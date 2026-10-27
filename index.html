@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Bastion des Lanternes</title>
+<meta name="description" content="Prototype de RPG pixel-art : construis ton camp, conquiers le donjon, choisis tes héros.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=Silkscreen:wght@400;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="game" aria-label="Monde du jeu"></canvas>
+
+<div id="hud" hidden>
+  <div id="top-left">
+    <div id="res"></div>
+    <div id="clock-row"><span id="clock"></span><span id="floor-tag" hidden></span></div>
+  </div>
+  <div id="top-right">
+    <button id="btn-menu" class="icon-btn" aria-label="Menu">≡</button>
+    <div id="quest"></div>
+    <canvas id="minimap" hidden></canvas>
+  </div>
+  <div id="bossbar" hidden>
+    <div id="boss-name"></div>
+    <div class="bar boss"><i id="boss-fill"></i></div>
+  </div>
+  <div id="toasts" aria-live="polite"></div>
+  <div id="banner" hidden></div>
+  <div id="bottom">
+    <div id="status">
+      <img id="portrait" class="px" alt="">
+      <div class="status-bars">
+        <div class="status-head"><b id="hero-name"></b><span id="lvl"></span></div>
+        <div class="bar hp"><i id="hp-fill"></i><span id="hp-text"></span></div>
+        <div class="bar en"><i id="en-fill"></i><span id="en-text"></span></div>
+        <div class="bar xp"><i id="xp-fill"></i></div>
+      </div>
+    </div>
+    <div id="hotbar"></div>
+    <div id="buildbar" hidden>
+      <span id="build-name"></span>
+      <button id="build-ok" class="btn primary">Placer</button>
+      <button id="build-cancel" class="btn">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<div id="panel" hidden>
+  <div id="panel-box" class="panel-box" role="dialog" aria-labelledby="panel-title">
+    <div id="panel-title" class="panel-title"></div>
+    <button id="panel-close" class="icon-btn close" aria-label="Fermer">×</button>
+    <div id="panel-body" class="panel-body"></div>
+  </div>
+</div>
+
+<div id="title">
+  <div class="title-inner">
+    <div class="logo">
+      <div class="logo-small">Un prototype de RPG pixel-art</div>
+      <h1>Bastion<br>des Lanternes</h1>
+    </div>
+    <div class="features">
+      <div class="feat"><img id="feat-camp" class="px" alt=""><span>Construis ton camp</span></div>
+      <div class="feat"><img id="feat-dungeon" class="px" alt=""><span>Conquiers le donjon</span></div>
+      <div class="feat"><img id="feat-heroes" class="px" alt=""><span>Choisis tes héros</span></div>
+    </div>
+    <div id="title-heroes" class="title-heroes"></div>
+    <div class="title-btns">
+      <button id="title-continue" class="btn primary big">Continuer</button>
+      <button id="title-new" class="btn big">Nouvelle partie</button>
+    </div>
+    <div id="title-confirm" class="title-confirm" hidden>
+      <p>Une partie existe déjà. L’effacer pour recommencer ?</p>
+      <button id="title-yes" class="btn danger">Effacer</button>
+      <button id="title-no" class="btn">Annuler</button>
+    </div>
+    <p class="title-help">Clavier : ZQSD / flèches · Espace pour attaquer · ou touche simplement l’écran</p>
+  </div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/art.js"></script>
+<script src="js/data.js"></script>
+<script src="js/world.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/game.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
