@@ -386,3 +386,150 @@ button:focus-visible { outline: 2px solid var(--lamp); outline-offset: 2px; }
   .title-heroes img, #banner.show { animation: none; }
   .toast { transition: none; }
 }
+
+/* =====================================================================
+   Habillage médiéval : cadres en bois et bronze, rivets, parchemin,
+   barres segmentées, emplacements en pierre. Surcharge les styles de base.
+   ===================================================================== */
+:root {
+  --wood: #4a3220;
+  --wood-light: #6e4c2e;
+  --bronze: #b0823a;
+  --bronze-light: #e8c06a;
+  --parchment: #e4d2a8;
+  --parchment-dark: #b89c68;
+  --ink: #2a1c12;
+  --rivet: radial-gradient(circle, #f4d27a 0 1.5px, #7a5418 2px 2.6px, transparent 3px);
+}
+
+/* Panneaux : grimoire violet dans un cadre de bois cerclé de bronze */
+.panel-box {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(120, 90, 170, .18), transparent 60%),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .015) 0 2px, transparent 2px 4px),
+    linear-gradient(#2f2442, #231a33);
+  border: 4px solid var(--wood);
+  box-shadow:
+    inset 0 0 0 2px var(--bronze), inset 0 0 0 4px #1a1224, inset 0 0 0 5px #5d4a7a,
+    0 0 0 2px #120c18, 0 10px 0 rgba(0, 0, 0, .45), 0 0 40px rgba(0, 0, 0, .5);
+  border-radius: 4px;
+}
+.panel-box::after {
+  content: '';
+  position: absolute; inset: -4px;
+  pointer-events: none;
+  background:
+    var(--rivet) 0 0 / 14px 14px no-repeat,
+    var(--rivet) 100% 0 / 14px 14px no-repeat,
+    var(--rivet) 0 100% / 14px 14px no-repeat,
+    var(--rivet) 100% 100% / 14px 14px no-repeat;
+}
+.panel-title {
+  background: linear-gradient(#6e4c2e, #4a3220);
+  border: 3px solid #1a1008;
+  box-shadow: inset 0 0 0 1px var(--bronze-light), inset 0 -3px 0 rgba(0, 0, 0, .35), 0 3px 0 rgba(0, 0, 0, .4);
+  color: #ffe9b0;
+  text-shadow: 1px 1px 0 #1a1008;
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 50%, 100% 100%, 0 100%, 8px 50%);
+  padding: 4px 24px;
+}
+.icon-btn {
+  background: linear-gradient(#3d2f55, #2a2138);
+  border: 2px solid #120c18;
+  box-shadow: inset 0 0 0 1px var(--bronze), inset 0 1px 0 rgba(255, 255, 255, .12);
+  color: #ffe9b0;
+}
+.icon-btn:hover { box-shadow: inset 0 0 0 1px var(--bronze-light), 0 0 8px rgba(232, 192, 106, .35); }
+
+/* Boutons */
+.btn {
+  background: linear-gradient(#4e3f68, #3a2e50);
+  box-shadow: inset 0 0 0 1px #7a68a0, inset 0 1px 0 rgba(255, 255, 255, .15), inset 0 -3px 0 rgba(0, 0, 0, .35);
+  transition: filter .1s, box-shadow .1s;
+}
+.btn:hover:not(:disabled) { background: linear-gradient(#5e4e7a, #45375e); }
+.btn.primary {
+  background: linear-gradient(#c8963a, #8a5e1e);
+  color: #2a1808;
+  text-shadow: 0 1px 0 rgba(255, 240, 200, .5);
+  box-shadow: inset 0 0 0 1px #ffe08a, inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -3px 0 rgba(0, 0, 0, .3);
+}
+.btn.primary:hover:not(:disabled) { background: linear-gradient(#dcaa48, #9a6a24); box-shadow: inset 0 0 0 1px #fff0b0, 0 0 10px rgba(255, 200, 90, .35); }
+.btn.danger { background: linear-gradient(#9a3434, #6a2020); }
+.btn:active:not(:disabled) { transform: translateY(1px); filter: brightness(.92); }
+
+/* HUD : ressources sur planchettes de bois */
+.res {
+  background: linear-gradient(#5e4029, #3e2a1a);
+  border: 2px solid #1a1008;
+  box-shadow: inset 0 0 0 1px #8a6440, inset 0 1px 0 rgba(255, 230, 180, .18);
+  color: #fff0d0;
+  text-shadow: 1px 1px 0 #1a1008;
+}
+.res.bag { box-shadow: inset 0 0 0 1px var(--bronze-light), 0 0 8px rgba(232, 192, 106, .3); }
+#clock-row { color: #c8d0f0; }
+
+/* Objectif sur parchemin */
+#quest {
+  background: linear-gradient(#efe0bc, var(--parchment) 70%, #d4bf90);
+  color: var(--ink);
+  border: 2px solid #5a3e22;
+  box-shadow: inset 0 0 0 1px #fff4d8, inset 0 0 12px rgba(120, 80, 30, .35), 0 3px 0 rgba(0, 0, 0, .35);
+}
+.q-head { color: #8a2a1a; }
+#minimap { border: 3px solid var(--wood); box-shadow: inset 0 0 0 1px var(--bronze), 0 0 0 1px #120c18; }
+
+/* Portrait et barres segmentées */
+#status, #hotbar, #buildbar {
+  background: linear-gradient(#2f2442, #241b33);
+  border: 3px solid var(--wood);
+  box-shadow: inset 0 0 0 1px var(--bronze), inset 0 0 0 3px #1a1224, 0 0 0 1px #120c18, 0 4px 0 rgba(0, 0, 0, .45);
+}
+#portrait { border: 2px solid var(--bronze); box-shadow: 0 0 0 1px #120c18; background: radial-gradient(#4a3a62, #241b33); }
+.bar { border: 1px solid #000; box-shadow: inset 0 0 0 1px #4a3a5a, 0 1px 0 rgba(255, 255, 255, .06); }
+.bar::after {
+  content: '';
+  position: absolute; inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255, 255, 255, .28), transparent 40%, transparent 70%, rgba(0, 0, 0, .25)),
+    repeating-linear-gradient(90deg, transparent 0 11px, rgba(0, 0, 0, .35) 11px 12px);
+}
+.bar.xp::after { background: repeating-linear-gradient(90deg, transparent 0 7px, rgba(0, 0, 0, .4) 7px 8px); }
+.bar span { z-index: 1; }
+.bar.boss { border: 2px solid #1a1008; box-shadow: inset 0 0 0 1px var(--bronze); height: 14px; }
+
+/* Barre d'actions : emplacements en pierre */
+.slot {
+  background: linear-gradient(145deg, #4a3d5e, #2c2239 70%);
+  border: 2px solid #120c18;
+  box-shadow: inset 0 0 0 1px #6a5a82, inset 1px 1px 0 rgba(255, 255, 255, .12), inset -2px -2px 0 rgba(0, 0, 0, .3);
+  transition: box-shadow .12s, transform .08s;
+}
+.slot:hover { background: linear-gradient(145deg, #574872, #33283f 70%); box-shadow: inset 0 0 0 1px var(--bronze-light), 0 0 10px rgba(232, 192, 106, .3); }
+.slot:active, .slot.pressed { transform: translateY(1px) scale(.96); box-shadow: inset 0 0 0 1px var(--bronze-light), inset 0 0 12px rgba(255, 210, 120, .45); }
+.slot kbd { color: var(--bronze-light); text-shadow: 1px 1px 0 #000; }
+.slot-label { color: #d8cce8; }
+
+/* Cartes, inventaire, arbre d'armes */
+.card, .node, .hero-card, .floor, .li, .equip {
+  background: linear-gradient(#3a2e50, #2e2440);
+  box-shadow: inset 0 0 0 1px #5a4a78, inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+.inv-slot {
+  background: radial-gradient(#33284a, #1a1424);
+  box-shadow: inset 0 0 0 1px #4e4066, inset 2px 2px 0 rgba(0, 0, 0, .35);
+}
+.inv-slot:not(.empty):hover { box-shadow: inset 0 0 0 1px var(--bronze-light), 0 0 8px rgba(232, 192, 106, .3); }
+.node.avail { box-shadow: inset 0 0 0 1px var(--bronze-light), 0 0 10px rgba(232, 192, 106, .18); }
+.tier + .tier::before { background: linear-gradient(var(--bronze-light), var(--bronze)); width: 3px; }
+.panel-body h3 { color: var(--bronze-light); border-bottom: 1px solid #4e4066; padding-bottom: 3px; }
+
+/* Messages sur parchemin */
+.toast {
+  background: linear-gradient(#efe0bc, var(--parchment));
+  color: var(--ink);
+  border: 2px solid #5a3e22;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, .35);
+}
+.feat { border: 3px solid var(--wood); box-shadow: inset 0 0 0 1px var(--bronze), 0 0 0 1px #120c18; }

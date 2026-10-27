@@ -8,6 +8,16 @@ Prototype jouable d'un RPG en pixel-art isométrique, inspiré de trois idées :
 
 Aucune dépendance et aucun fichier image : tout le pixel-art (tuiles, personnages, bâtiments, arbres, icônes) est généré par code au lancement.
 
+## Graphismes
+
+- Sol pré-rendu en cache, avec trois teintes d'herbe réparties par bruit lissé (pas d'effet damier), des bordures naturelles entre l'herbe et les chemins ou entre le sable et l'eau, et des décalques (feuilles mortes, aiguilles, fleurs, cailloux, gravats).
+- Végétation variée (pins, sapins bleus, chênes, bouleaux, arbres d'automne) et sous-bois (fougères, champignons, hautes herbes, troncs couchés).
+- Bâtiments détaillés : colombages, soubassements en pierre, volets, jardinières, porche, faîtage, mousse sur les toits, outils, enseigne, rails de mine. Accessoires autour de chaque bâtiment.
+- Personnages avec volume automatique (ombre, reflet, contours colorés), épaulières, sacoches, robe de mage, respiration au repos et élan pendant les attaques.
+- Donjon thématisé selon la profondeur (pierre grise, pierre moussue, crypte violette) : torches murales animées, portes, bannières, panoplies, chaînes, armures, râteliers, établis, bassins animés, salle du boss avec tapis et braseros.
+- Éclairage par carte de lumière multipliée : nuit bleutée, lumières chaudes en paliers (sans flou), vitres et flammes qui restent lumineuses et masquées par ce qui passe devant, ombres portées, braises, lucioles, brume légère.
+- Qualité graphique « automatique » par défaut : le jeu passe en qualité réduite si l'appareil n'arrive pas à suivre. Réglable dans le menu (automatique, élevés, réduits).
+
 ## Lancer le jeu
 
 Ouvre `index.html` dans un navigateur, c'est tout.
@@ -44,19 +54,20 @@ Une liste d'objectifs (en haut à droite) guide les premières étapes.
 | Fichier | Rôle |
 | --- | --- |
 | `index.html`, `css/style.css` | Page, HUD et panneaux de l'interface |
-| `js/core.js` | Maths, projection isométrique, tampon de pixels, police bitmap, sons |
+| `js/core.js` | Maths, bruit lissé, projection isométrique, tampon de pixels, police bitmap, sons |
 | `js/art.js` | Génération procédurale de tous les sprites |
 | `js/data.js` | Données de jeu : objets, héros, armes, bâtiments, monstres, objectifs |
 | `js/world.js` | Cartes : camp (depuis la sauvegarde) et donjon procédural, A* |
 | `js/entities.js` | Héros, monstres, villageois, animaux |
-| `js/game.js` | Boucle, rendu iso avec tri de profondeur, éclairage jour/nuit, entrées, sauvegarde |
+| `js/game.js` | Boucle, cache du sol, rendu iso avec tri de profondeur, ombres, éclairage jour/nuit, couche émissive, particules d'ambiance, qualité graphique, entrées, sauvegarde |
 | `js/ui.js` | Barre d'actions et panneaux (inventaire, construction, forge, marché, héros, expédition) |
 
 Pour équilibrer le jeu, la plupart des chiffres sont dans `js/data.js`.
 
 ## Pistes pour la suite
 
-- Remplacer le pixel-art procédural par de vrais sprites (un pack isométrique 32×16 s'intègre directement : il suffit de remplacer les fonctions de `js/art.js`).
+- Remplacer le pixel-art procédural par de vrais sprites dessinés à la main (un pack isométrique 32×16 s'intègre directement : il suffit de remplacer les fonctions de `js/art.js`).
+- Intérieurs de bâtiments (taverne visitable) et portes réelles entre les salles du donjon.
 - Musique d'ambiance et vrais effets sonores.
 - Équipement (armures, anneaux) en plus des armes, et compétences débloquées par niveau.
 - Plusieurs héros en même temps dans le donjon (groupe).

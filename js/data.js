@@ -83,35 +83,35 @@
       desc: 'Robuste et polyvalent. Sa compétence Tourbillon frappe tous les ennemis autour de lui.',
       hp: 120, atk: 10, def: 3, speed: 3.3, range: 1.15, aspd: 1.5, crit: 5,
       skill: { id: 'whirl', name: 'Tourbillon', cost: 30, cd: 4 },
-      look: { skin: '#f2c9a0', hair: '#e8742a', hairStyle: 'spiky', shirt: '#4f8a3c', cape: '#2e5a2a', pants: '#6b4a2e', boots: '#3b2a1e' },
+      look: { skin: '#f2c9a0', hair: '#e8742a', hairStyle: 'spiky', shirt: '#4f8a3c', cape: '#2e5a2a', pants: '#6b4a2e', boots: '#3b2a1e', pauldrons: true, pauldron: '#8a5a32', pouch: true },
     },
     lyra: {
       name: 'Lyra', role: 'Archère elfe', weapon: 'bow', cost: 120,
       desc: 'Attaque à distance. Volée tire cinq flèches en éventail.',
       hp: 85, atk: 9, def: 1, speed: 3.6, range: 5.5, aspd: 1.3, crit: 10,
       skill: { id: 'volley', name: 'Volée', cost: 30, cd: 4 },
-      look: { skin: '#f5d5b5', hair: '#f0d878', hairStyle: 'long', shirt: '#3f7a48', cape: '#5a3f2a', pants: '#6e5a3a', ears: true },
+      look: { skin: '#f5d5b5', hair: '#f0d878', hairStyle: 'long', shirt: '#3f7a48', cape: '#5a3f2a', pants: '#6e5a3a', ears: true, pouch: true },
     },
     sylve: {
       name: 'Sylve', role: 'Mage', weapon: 'staff', cost: 200,
       desc: 'Sorts à distance. Boule de feu explose et brûle un groupe entier.',
       hp: 75, atk: 12, def: 1, speed: 3.2, range: 5, aspd: 1.0, crit: 5,
       skill: { id: 'fireball', name: 'Boule de feu', cost: 35, cd: 5 },
-      look: { skin: '#e8c4a8', hair: '#4cc6a0', hairStyle: 'long', shirt: '#6a3f8a', cape: '#3a2350', pants: '#4a2c62' },
+      look: { skin: '#e8c4a8', hair: '#4cc6a0', hairStyle: 'long', shirt: '#6a3f8a', cape: '#3a2350', pants: '#4a2c62', robe: true, boots: '#2a1a3a' },
     },
     durgan: {
       name: 'Durgan', role: 'Nain forgeron', weapon: 'hammer', cost: 260,
       desc: 'Très résistant. Séisme étourdit les ennemis proches.',
       hp: 160, atk: 11, def: 6, speed: 2.9, range: 1.15, aspd: 1.1, crit: 5,
       skill: { id: 'quake', name: 'Séisme', cost: 35, cd: 6 },
-      look: { skin: '#e8b090', hair: '#c24a26', hairStyle: 'short', beard: true, shirt: '#7a5a3a', pants: '#4a3a2a', belt: '#2a1a10' },
+      look: { skin: '#e8b090', hair: '#c24a26', hairStyle: 'short', beard: true, shirt: '#7a5a3a', pants: '#4a3a2a', belt: '#2a1a10', pauldrons: true, metal: '#8a8f99', pouch: true },
     },
     grok: {
       name: 'Grok', role: 'Orque berserker', weapon: 'axe', cost: 380,
       desc: 'Frappe fort et vite. Rage augmente sa vitesse et lui rend des PV à chaque coup.',
       hp: 140, atk: 13, def: 3, speed: 3.3, range: 1.2, aspd: 1.4, crit: 10,
       skill: { id: 'rage', name: 'Rage', cost: 40, cd: 9 },
-      look: { skin: '#6aa84a', hair: '#6aa84a', hat: 'horned', metal: '#8a8f99', shirt: '#6b4a2e', pants: '#4a3420', ears: true },
+      look: { skin: '#6aa84a', hair: '#6aa84a', hat: 'horned', metal: '#8a8f99', shirt: '#6b4a2e', pants: '#4a3420', ears: true, pauldrons: true },
     },
   };
   D.HERO_ORDER = ['bram', 'lyra', 'sylve', 'durgan', 'grok'];
@@ -158,9 +158,9 @@
     blueSlime: { name: 'Slime bleu', hp: 34, atk: 7, def: 1, speed: 1.6, xp: 8, range: 0.8, aspd: 0.9, loot: [['gel', 0.8, 1, 2], ['gold', 0.5, 2, 4]], color: '#3a8ae0' },
     bat: { name: 'Chauve-souris', hp: 14, atk: 4, def: 0, speed: 3.0, xp: 4, range: 0.8, aspd: 1.2, loot: [['wing', 0.6], ['gold', 0.3, 1, 2]], flying: true },
     goblin: { name: 'Gobelin', hp: 40, atk: 8, def: 1, speed: 2.4, xp: 10, range: 0.9, aspd: 1.1, loot: [['ear', 0.6], ['gold', 0.7, 2, 6], ['iron', 0.15]], look: { skin: '#7ab648', hair: '#7ab648', ears: true, shirt: '#5a4630', pants: '#4a3a24' }, scale: 0.85, weapon: ['sword', '#8a8a8a', '#5a4a2a'] },
-    skeleton: { name: 'Squelette archer', hp: 38, atk: 9, def: 2, speed: 1.9, xp: 13, range: 4.5, ranged: true, aspd: 0.6, loot: [['bone', 0.8, 1, 2], ['iron', 0.3], ['gold', 0.5, 3, 7]], look: { skin: '#e8e4d8', hair: '#e8e4d8', eye: '#c03030', shirt: '#cfc8b4', pants: '#b8b0a0', boots: '#8a8474', belt: '#6a6458' }, weapon: ['bow', '#6a5040', '#c0c0c0'] },
-    orc: { name: 'Orque brute', hp: 80, atk: 13, def: 3, speed: 2.0, xp: 22, range: 1.0, aspd: 0.8, loot: [['ear', 0.5, 1, 2], ['iron', 0.4, 1, 2], ['gold', 0.8, 5, 10], ['gem', 0.08]], look: { skin: '#5a9a3a', hair: '#5a9a3a', hat: 'horned', metal: '#6a6a72', shirt: '#4a3a2a', pants: '#3a2a1a', ears: true }, scale: 1.15, weapon: ['axe', '#9a9aa0', '#5a4a2a'] },
-    knight: { name: 'Chevalier de bronze', boss: true, hp: 360, atk: 18, def: 5, speed: 2.1, xp: 120, range: 1.3, aspd: 0.7, loot: [['bronze', 1, 2, 3], ['gem', 1, 1, 2], ['iron', 1, 4, 6], ['gold', 1, 40, 60]], look: { skin: '#c8893a', hair: '#c8893a', hat: 'helmet', metal: '#c8893a', eye: '#ffcc55', shirt: '#b87a32', pants: '#9a6428', boots: '#7a4e1e', cape: '#9a2a2a', belt: '#5a3a14' }, scale: 1.6, weapon: ['hammer', '#e0a850', '#8a5a2a'] },
+    skeleton: { name: 'Squelette archer', hp: 38, atk: 9, def: 2, speed: 1.9, xp: 13, range: 4.5, ranged: true, aspd: 0.6, loot: [['bone', 0.8, 1, 2], ['iron', 0.3], ['gold', 0.5, 3, 7]], look: { skin: '#e8e4d8', hair: '#e8e4d8', eye: '#c03030', shirt: '#cfc8b4', pants: '#b8b0a0', boots: '#8a8474', belt: '#6a6458', ribs: true }, weapon: ['bow', '#6a5040', '#c0c0c0'] },
+    orc: { name: 'Orque brute', hp: 80, atk: 13, def: 3, speed: 2.0, xp: 22, range: 1.0, aspd: 0.8, loot: [['ear', 0.5, 1, 2], ['iron', 0.4, 1, 2], ['gold', 0.8, 5, 10], ['gem', 0.08]], look: { skin: '#5a9a3a', hair: '#5a9a3a', hat: 'horned', metal: '#6a6a72', shirt: '#4a3a2a', pants: '#3a2a1a', ears: true, pauldrons: true }, scale: 1.15, weapon: ['axe', '#9a9aa0', '#5a4a2a'] },
+    knight: { name: 'Chevalier de bronze', boss: true, hp: 360, atk: 18, def: 5, speed: 2.1, xp: 120, range: 1.3, aspd: 0.7, loot: [['bronze', 1, 2, 3], ['gem', 1, 1, 2], ['iron', 1, 4, 6], ['gold', 1, 40, 60]], look: { skin: '#c8893a', hair: '#c8893a', hat: 'helmet', metal: '#c8893a', eye: '#ffcc55', shirt: '#b87a32', pants: '#9a6428', boots: '#7a4e1e', cape: '#9a2a2a', belt: '#5a3a14', pauldrons: true }, scale: 1.6, weapon: ['hammer', '#e0a850', '#8a5a2a'] },
   };
   D.floorEnemies = function (f) {
     const list = ['slime', 'bat'];

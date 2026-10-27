@@ -55,14 +55,18 @@
   E.drawHumanoid = function (ctx, a, sx, sy, frames, scale, weapon) {
     scale = scale || 1;
     sx = Math.round(sx); sy = Math.round(sy);
-    const seq = a.moving ? 1 + (Math.floor(a.anim * 9) % 3) : 0;
+    // marche (1-3), respiration au repos (alterne 0 et 4)
+    const seq = a.moving ? 1 + (Math.floor(a.anim * 9) % 3) : frames[a.dir][4] && Math.floor(a.anim * 1.6) % 2 ? 4 : 0;
     const f = frames[a.dir][seq];
     const img = a.flash > 0 ? G.flashOf(f) : f;
     const w = 14 * scale, h = 20 * scale;
+    // élan vers l'avant pendant un coup
+    const lunge = a.swing > 0 && !(weapon && weapon.ranged) ? Math.round(Math.sin(a.swing * Math.PI) * 2 * scale) * (a.flip ? -1 : 1) : 0;
+    sx += lunge;
     const dx = Math.round(sx - w / 2), dy = Math.round(sy - h + 1 * scale);
     const drawW = () => {
       if (!weapon) return;
-      let hx = dx + 11.5 * scale, hy = dy + 11 * scale + (seq % 2 ? scale : 0);
+      let hx = dx + 11.5 * scale, hy = dy + 11 * scale + (seq % 2 || seq === 4 ? scale : 0);
       if (a.flip) hx = 2 * sx - hx;
       let ang;
       if (weapon.ranged) ang = 0.15 - a.swing * 0.3;

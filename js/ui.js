@@ -40,7 +40,12 @@
       $('panel-body').addEventListener('click', (e) => this.onPanelClick(e));
       $('hotbar').addEventListener('click', (e) => {
         const b = e.target.closest('[data-act]');
-        if (b) { G.audio.init(); this.hotbarAction(b.dataset.act); }
+        if (b) {
+          G.audio.init();
+          b.classList.add('pressed');
+          setTimeout(() => b.classList.remove('pressed'), 160);
+          this.hotbarAction(b.dataset.act);
+        }
       });
       $('build-ok').addEventListener('click', () => G.game.confirmBuild());
       $('build-cancel').addEventListener('click', () => G.game.cancelBuild());
@@ -350,6 +355,7 @@
         case 'potion': g.usePotion(); this.render('inventory'); break;
         case 'save': G.save(); this.toast('Partie sauvegardée'); break;
         case 'sound': G.audio.muted = !G.audio.muted; this.render('menu'); break;
+        case 'gfx': G.gfx.setMode({ auto: 'high', high: 'low', low: 'auto' }[G.gfx.mode]); this.render('menu'); break;
         case 'flee': this.close(); this.confirm('Abandonner l’expédition ? Tu perdras la moitié du butin.', () => g.leaveDungeon(true)); break;
         case 'newgame': this.render('newgame'); break;
         case 'reset': G.clearSave(); G.state = G.newState(); this.close(); g.enterCamp(true); this.refresh(); this.banner('NOUVELLE PARTIE', 'Bonne chance, héros !'); G.save(); break;
@@ -367,6 +373,7 @@
           '<button class="btn" data-do="help">Commandes</button>' +
           '<button class="btn" data-do="save">Sauvegarder</button>' +
           '<button class="btn" data-do="sound">Son : ' + (G.audio.muted ? 'coupé' : 'activé') + '</button>' +
+          '<button class="btn" data-do="gfx">Graphismes : ' + ({ auto: 'automatiques', high: 'élevés', low: 'réduits' }[G.gfx.mode]) + (G.gfx.mode === 'auto' ? (G.gfx.hq ? ' (élevés)' : ' (réduits)') : '') + '</button>' +
           (dungeon ? '<button class="btn warn" data-do="flee">Abandonner l’expédition</button>' : '') +
           '<button class="btn danger" data-do="newgame">Nouvelle partie</button></div>',
       };

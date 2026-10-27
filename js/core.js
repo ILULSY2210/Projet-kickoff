@@ -29,6 +29,15 @@ G.hash2 = function (x, y, s) {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 };
 
+// Bruit de valeur lissé (0..1), déterministe : grandes taches de couleur sans motif répétitif.
+G.vnoise = function (x, y, s) {
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const fx = x - xi, fy = y - yi;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = G.hash2(xi, yi, s), b = G.hash2(xi + 1, yi, s), c = G.hash2(xi, yi + 1, s), d = G.hash2(xi + 1, yi + 1, s);
+  return G.lerp(G.lerp(a, b, sx), G.lerp(c, d, sx), sy);
+};
+
 // Monde (tuiles) -> écran (px, avant caméra). Le coin haut de la tuile (x,y) est iso(x,y).
 G.iso = (x, y) => ({ x: (x - y) * 16, y: (x + y) * 8 });
 G.unIso = (sx, sy) => ({ x: (sx / 16 + sy / 8) / 2, y: (sy / 8 - sx / 16) / 2 });

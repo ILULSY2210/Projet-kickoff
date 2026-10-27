@@ -19,12 +19,15 @@
       this.loot = [];
       this.texts = [];
       this.effects = [];
+      this.decals = []; // décalques au sol (feuilles, cailloux…) cuits dans le cache du sol
+      this.look = new Uint8Array(w * h); // apparence spéciale d'une tuile (1 = salle du boss, 2 = tapis)
+      this.groundDirty = true;
       for (let i = 0; i < w * h; i++) this.variant[i] = Math.floor(G.hash2(i % w, Math.floor(i / w), 77) * 255);
     }
     idx(x, y) { return y * this.w + x; }
     inside(x, y) { return x >= 0 && y >= 0 && x < this.w && y < this.h; }
     tile(x, y) { return this.inside(x, y) ? this.tiles[this.idx(x, y)] : 'void'; }
-    setTile(x, y, t) { if (this.inside(x, y)) this.tiles[this.idx(x, y)] = t; }
+    setTile(x, y, t) { if (this.inside(x, y)) { this.tiles[this.idx(x, y)] = t; this.groundDirty = true; } }
     isSolid(x, y) {
       x = Math.floor(x); y = Math.floor(y);
       return !this.inside(x, y) || this.solid[this.idx(x, y)] === 1;
@@ -182,7 +185,7 @@
       for (let y = b.y; y < b.y + def.d; y++)
         for (let x = b.x; x < b.x + def.w; x++) {
           scene.setTile(x, y, 'field');
-          const kind = (x + y) % 3 === 0 ? 'cabbage' : (x * 7 + y) % 4 === 0 ? 'sprout' : 'pumpkin';
+          const kind = ['pumpkin', 'cabbage', 'wheat', 'carrot', 'pumpkin', 'sprout'][(x * 7 + y * 3) % 6];
           scene.objects.push({ kind: 'crop', x: x + 0.5, y: y + 0.5, spr: G.S[kind], deco: true, farm: o });
         }
       o.x = b.x + def.w - 0.6; o.y = b.y + 0.6; // épouvantail
@@ -201,14 +204,21 @@
       }
       o.spr = null;
     }
-    if (b.type === 'forge') {
-      scene.objects.push({ kind: 'prop', x: b.x + 1.2, y: b.y + 3.6, spr: G.S.anvil, deco: true });
-      scene.objects.push({ kind: 'prop', x: b.x + 3.4, y: b.y + 2.6, spr: G.S.barrel, deco: true });
-    }
-    if (b.type === 'market') {
-      scene.objects.push({ kind: 'prop', x: b.x + 2.4, y: b.y + 0.4, spr: G.S.barrel, deco: true });
-      scene.objects.push({ kind: 'prop', x: b.x + 2.4, y: b.y + 1.2, spr: G.S.crate, deco: true });
-    }
+    // Accessoires décoratifs autour des bâtiments (non bloquants)
+    const deco = (dx, dy, spr) => scene.objects.push({ kind: 'prop', x: b.x + dx, y: b.y + dy, spr: G.S[spr], deco: true });
+    const DECOR = {
+      forge: [[1.2, 3.6, 'anvil'], [3.4, 2.6, 'barrel'], [3.5, 0.6, 'grindstone'], [0.4, 3.5, 'coal'], [-0.4, 1.6, 'weaponRack']],
+      market: [[2.4, 0.4, 'barrel'], [2.4, 1.2, 'crate'], [0.5, 2.4, 'basket'], [2.4, 2.0, 'sack']],
+      house: [[3.4, 0.7, 'woodpile'], [3.35, 2.2, 'barrel'], [-0.4, 2.3, 'flowers']],
+      tavern: [[4.4, 0.6, 'barrel'], [4.45, 1.2, 'barrel'], [0.6, 3.5, 'bench'], [3.4, 3.5, 'bench']],
+      sawmill: [[3.5, 1.0, 'sawhorse'], [-0.6, 1.0, 'woodpile']],
+      quarry: [[2.4, 1.6, 'bucket'], [2.5, 0.6, 'crate']],
+      mine: [[2.5, 1.7, 'minecart'], [2.5, 0.6, 'crate']],
+      farm: [[-0.5, 0.6, 'hay'], [3.4, 2.6, 'bucket'], [-0.5, 2.4, 'hay']],
+      pen: [[1.2, 1.2, 'trough'], [3.6, 2.6, 'hay']],
+    };
+    for (const d of DECOR[b.type] || []) deco(d[0], d[1], d[2]);
+    if (b.type === 'quarry' || b.type === 'mine') scene.decals.push({ x: b.x + 1, y: b.y + 2.4, spr: G.S.decal.pebbles });
     scene.addObject(o);
     return o;
   };
@@ -266,14 +276,31 @@
         const density = edge ? 0.75 : north ? 0.42 : 0.07;
         const key = x + ',' + y;
         const cut = state.chopped[key] && state.chopped[key] > state.clock;
+        const v = G.hash2(x, y, 99); // choix décoratifs indépendants des positions (sauvegardes compatibles)
         if (r < density) {
-          const isPine = r2 < 0.6;
-          const spr = isPine ? G.S.pine[Math.floor(r3 * 4)] : G.S.tree[['red', 'orange', 'yellow', 'green'][Math.floor(r3 * 4)]];
+          const isPine = r2 < 0.55;
+          const kind = ['red', 'orange', 'yellow', 'green', 'oak', 'birch', 'orange', 'oak'][Math.floor(v * 8)];
+          const spr = isPine ? G.S.pine[Math.floor(r3 * 4)] : G.S.tree[kind];
+          const leaves = isPine ? 'needles' : { red: 'leavesRed', orange: 'leavesOrange', yellow: 'leavesYellow', birch: 'leavesYellow' }[kind] || 'leavesGreen';
+          s.decals.push({ x: x + 0.6, y: y + 0.7, spr: G.S.decal[leaves] });
           s.addObject({ kind: 'tree', x: x + 0.5, y: y + 0.5, fp: { x0: x, y0: y, x1: x + 1, y1: y + 1 }, solid: !cut, spr: cut ? G.S.stump : spr, full: spr, cut, key, anchorPoint: true });
         } else if (r < density + 0.025 && !edge) {
           s.addObject({ kind: 'rock', x: x + 0.5, y: y + 0.5, fp: { x0: x, y0: y, x1: x + 1, y1: y + 1 }, solid: !cut, spr: cut ? null : G.S.boulder[Math.floor(r3 * 2)], full: G.S.boulder[Math.floor(r3 * 2)], cut, key, anchorPoint: true });
         } else if (r < density + 0.06 && !edge) {
           s.objects.push({ kind: 'prop', x: x + 0.5, y: y + 0.5, spr: G.S.bush[Math.floor(r3 * 2)], deco: true });
+        } else {
+          // sous-bois : fougères, champignons, hautes herbes, troncs couchés, fleurs
+          const forest = edge || north;
+          const u = G.hash2(x, y, 7);
+          const ox = 0.3 + G.hash2(x, y, 8) * 0.4, oy = 0.3 + G.hash2(x, y, 9) * 0.4;
+          let spr = null;
+          if (forest && u < 0.22) spr = G.S.fern[Math.floor(v * 2)];
+          else if (forest && u < 0.3) spr = G.S.mushrooms[Math.floor(v * 2)];
+          else if (forest && u < 0.33) spr = G.S.log;
+          else if (u < (forest ? 0.45 : 0.1)) spr = G.S.tallGrass[Math.floor(v * 3)];
+          else if (!forest && u < 0.13) spr = G.S.flowers;
+          if (spr) s.objects.push({ kind: 'prop', x: x + ox, y: y + oy, spr, deco: true });
+          if (G.hash2(x, y, 11) < 0.12) s.decals.push({ x: x + 0.5, y: y + 0.5, spr: G.S.decal[['flowersW', 'flowersY', 'flowersP', 'pebbles'][Math.floor(G.hash2(x, y, 12) * 4)]] });
         }
       }
     s.spawn = { x: 17.5, y: 17.5 };
@@ -304,6 +331,8 @@
     const size = 40 + Math.min(floor, 6) * 2;
     const s = new Scene('dungeon', size, size);
     s.floor = floor;
+    s.tier = floor <= 2 ? 0 : floor <= 5 ? 1 : 2;
+    const WS = G.S.wallSets[s.tier];
     s.solid.fill(1);
     const rooms = [];
     const target = 6 + Math.min(floor, 5);
@@ -347,11 +376,6 @@
         }
       }
     const isFloor = (x, y) => s.tile(x, y) === 'floor';
-    for (const [x, y] of walls) {
-      const behind = isFloor(x + 1, y) || isFloor(x, y + 1) || isFloor(x + 1, y + 1);
-      const v = G.hash2(x, y, floor) > 0.93 ? 2 : 0;
-      s.objects.push({ kind: 'wall', x: x + 0.5, y: y + 0.5, fp: { x0: x, y0: y, x1: x + 1, y1: y + 1 }, spr: behind ? G.S.wall[v] : G.S.wallLow, isWall: true, tall: behind });
-    }
     // Salle de départ = première ; salle finale = la plus éloignée
     const start = rooms[0];
     let far = rooms[rooms.length - 1], fd = -1;
@@ -359,10 +383,43 @@
       const d = Math.abs(r.cx - start.cx) + Math.abs(r.cy - start.cy);
       if (d > fd) { fd = d; far = r; }
     }
+    const isBoss = floor % 3 === 0;
+    // Décor imposé : deux torches murales par salle, bannières autour de la salle du boss
+    const forced = {};
+    for (const r of rooms) {
+      for (const tx of [r.x + 1, r.x + r.w - 2]) if (s.tile(tx, r.y - 1) === 'wall') forced[tx + ',' + (r.y - 1)] = 'torchL';
+      if (s.tile(r.x - 1, r.cy) === 'wall') forced[(r.x - 1) + ',' + r.cy] = 'torchR';
+      if (isBoss && r === far) for (let x = r.x; x < r.x + r.w; x += 2) if (s.tile(x, r.y - 1) === 'wall' && !forced[x + ',' + (r.y - 1)]) forced[x + ',' + (r.y - 1)] = 'bannerL';
+    }
+    for (const [x, y] of walls) {
+      const behind = isFloor(x + 1, y) || isFloor(x, y + 1) || isFloor(x + 1, y + 1);
+      let variant = 'plain';
+      if (behind) {
+        const faceL = isFloor(x, y + 1), faceR = isFloor(x + 1, y);
+        const h = G.hash2(x, y, floor * 7 + 1);
+        variant = forced[x + ',' + y];
+        if (variant && ((variant.endsWith('L') && !faceL) || (variant.endsWith('R') && !faceR))) variant = null;
+        if (!variant) {
+          const f = faceL ? 'L' : faceR ? 'R' : null;
+          if (f && h < 0.05) variant = 'banner' + f;
+          else if (f && h < 0.08) variant = 'door' + f;
+          else if (f && h < 0.11) variant = 'weapons' + f;
+          else if (f && h < 0.14) variant = 'chains' + f;
+          else variant = h < 0.3 ? 'cracked' : h < 0.65 ? 'plain2' : 'plain';
+        }
+      }
+      const spr = behind ? WS[variant] : WS.low;
+      const o = { kind: 'wall', x: x + 0.5, y: y + 0.5, fp: { x0: x, y0: y, x1: x + 1, y1: y + 1 }, spr, isWall: true, tall: behind };
+      if (spr.flame) {
+        const f = { x: x + spr.flame.x, y: y + spr.flame.y, z: spr.flame.z };
+        o.flames = [f];
+        o.light = { x: f.x, y: f.y, z: f.z, color: 'fire', r: 78 };
+      }
+      s.objects.push(o);
+    }
     s.rooms = rooms;
     s.spawn = { x: start.cx + 0.5, y: start.cy + 1.5 };
     s.addObject({ kind: 'portal', x: start.cx + 0.5, y: start.cy + 0.5, spr: null, interact: true, t: 0 });
-    const isBoss = floor % 3 === 0;
     s.stairs = { kind: 'stairs', x: far.cx + 0.5, y: far.cy + 0.5, spr: G.S.stairs, interact: true, hidden: isBoss, flat: true };
     s.addObject(s.stairs);
 
@@ -374,30 +431,49 @@
       return null;
     };
     // Décor
+    const solidProp = (x, y, spr, extra) => s.addObject(Object.assign({ kind: 'prop', x: x + 0.5, y: y + 0.5, fp: { x0: x, y0: y, x1: x + 1, y1: y + 1 }, solid: true, spr, anchorPoint: true }, extra || {}));
     for (const r of rooms) {
-      // torches le long des murs
-      const torches = [[r.x, r.y], [r.x + r.w - 1, r.y], [r.x, r.y + r.h - 1]];
-      for (const t of torches) {
-        if (s.occ[s.idx(t[0], t[1])]) continue;
-        s.addObject({ kind: 'torch', x: t[0] + 0.5, y: t[1] + 0.5, fp: { x0: t[0], y0: t[1], x1: t[0] + 1, y1: t[1] + 1 }, solid: true, spr: G.S.torch, light: { color: 'fire', r: 70 }, anchorPoint: true });
+      // mobilier contre le mur du fond (armures, râteliers, établis) : bien visible depuis la caméra
+      if (r !== start) {
+        const furniture = ['armorStand', 'weaponRack', 'workbench', 'armorStand'];
+        const count = r === far ? 1 : G.irnd(0, 2);
+        for (let i = 0; i < count; i++) {
+          const x = G.irnd(r.x + 1, r.x + r.w - 2), y = r.y;
+          if (s.occ[s.idx(x, y)] || (x === r.cx) || (x === r.cx + 1)) continue;
+          solidProp(x, y, G.S[G.pick(furniture)]);
+        }
       }
       const n = G.irnd(1, 3);
       for (let i = 0; i < n; i++) {
         const p = free(r, 0);
         if (!p) continue;
         if (p.x !== r.x && p.x !== r.x + r.w - 1 && p.y !== r.y && p.y !== r.y + r.h - 1) continue; // contre les murs
-        const kind = G.pick(['barrel', 'crate', 'barrel']);
-        s.addObject({ kind: 'prop', x: p.x + 0.5, y: p.y + 0.5, fp: { x0: p.x, y0: p.y, x1: p.x + 1, y1: p.y + 1 }, solid: true, spr: G.S[kind], anchorPoint: true, breakable: true, hp: 1 });
+        solidProp(p.x, p.y, G.S[G.pick(['barrel', 'crate', 'barrel'])], { breakable: true, hp: 1 });
       }
       if (Math.random() < 0.5) {
         const p = free(r, 1);
         if (p) s.objects.push({ kind: 'prop', x: p.x + 0.5, y: p.y + 0.5, spr: G.S.bones, deco: true, flat: true });
+      }
+      // décalques : gravats, taches, mousse
+      for (let i = 0; i < 3; i++) {
+        const x = G.rnd(r.x + 0.5, r.x + r.w - 0.5), y = G.rnd(r.y + 0.5, r.y + r.h - 0.5);
+        s.decals.push({ x, y, spr: G.S.decal[G.pick(s.tier === 1 ? ['rubble', 'moss', 'stain'] : ['rubble', 'stain', 'rubble'])] });
       }
       if (r !== start && r !== far && r.w >= 7 && r.h >= 7 && Math.random() < 0.35) {
         const px = r.cx - 1, py = r.cy - 1;
         let ok = true;
         for (let y = py; y < py + 2; y++) for (let x = px; x < px + 2; x++) if (s.occ[s.idx(x, y)]) ok = false;
         if (ok) s.addObject({ kind: 'pool', x: px, y: py, fp: { x0: px, y0: py, x1: px + 2, y1: py + 2 }, solid: true, spr: G.S.pool, flat: true });
+      }
+    }
+    // Salle du boss : dallage sombre, tapis rouge, braseros
+    if (isBoss) {
+      for (let y = far.y; y < far.y + far.h; y++) for (let x = far.x; x < far.x + far.w; x++) s.look[s.idx(x, y)] = 1;
+      for (let x = far.x; x < far.x + far.w; x++) s.look[s.idx(x, far.cy)] = 2;
+      for (const c of [[far.x + 1, far.y + 1], [far.x + far.w - 2, far.y + 1], [far.x + 1, far.y + far.h - 2], [far.x + far.w - 2, far.y + far.h - 2]]) {
+        if (s.occ[s.idx(c[0], c[1])] || c[1] === far.cy) continue;
+        const f = { x: c[0] + 0.5, y: c[1] + 0.5, z: 11 };
+        solidProp(c[0], c[1], G.S.brazier, { flames: [f], light: { x: f.x, y: f.y, z: f.z, color: 'fire', r: 90 } });
       }
     }
     // Coffres
