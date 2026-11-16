@@ -14,8 +14,10 @@ function worldInfo(w) {
 /* ---------- lois de rotation ---------- */
 // 0 continue, 1 respirante, 2 alternée (inversions douces), 3 à-coups, 4 pas à pas (arrêts francs, rampes lisses),
 // 5 ressac (retours en arrière)
-function patSpeed(p, s, t) {
+// 6 irrégulière : somme de 2 ou 3 sinusoïdes de fréquences non multiples (paramètres du niveau P : b, a[], f[], p[])
+function patSpeed(p, s, t, P) {
   switch (p) {
+    case 6: { let v = P.b; for (let i = 0; i < P.a.length; i++) v += P.a[i] * Math.sin(P.f[i] * t + P.p[i]); return s * v; }
     case 1: return s * (.45 + .75 * (.5 + .5 * Math.sin(t * 1.6)));
     case 2: return s * 1.1 * Math.tanh(3 * (Math.sin(t * .9) + .3));
     case 3: return s * (.45 + .9 * Math.pow(Math.max(0, Math.sin(t * 1.8)), 6));
@@ -54,7 +56,7 @@ function flipSign(t) {
 }
 function speedAt(t) {
   if (!L) return 0;
-  let v = patSpeed(L.pattern, L.speed * L.dir, t);
+  let v = patSpeed(L.pattern, L.speed * L.dir, t, L.irr);
   if (L.accel) v *= accelMult(t);
   if (L.ramp) v *= rampMult(t);
   if (L.demi || L.rhythm || L.inv) v *= flipSign(t);
@@ -103,7 +105,7 @@ function makeLevel(n) {
   const teach = teachOf(n), known = learnedAt(n), has = f => known.has(f);
   const inf = n > LAST_LEVEL;
   // --- recette : loi, sens, obstacles, intensité ---
-  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null, demi: null, rhythm: null, inv: false, ramp: null };
+  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null, demi: null, rhythm: null, inv: false, ramp: null, irr: null };
   R.N = Math.round(lerp(DW.throws[0], DW.throws[1], d)); R.F = lerp(DW.fixed[0], DW.fixed[1], d); R.omega = lerp(DW.speed[0], DW.speed[1], d);
   R.dir = has('sens') ? (r() < .5 ? 1 : -1) : 1;
   R.orbs = has('etoiles') ? (n < 11 ? 2 : 3) : 0;
@@ -113,6 +115,7 @@ function makeLevel(n) {
   if (has('arrets')) { laws.push(4); lw.push(wi === 1 ? 3 : wi === 2 ? 2 : 1); }
   if (has('alternee')) { laws.push(2); lw.push(wi === 3 ? 4 : 1.5); }
   if (has('ressac')) { laws.push(5); lw.push(wi === 3 ? 4 : 1.5); }
+  if (has('irreg')) { laws.push(6); lw.push(wi >= 5 ? 2.5 : 1); }
   if (wi >= 3) lw[0] = 1;
   if (teach) {
     // niveau d'apprentissage : l'idée seule, courte et lente ; le reste au plus simple
@@ -133,6 +136,7 @@ function makeLevel(n) {
     if (teach === 'rythme') { R.N = 5; R.rhythm = { P: 3, warn: .6 }; }
     if (teach === 'invImpact') { R.N = 5; R.inv = true; }
     if (teach === 'rampe') { R.N = 5; R.ramp = { k: .6, T: 12 }; }
+    if (teach === 'irreg') { R.N = 5; R.law = 6; R.irr = 2; }
   } else if (boss) {
     const B = BOSSES[bossArch(n)], tier = Math.min(wi, 5);
     R.N = B.throws[tier]; R.omega = B.speed[tier]; R.F = 0; R.orbs = has('etoiles') ? 3 : 0;
@@ -144,10 +148,11 @@ function makeLevel(n) {
     if (arch === 'forteresse' && tier === 1 && has('rampe')) R.ramp = { k: .5, T: 15 };
     if (arch === 'forteresse') { R.zones = tier === 1 ? [.3, .3, .3] : tier === 0 ? [.45, .45] : [.4, .4]; if (tier === 4 && has('sentinelle')) R.sent = 1; }
     if (arch === 'anneaux') { R.F = 2; if (tier === 2) R.zones = [.4]; if (tier === 3 && has('alternee')) R.law = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
-    if (arch === 'chaos') { R.law = has('alternee') ? 2 : has('respiration') ? 1 : 0; R.F = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
+    if (arch === 'chaos') { R.law = has('irreg') ? 6 : has('alternee') ? 2 : has('respiration') ? 1 : 0; R.irr = tier === 0 ? 2 : tier === 5 ? 4 : 3; R.F = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
     R.F += R.zones.length * 2;
   } else {
     R.law = pick(laws, lw);
+    if (R.law === 6) R.irr = d < .5 ? 2 : 3;
     if (has('serre') && r() < .35) R.layout = r() < .5 ? 'pairs' : 'fan';
     else if (r() < .25) R.layout = 'sym';
     // zones interdites : idée d'Émeraude (29), cœur de Rubis
@@ -170,7 +175,7 @@ function makeLevel(n) {
     if (wi >= 1) {
       const A = () => (R.zones.length || R.fentes ? 1 : 0), Bm = () => ([2, 4, 5].includes(R.law) ? 1 : 0), C = () => (R.sent ? 1 : 0);
       if (A() + Bm() + C() < 2 && has('zone') && !A()) R.zones = [.35 + .15 * r()];
-      if (A() + Bm() + C() < 2) { const stops = laws.filter(x => [2, 4, 5].includes(x)); if (stops.length) R.law = stops[Math.floor(r() * stops.length)]; }
+      if (A() + Bm() + C() < 2) { const stops = laws.filter(x => [2, 4, 5].includes(x)); if (stops.length) { R.law = stops[Math.floor(r() * stops.length)]; R.irr = null; } }
     }
     if (special && sp === 'chrono') { R.law = 0; R.omega = lerp(DW.speed[0], DW.speed[1], Math.min(1, d + .3)); R.F = Math.max(R.F, 3); }
     if (special && sp === 'parfait') { R.N = 6; R.F = Math.max(R.F, 2); }
@@ -205,7 +210,16 @@ function makeLevel(n) {
   while (throws * per + fixed > cap && throws > 3) throws--;
   for (const wl of walls) delete wl.pts;
   // --- vitesse : ω moyenne (facteur de réglage par niveau), normalisée par la loi ---
-  const omega = R.omega * (DIFFICULTY.tune[n] || 1), speed = omega / LAW_MEAN[R.law];
+  // loi irrégulière : 2 ou 3 sinusoïdes (3 fortes pour le Chaos VI), fréquences non multiples, phases tirées au hasard ;
+  // elle tourne surtout dans un sens, avec des arrêts et parfois de brefs retours (annoncés par les chevrons)
+  let irr = null;
+  if (R.law === 6) {
+    const k = R.irr || 2, strong = k === 4, m = Math.min(3, k);
+    irr = { b: strong ? .45 : .6, a: [strong ? .55 : .42, strong ? .38 : .3, .22].slice(0, m), f: [.9 + .5 * r(), 2.05 + .6 * r(), 3.4 + .8 * r()].slice(0, m), p: [r() * TAU, r() * TAU, r() * TAU].slice(0, m) };
+    irr.f = irr.f.map(x => Math.round(x * 1e6) / 1e6); irr.p = irr.p.map(x => Math.round(x * 1e6) / 1e6);
+  }
+  const lawMean = R.law === 6 ? (() => { let a = 0; for (let i = 0; i < 20000; i++) a += Math.abs(patSpeed(6, 1, i * .01, irr)); return Math.round(a / 20000 * 1e9) / 1e9; })() : LAW_MEAN[R.law];
+  const omega = R.omega * (DIFFICULTY.tune[n] || 1), speed = omega / lawMean;
   const dir = R.dir, phase = r() * 10;
   // --- étoiles bonus : loin des obstacles ; pour les traversantes, seulement là où une capture sûre existe ---
   const orbs = [];
@@ -236,11 +250,11 @@ function makeLevel(n) {
   if (occ.length) {
     const tgt = .25 + r() * .9 + FLIGHT;
     let R0 = 0, tt = phase; const h = .005;
-    for (let x = 0; x < tgt; x += h) { R0 += h * (patSpeed(R.law, speed * dir, tt) + patSpeed(R.law, speed * dir, tt + h)) / 2; tt += h; }
+    for (let x = 0; x < tgt; x += h) { R0 += h * (patSpeed(R.law, speed * dir, tt, irr) + patSpeed(R.law, speed * dir, tt + h, irr)) / 2; tt += h; }
     const c = walls.length ? (walls[0].a0 + walls[0].a1) / 2 : pre[Math.floor(r() * pre.length)];
     rot0 = Math.round(norm(HPI - R0 - c) * 1e9) / 1e9;   // arrondi : identique d'un moteur JavaScript à l'autre
   }
-  let vmax = .1; for (let i = 0; i < 160; i++) vmax = Math.max(vmax, Math.abs(patSpeed(R.law, speed, i * .1)));
+  let vmax = .1; for (let i = 0; i < 400; i++) vmax = Math.max(vmax, Math.abs(patSpeed(R.law, speed, i * .1, irr)));
   if (R.accel) { R.accel.k = Math.round(R.accel.k * 1e6) / 1e6; R.accel.cap = Math.round(R.accel.cap * 1e6) / 1e6; vmax *= R.accel.cap; }
   if (R.demi) R.demi.warn = Math.round(R.demi.warn * 1e3) / 1e3;
   if (R.ramp) { R.ramp.k = Math.round(R.ramp.k * 1e3) / 1e3; R.ramp.T = Math.round(R.ramp.T * 1e3) / 1e3; vmax *= 1 + R.ramp.k; }
@@ -249,7 +263,7 @@ function makeLevel(n) {
   const blockers = pre.map(a => ({ a: norm(a), pre: true, k: 1 }));
   for (const wl of walls) for (const p of wallPoints(wl.a0, wl.a1 - wl.a0)) blockers.push({ a: norm(p), pre: true, wall: true, k: 1 });
   const lv = { n, w, boss, special, sp, teach, throws, pre, walls, orbs, sents, speed, omega, pattern: R.law, dir, phase, rot0, trav, vmax, d,
-    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, blockers };
+    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, irr, blockers };
   lv.flags = levelFlags(lv);
   return lv;
 }

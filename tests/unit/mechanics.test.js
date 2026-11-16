@@ -117,6 +117,16 @@ const out = [];
     check(m(L.phase) === 1 && Math.abs(m(L.phase + L.ramp.T) - (1 + L.ramp.k)) < 1e-12 && m(L.phase + L.ramp.T / 2) > 1, `rampe, niveau ${n} : de × 1 à × ${1 + L.ramp.k} en ${L.ramp.T} s`);
   }
 }
+// rotation irrégulière : jamais deux fois le même motif (fréquences non multiples), arrêts et retours annoncés
+{
+  const ns = levelsWith(L => L.pattern === 6, 6);
+  check(ns[0] === 49, `rotation irrégulière : premier niveau ${ns[0]}`);
+  out.push(predictionCheck('rotation irrégulière', ns));
+  for (const n of ns.slice(0, 4)) {
+    const P = mk(n).irr;
+    for (let i = 0; i < P.f.length; i++) for (let j = i + 1; j < P.f.length; j++) { const q = P.f[j] / P.f[i]; check(Math.abs(q - Math.round(q)) > .05, `rotation irrégulière, niveau ${n} : fréquences presque multiples (${P.f})`); }
+  }
+}
 console.log(out.join('\n'));
 if (fails.length) { console.log('mechanics : ÉCHEC\n  ' + fails.slice(0, 20).join('\n  ')); process.exit(1); }
 console.log('mechanics : pass');
