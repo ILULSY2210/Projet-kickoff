@@ -1,13 +1,13 @@
 {
   "name": "Orbita",
   "short_name": "Orbita",
-  "description": "Fais fleurir les planètes : plante tes pousses sans jamais toucher les autres.",
+  "description": "Un doigt, un tir, zéro contact : plante tes aiguilles sur l'astre qui tourne.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#17B3A3",
-  "theme_color": "#17B3A3",
+  "background_color": "#04070a",
+  "theme_color": "#04070a",
   "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
 }

@@ -1,37 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="42%" r="75%"><stop offset="0" stop-color="#2CC7B6"/><stop offset=".55" stop-color="#17B3A3"/><stop offset="1" stop-color="#0B8684"/></radialGradient>
-    <radialGradient id="sh" cx="36%" cy="30%" r="78%"><stop offset="0" stop-color="#fff" stop-opacity=".38"/><stop offset=".42" stop-color="#fff" stop-opacity="0"/><stop offset=".72" stop-color="#2B1840" stop-opacity="0"/><stop offset="1" stop-color="#2B1840" stop-opacity=".42"/></radialGradient>
-    <clipPath id="pl"><circle cx="256" cy="262" r="112"/></clipPath>
+    <radialGradient id="bg" cx="50%" cy="44%" r="70%"><stop offset="0" stop-color="#0c1a16"/><stop offset=".6" stop-color="#060b0d"/><stop offset="1" stop-color="#04070a"/></radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="9"/></filter>
   </defs>
   <rect width="512" height="512" fill="url(#bg)"/>
-  <g transform="translate(256 256) scale(.92) translate(-256 -256)">
-  <circle cx="256" cy="262" r="204" fill="#0A6F74" opacity=".5"/>
-  <circle cx="256" cy="262" r="176" fill="none" stroke="#FFF6E0" stroke-opacity=".22" stroke-width="4" stroke-dasharray="3 18" stroke-linecap="round"/>
-  <!-- pousses -->
-  <g stroke-linecap="round" fill="none">
-    <g stroke="#2B1840" stroke-width="21"><path d="M256,150V88"/><path d="M353,206l54-31"/><path d="M353,318l54,31"/><path d="M159,318l-54,31"/><path d="M159,206l-54-31"/></g>
-    <g stroke="#D5F56B" stroke-width="10"><path d="M256,150V88"/><path d="M353,206l54-31"/><path d="M353,318l54,31"/><path d="M159,318l-54,31"/><path d="M159,206l-54-31"/></g>
+  <path d="M406.0 226.0L424.0 226.0 M400.9 264.8L410.5 267.4 M385.9 301.0L394.6 306.0 M362.1 332.1L369.1 339.1 M331.0 355.9L336.0 364.6 M294.8 370.9L297.4 380.5 M256.0 376.0L256.0 394.0 M217.2 370.9L214.6 380.5 M181.0 355.9L176.0 364.6 M149.9 332.1L142.9 339.1 M126.1 301.0L117.4 306.0 M111.1 264.8L101.5 267.4 M106.0 226.0L88.0 226.0 M111.1 187.2L101.5 184.6 M126.1 151.0L117.4 146.0 M149.9 119.9L142.9 112.9 M181.0 96.1L176.0 87.4 M217.2 81.1L214.6 71.5 M256.0 76.0L256.0 58.0 M294.8 81.1L297.4 71.5 M331.0 96.1L336.0 87.4 M362.1 119.9L369.1 112.9 M385.9 151.0L394.6 146.0 M400.9 187.2L410.5 184.6" stroke="#4dffa6" stroke-opacity=".35" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g filter="url(#glow)" opacity=".9">
+      <circle cx="256" cy="226" r="118" stroke="#4dffa6" stroke-width="16"/>
+      <path d="M256 344L256 425" stroke="#ffffff" stroke-width="14"/>
+      <path d="M165.6 301.8L105.9 352.0" stroke="#4dffa6" stroke-width="12"/>
+    </g>
+    <circle cx="256" cy="226" r="118" stroke="#4dffa6" stroke-width="11"/>
+    <circle cx="256" cy="226" r="104" stroke="#4dffa6" stroke-opacity=".3" stroke-width="2.5"/>
+    <path d="M256.0 146.0L325.3 186.0 M325.3 186.0L325.3 266.0 M325.3 266.0L256.0 306.0 M256.0 306.0L186.7 266.0 M186.7 266.0L186.7 186.0 M186.7 186.0L256.0 146.0 M256.0 188.0L288.9 245.0 M256.0 188.0L186.7 186.0 M256.0 188.0L256.0 146.0 M256.0 188.0L325.3 186.0 M288.9 245.0L223.1 245.0 M288.9 245.0L325.3 186.0 M288.9 245.0L325.3 266.0 M288.9 245.0L256.0 306.0 M223.1 245.0L256.0 188.0 M223.1 245.0L256.0 306.0 M223.1 245.0L186.7 266.0 M223.1 245.0L186.7 186.0" stroke="#b8ffe0" stroke-width="5"/>
+    <path d="M165.6 301.8L105.9 352.0" stroke="#4dffa6" stroke-width="8"/>
+    <circle cx="105.9" cy="352.0" r="12" stroke="#4dffa6" stroke-width="7" fill="#04070a"/>
+    <path d="M256 344L256 425" stroke="#f2fff8" stroke-width="9"/>
   </g>
-  <g stroke="#2B1840" stroke-width="8">
-    <circle cx="256" cy="86" r="21" fill="#FFF6E0"/><circle cx="408" cy="174" r="21" fill="#FFF6E0"/><circle cx="408" cy="350" r="21" fill="#FF8CC6"/><circle cx="104" cy="350" r="21" fill="#FFF6E0"/><circle cx="104" cy="174" r="21" fill="#FF8CC6"/>
-  </g>
-  <g fill="#fff" opacity=".85"><circle cx="249" cy="78" r="5"/><circle cx="401" cy="166" r="5"/><circle cx="97" cy="342" r="5"/></g>
-  <g fill="#2B1840"><circle cx="410" cy="352" r="6"/><circle cx="106" cy="176" r="6"/></g>
-  <!-- étoile à cueillir -->
-  <path d="M256,418l9.5,19.5 21.5,3.2-15.5,15 3.7,21.3L256,467l-19.2,10 3.7-21.3-15.5-15 21.5-3.2z" fill="#FFC72E" stroke="#2B1840" stroke-width="8" stroke-linejoin="round"/>
-  <!-- planète -->
-  <circle cx="262" cy="278" r="114" fill="#2B1840" opacity=".22"/>
-  <circle cx="256" cy="262" r="112" fill="#93E23C"/>
-  <g clip-path="url(#pl)" fill="#6CCB2C"><circle cx="176" cy="196" r="34"/><circle cx="202" cy="176" r="20"/><circle cx="342" cy="208" r="30"/><circle cx="330" cy="340" r="38"/><circle cx="190" cy="348" r="28"/><circle cx="256" cy="366" r="20"/></g>
-  <circle cx="256" cy="262" r="112" fill="url(#sh)"/>
-  <ellipse cx="207" cy="199" rx="23" ry="11" fill="#fff" opacity=".72" transform="rotate(-40 207 199)"/>
-  <circle cx="256" cy="262" r="112" fill="none" stroke="#2B1840" stroke-width="10"/>
-  <!-- visage -->
-  <g fill="#FF8FA3" opacity=".9"><ellipse cx="194" cy="284" rx="14" ry="9.5"/><ellipse cx="318" cy="284" rx="14" ry="9.5"/></g>
-  <g fill="#fff" stroke="#2B1840" stroke-width="6.5"><ellipse cx="216" cy="250" rx="22" ry="24"/><ellipse cx="296" cy="250" rx="22" ry="24"/></g>
-  <g fill="#2B1840"><circle cx="220" cy="240" r="12.5"/><circle cx="300" cy="240" r="12.5"/></g>
-  <g fill="#fff"><circle cx="216" cy="235.5" r="4.4"/><circle cx="296" cy="235.5" r="4.4"/></g>
-  <path d="M234,300q22,20 44,0" fill="none" stroke="#2B1840" stroke-width="8" stroke-linecap="round"/>
-</g>
+  <g fill="#e6fff2"><circle cx="256.0" cy="146.0" r="4.5"/><circle cx="325.3" cy="186.0" r="4.5"/><circle cx="325.3" cy="266.0" r="4.5"/><circle cx="256.0" cy="306.0" r="4.5"/><circle cx="186.7" cy="266.0" r="4.5"/><circle cx="186.7" cy="186.0" r="4.5"/><circle cx="256.0" cy="188.0" r="4.5"/><circle cx="288.9" cy="245.0" r="4.5"/><circle cx="223.1" cy="245.0" r="4.5"/></g>
+  <circle cx="256" cy="425" r="17" fill="#ffffff"/>
 </svg>
