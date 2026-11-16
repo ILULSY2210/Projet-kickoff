@@ -427,7 +427,8 @@ function drawGame(c, g) {
 
 // Chevrons de direction de part et d'autre du pas de tir : sens où défile le bord sous le point d'impact (vitesse > 0 :
 // vers la gauche). Un arrêt ou une inversion à venir dans AHEAD s les fait clignoter à la couleur d'accent : barres
-// « || » pour un arrêt, chevrons qui basculent pour une inversion.
+// « || » pour un arrêt, chevrons qui basculent pour une inversion ; astre arrêté : « || », et la reprise annoncée fait
+// clignoter les chevrons dans son sens.
 let chevron = { kind: null, dir: 0 };
 // géométrie des chevrons et de la jauge ROTATION (dessin et tests de chevauchement)
 function chevGeom() { const y = LAUNCH + PL * .4, s = 5.5, gap = HEAD + 9; return { y, s, gap, box: [cx - gap - 7.5, y - s - 1, cx + gap + 7.5, y + s + 1] }; }
@@ -444,7 +445,7 @@ function drawChevrons(c, g) {
   c.beginPath();
   for (const side of [-1, 1]) {
     const x0 = cx + side * gap;
-    if (ev.kind === 'stop' && blink || d === 0) { c.moveTo(x0 - 3, y - s); c.lineTo(x0 - 3, y + s); c.moveTo(x0 + 3, y - s); c.lineTo(x0 + 3, y + s); continue; }
+    if (ev.kind === 'stop' && blink || d === 0 || ev.kind === 'go' && !blink) { c.moveTo(x0 - 3, y - s); c.lineTo(x0 - 3, y + s); c.moveTo(x0 + 3, y - s); c.lineTo(x0 + 3, y + s); continue; }
     // d > 0 : le bord défile vers la gauche → « < < »
     for (const k of [0, 1]) { const xa = x0 + (k * 7 - 3.5) * (d > 0 ? 1 : -1); c.moveTo(xa + d * s * .7, y - s); c.lineTo(xa - d * s * .7, y); c.lineTo(xa + d * s * .7, y + s); }
   }

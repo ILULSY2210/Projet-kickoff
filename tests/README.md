@@ -41,6 +41,12 @@ mêmes que `__botSafe`.
 | Outil | Ce qui est vérifié |
 |---|---|
 | `tests/sim/agree.js [--n=2000] [--max=400]` | ≥ 2 000 tentatives du joueur qui vise (σ au hasard) rejouées dans Chromium et dans Node : ≥ 99,5 % d'issues identiques, angles à 1e-9 |
+| `tests/sim/report.js [--quick] [--from= --to=]` | joueur qui vise à 30 et 70 ms (300 essais, remesure à 1 000 sous 85 % et sur les falaises), joueur réactif, durées : plancher 75 % à 30 ms (Wilson ≥ 72 %), cibles par monde ±7 points, falaises, respirations, durées (≈ 15 min sur 4 cœurs) |
+| `tests/sim/mash.js [--quick]` | salve à l'aveugle (4 cadences × 200 départs) : ≤ 30 % sur 11-50, ≤ 6/200 par niveau dès 51 ; salve soutenue 60 s |
+| `tests/sim/bot.js` | `__botSafe` sur le vrai cœur : 0 mort, 0 blocage sur 1..300 et 50 niveaux de COSMOS ∞ × 4 parties, à dt 1/60 et 1/120 |
+
+Les calculs se répartissent sur un processus par cœur (`tests/sim/pool.js`, `tests/sim/worker.js`) ; les graines sont
+dans `tests/sim/seeds.json`, les résultats dans `tests/out/sim/`.
 
 | Outil | Section | Ce qui est vérifié |
 |---|---|---|

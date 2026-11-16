@@ -233,15 +233,26 @@ window.__botSafe = function (tSim) {
 };
 
 /* ---------- annonces des arrêts et des inversions ---------- */
-// premier arrêt ou inversion de la rotation dans ]t0, t0 + A] : { kind: 'stop' | 'flip' | null, dt, dir } (dir = sens
-// actuel, +1 ou −1 ; 0 si l'astre est arrêté). L'événement commence quand |v| passe sous STOP_V × vmax (une inversion
+// premier arrêt ou inversion de la rotation dans ]t0, t0 + A] : { kind: 'stop' | 'flip' | 'go' | null, dt, dir } (dir = sens
+// actuel, +1 ou −1 ; si l'astre est arrêté, 'go' annonce la reprise et dir donne son sens). L'événement commence quand |v| passe sous STOP_V × vmax (une inversion
 // passe aussi par là) ; c'est une inversion si la rotation repart ensuite dans l'autre sens. Échantillons de 10 ms puis
 // bissection : instant exact à 0,1 ms près.
 const AHD = { kind: null, dt: 0, dir: 0 };
 function aheadEvent(t0, A) {
   const vm = L.vmax * STOP_V, v0 = speedAt(t0);
   AHD.kind = null; AHD.dt = 0; AHD.dir = Math.abs(v0) >= vm ? Math.sign(v0) : 0;
-  if (!AHD.dir) return AHD;
+  if (!AHD.dir) {
+    // astre arrêté : la reprise est annoncée aussi (kind 'go', dir = sens de la reprise)
+    for (let k = 1; k <= Math.ceil(A / .01); k++) {
+      const x = Math.min(A, k * .01), v = speedAt(t0 + x);
+      if (Math.abs(v) >= vm) {
+        let lo = x - .01, hi = x;
+        for (let i = 0; i < 7; i++) { const m = (lo + hi) / 2; if (Math.abs(speedAt(t0 + m)) >= vm) hi = m; else lo = m; }
+        AHD.kind = 'go'; AHD.dt = hi; AHD.dir = Math.sign(v); return AHD;
+      }
+    }
+    return AHD;
+  }
   const slow = x => Math.abs(speedAt(t0 + x)) < vm || Math.sign(speedAt(t0 + x)) !== AHD.dir;
   let prev = 0, hit = -1;
   for (let k = 1; k <= Math.ceil(A / .01) && hit < 0; k++) { const x = Math.min(A, k * .01); if (slow(x)) hit = x; else prev = x; }

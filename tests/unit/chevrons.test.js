@@ -29,8 +29,18 @@ for (const pat of [4, 2, 5]) {
     tested++;
   }
 }
+// pas à pas : chaque reprise après un arrêt est annoncée aussi ('go'), dans son sens
+{
+  let n = 1; while (mk(n).pattern !== 4) n++;
+  G.startLevel(n); const sp = G.speedAt, L = G.get('L'), vm = L.vmax * G.get('STOP_V'), t0 = G.get('t'); let prev = Math.abs(sp(t0)) >= vm, k = 0;
+  for (let x = t0; x < t0 + 20 && k < 4; x += 1e-4) {
+    const mv = Math.abs(sp(x)) >= vm;
+    if (mv && !prev) { const e = ahead(x - A + .002, A); check(e.kind === 'go' && e.dir === Math.sign(sp(x + .01)) && Math.abs(e.dt - (A - .002)) < .002, `pas à pas : reprise à ${x.toFixed(3)} annoncée (${e.kind}, ${e.dt})`); k++; tested++; }
+    prev = mv;
+  }
+}
 // rotation continue : aucune annonce
 { let n = 1; while (mk(n).pattern !== 0) n++; G.startLevel(n); for (let i = 0; i < 200; i++) { G.update(.05); check(ahead(G.get('t'), A).kind === null, 'rotation continue : annonce intempestive'); } }
 check(tested >= 12, `seulement ${tested} événements vérifiés`);
 if (fails.length) { console.log('chevrons : ÉCHEC\n  ' + fails.slice(0, 20).join('\n  ')); process.exit(1); }
-console.log(`chevrons : pass (${tested} arrêts et inversions annoncés 0,45 s avant)`);
+console.log(`chevrons : pass (${tested} arrêts, inversions et reprises annoncés 0,45 s avant)`);

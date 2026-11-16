@@ -10,7 +10,8 @@
 //            de temps au plus proche instant mortel, et vise le milieu de la première fenêtre presque aussi large que la
 //            meilleure (≥ 85 %) ; son tap part avec une imprécision gaussienne σ ; il réfléchit THINK s après chaque impact.
 //   reactive joueur qui n'anticipe pas : il extrapole la rotation à vitesse constante et tape RT = 0,2 s après avoir vu
-//            une ouverture (seuil qui baisse quand il attend), avec la même imprécision σ.
+//            une ouverture (seuil qui baisse quand il attend), avec la même imprécision σ ; il ne tire pas pendant que les
+//            chevrons annoncent un arrêt ou une inversion (aheadEvent, 0,45 s à l'avance).
 //   mash     salve à l'aveugle : un tap toutes les c secondes ± 1 image, dès un départ tiré au hasard dans la première
 //            seconde, sans regarder.
 //   bot      prédicteur honnête du banc d'essai (__botSafe), comme tests/play.js.
@@ -102,7 +103,8 @@ var __sim = (function () {
       while (state === 'play' && t - T0 < MAXT) {
         var waited = t - tDec, thr = stuck.length ? best * Math.max(.4, .85 - .08 * waited) : -1;
         var a = norm(HPI - (rot + speedAt(t) * (RT + FLIGHT)));
-        var ok = clearAt(a) >= thr;
+        // il lit les chevrons : pas de tir quand un arrêt ou une inversion est annoncé (0,45 s à l'avance)
+        var ok = clearAt(a) >= thr && !aheadEvent(t, AHEAD).kind;
         if (ok && L.sents.length) { var tL = t + RT, w = sentWindow(); for (var i = 0; i < L.sents.length; i++) { var q = L.sents[i]; if (sentMin(q, tL + w[0] - .12, tL + HEAD_WIN[1] + .12) <= q.hw + SENT_PAD_HEAD) ok = false; } }
         if (ok) { tTap = t + RT; break; }
         update(STEP);

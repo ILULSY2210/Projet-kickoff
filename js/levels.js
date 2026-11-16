@@ -12,13 +12,17 @@ function worldInfo(w) {
 }
 
 /* ---------- lois de rotation ---------- */
-// 0 continue, 1 respirante, 2 alternée (inversions douces), 3 à-coups, 4 pas à pas (arrêts), 5 ressac (retours en arrière)
+// 0 continue, 1 respirante, 2 alternée (inversions douces), 3 à-coups, 4 pas à pas (arrêts francs, rampes lisses),
+// 5 ressac (retours en arrière)
 function patSpeed(p, s, t) {
   switch (p) {
     case 1: return s * (.45 + .75 * (.5 + .5 * Math.sin(t * 1.6)));
     case 2: return s * 1.1 * Math.tanh(3 * (Math.sin(t * .9) + .3));
     case 3: return s * (.45 + .9 * Math.pow(Math.max(0, Math.sin(t * 1.8)), 6));
-    case 4: return s * 1.5 * Math.max(0, Math.sin(t * 2.2) + .25) / 1.25;
+    case 4: { // pas à pas : départ en 0,25 s, palier de 1,35 s, arrêt en 0,25 s, pause de 0,75 s (rampes lisses)
+      const u = ((t % 2.6) + 2.6) % 2.6, sm = x => x * x * (3 - 2 * x);
+      return s * 1.6 * (u < .25 ? sm(u / .25) : u < 1.6 ? 1 : u < 1.85 ? sm((1.85 - u) / .25) : 0);
+    }
     case 5: return s * (.5 + .8 * Math.sin(t * 1.3));
     default: return s;
   }
