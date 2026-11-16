@@ -73,8 +73,8 @@ function win() {
 // telle : la distance au bloqueur invisible le plus proche de l'arc n'aurait aucun sens (« il manquait 4° » pour 20°).
 function inZone(a, lv) { return lv.walls.some(wl => angDiff(a, (wl.a0 + wl.a1) / 2) <= (wl.a1 - wl.a0) / 2); }
 function failCause(info, lv) {
-  const deg = info.kind === 'sent' ? 0 : Math.max(1, Math.ceil((GAP - info.d) * 180 / Math.PI));
-  const key = info.kind === 'sent' ? 'sent' : inZone(info.a, lv) ? (info.kind === 'twin' ? 'twinZone' : 'zone') : info.kind === 'twin' ? 'twin' : 'pin';
+  const deg = info.kind === 'sent' || info.kind === 'zone' ? 0 : Math.max(1, Math.ceil((GAP - info.d) * 180 / Math.PI));
+  const key = info.kind === 'sent' ? 'sent' : info.kind === 'zone' ? (info.twin ? 'twinZone' : 'zone') : inZone(info.a, lv) ? (info.kind === 'twin' ? 'twinZone' : 'zone') : info.kind === 'twin' ? 'twin' : 'pin';
   const T = FAIL_TEXT[key], f = x => x.replace('{d}', deg);
   return { key, deg, short: f(T.short), long: f(T.long), tip: T.tips[(lv.n + lv.throws) % T.tips.length] };
 }
@@ -86,6 +86,15 @@ function landing(a) {
   if (L.trav) { const b = a + Math.PI; for (const s of stuck) { const x = angDiff(s.a, b); if (x < d) { d = x; who = s; twin = true; } } }
   LAND.d = d; LAND.who = who; LAND.twin = twin;
   return LAND;
+}
+/* ---------- zones dynamiques : pulsées (éteinte → annoncée → active) et glissantes (toujours actives, elles glissent) ---------- */
+// état d'une zone à l'instant t : 0 éteinte, 1 annoncée, 2 active ; centre (repère de l'astre)
+function zoneState(z, t) { if (z.kind === 'glide') return 2; const u = ((t - z.ph) % z.P + z.P) % z.P; return u < z.off ? 0 : u < z.off + z.ann ? 1 : 2; }
+function zoneCenter(z, t) { return z.kind === 'glide' ? norm(z.c + z.w * (t - L.phase)) : z.c; }
+// zone active où tomberait une tête plantée à l'angle a à l'instant t (contact : la tête, de rayon GAP / 2, touche la bande)
+function zoneAt(a, t, pad) {
+  for (const z of L.zones) if (zoneState(z, t) === 2 && angDiff(a, zoneCenter(z, t)) < z.hw + GAP / 2 + (pad || 0)) return z;
+  return null;
 }
 // règles d'un niveau, de l'idée la plus récemment apprise à la plus ancienne : [titre, règle] (pause, sélection)
 function levelRules(lv, max) {
@@ -99,9 +108,24 @@ function levelRules(lv, max) {
 function litArcs() {
   return computeArcs(L.trav ? stuck.concat(stuck.filter(s => s.pre).map(s => ({ a: s.a + Math.PI }))) : stuck);
 }
+// arcs allumés à l'instant t, zones dynamiques actives retirées (et leurs antipodes pour les traversantes)
+function litArcsAt(t) {
+  const base = litArcs(), cut = [];
+  for (const z of L.zones) if (zoneState(z, t) === 2) {
+    const c = zoneCenter(z, t), h = z.hw + GAP / 2;
+    cut.push([c - h, c + h]); if (L.trav) cut.push([c + Math.PI - h, c + Math.PI + h]);
+  }
+  return cut.length ? subtractArcs(base, cut) : base;
+}
 function stick(a, f) {
   const ld = landing(a), d = ld.d, who = ld.who, twinHit = ld.twin, b = norm(a + Math.PI);
   if (d < GAP) { fail(twinHit ? 'twin' : 'pin', a, d, who); return; }
+  // zone active (pulsée ou glissante) au point d'impact, ou à la sortie opposée d'une traversante : l'aiguille est perdue ;
+  // une aiguille déjà plantée sous une zone n'est jamais touchée
+  if (L.zones.length) {
+    const z = zoneAt(a, t), z2 = !z && L.trav ? zoneAt(b, t) : null;
+    if (z || z2) { fail('zone', z ? a : b, 0, null); failInfo.zone = z || z2; failInfo.twin = !z; return; }
+  }
   const idx = f ? f.idx : L.throws - left - 1, s = { a, pre: false, k: 0, deg: idx };
   stuck.push(s);
   if (L.trav) { s.tr = true; s.tw = { a: b, pre: false, k: 0, twin: true, deg: idx + 2 }; stuck.push(s.tw); }
@@ -225,6 +249,15 @@ function shotSafe(tL, k) {
   const a = norm(HPI - predictRot(tL)), G = GAP * (1 + k), M = GAP * k;
   for (const s of stuck) if (angDiff(s.a, a) <= G) return false;
   if (L.trav) { const b = a + Math.PI; for (const s of stuck) if (angDiff(s.a, b) <= G) return false; }
+  if (L.zones.length) {
+    // zones dynamiques à l'impact (marge : k × GAP en angle, et ±0,1 s si k > 0, déplacement d'une zone glissante compris)
+    const tI = tL + FLIGHT, e = k > 0 ? .1 : 0, b = a + Math.PI;
+    for (const z of L.zones) for (const x of e ? [tI - e, tI, tI + e] : [tI]) {
+      if (zoneState(z, x) !== 2) continue;
+      const pad = z.hw + GAP / 2 + M + (z.kind === 'glide' ? Math.abs(z.w) * e : 0), c = zoneCenter(z, tI);
+      if (angDiff(a, c) < pad || (L.trav && angDiff(b, c) < pad)) return false;
+    }
+  }
   if (L.sents.length) {
     // tige (marge SENT_PAD) sur toute la traversée, tête (marge SENT_PAD_HEAD) sur sa fenêtre, plus M et 20 ms si k > 0
     const e = k > 0 ? .02 : 0, w = sentWindow(), s0 = tL + w[0] - e, s1 = tL + w[1] + e, h0 = tL + HEAD_WIN[0] - e, h1 = tL + HEAD_WIN[1] + e;

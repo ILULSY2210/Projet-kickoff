@@ -105,7 +105,7 @@ function makeLevel(n) {
   const teach = teachOf(n), known = learnedAt(n), has = f => known.has(f);
   const inf = n > LAST_LEVEL;
   // --- recette : loi, sens, obstacles, intensité ---
-  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null, demi: null, rhythm: null, inv: false, ramp: null, irr: null };
+  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null, demi: null, rhythm: null, inv: false, ramp: null, irr: null, pulse: 0, glide: 0 };
   R.N = Math.round(lerp(DW.throws[0], DW.throws[1], d)); R.F = lerp(DW.fixed[0], DW.fixed[1], d); R.omega = lerp(DW.speed[0], DW.speed[1], d);
   R.dir = has('sens') ? (r() < .5 ? 1 : -1) : 1;
   R.orbs = has('etoiles') ? (n < 11 ? 2 : 3) : 0;
@@ -137,6 +137,7 @@ function makeLevel(n) {
     if (teach === 'invImpact') { R.N = 5; R.inv = true; }
     if (teach === 'rampe') { R.N = 5; R.ramp = { k: .6, T: 12 }; }
     if (teach === 'irreg') { R.N = 5; R.law = 6; R.irr = 2; }
+    if (teach === 'pulse') { R.N = 5; R.pulse = 1; }
   } else if (boss) {
     const B = BOSSES[bossArch(n)], tier = Math.min(wi, 5);
     R.N = B.throws[tier]; R.omega = B.speed[tier]; R.F = 0; R.orbs = has('etoiles') ? 3 : 0;
@@ -146,7 +147,7 @@ function makeLevel(n) {
     if (arch === 'pendule' && has('demitour')) { R.demi = { every: B.every[tier], warn: B.warn[tier] }; if (tier >= 3 && has('rythme')) R.rhythm = { P: [3, 2.5, 2.2][tier - 3], warn: B.warn[tier] }; }
     if (arch === 'pendule') { if (tier >= 1) R.F = 2; if (tier === 2) R.zones = [.4]; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
     if (arch === 'forteresse' && tier === 1 && has('rampe')) R.ramp = { k: .5, T: 15 };
-    if (arch === 'forteresse') { R.zones = tier === 1 ? [.3, .3, .3] : tier === 0 ? [.45, .45] : [.4, .4]; if (tier === 4 && has('sentinelle')) R.sent = 1; }
+    if (arch === 'forteresse') { R.zones = tier === 1 ? [.3, .3, .3] : tier === 0 ? [.45, .45] : [.4, .4]; if (tier === 4 && has('sentinelle')) R.sent = 1; if (has('pulse')) R.pulse = [0, 0, 1, 1, 2, 3][tier]; }
     if (arch === 'anneaux') { R.F = 2; if (tier === 2) R.zones = [.4]; if (tier === 3 && has('alternee')) R.law = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
     if (arch === 'chaos') { R.law = has('irreg') ? 6 : has('alternee') ? 2 : has('respiration') ? 1 : 0; R.irr = tier === 0 ? 2 : tier === 5 ? 4 : 3; R.F = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
     R.F += R.zones.length * 2;
@@ -162,6 +163,8 @@ function makeLevel(n) {
     if (has('sentinelle') && r() < (wi >= 4 ? .55 : .2)) R.sent = 1;
     // accélération à chaque aiguille : idée d'Émeraude (9), cœur d'Ambre
     if (has('accel') && r() < (wi === 1 ? .55 : .25)) R.accel = { k: .03 + .04 * d, cap: 1.25 + .3 * d };
+    // zones pulsées (111) : cœur de Rubis
+    if (has('pulse') && r() < (wi === 2 ? .45 : .15)) R.pulse = d > .6 && r() < .5 ? 2 : 1;
     // rampe (71) : cœur d'Ambre, plutôt sans accélération à l'impact
     if (has('rampe') && !R.accel && r() < (wi === 1 ? .45 : .15)) R.ramp = { k: .35 + .35 * d, T: 10 + 10 * r() };
     // demi-tours annoncés : toutes les k aiguilles (19), au rythme (161) ; cœur de Saphir
@@ -209,6 +212,12 @@ function makeLevel(n) {
   while (throws * per + fixed > cap && walls.length > 1) { const wl = walls.pop(); for (const p of wl.pts) occ.splice(occ.indexOf(p), 1); fixed = unitsNow(); if (R.fentes) R.fentes = walls.length > 1; }
   while (throws * per + fixed > cap && throws > 3) throws--;
   for (const wl of walls) delete wl.pts;
+  // --- zones dynamiques : pulsées (période P, annonce de 0,6 s, active ~45 % du temps), loin des obstacles fixes ---
+  const zones = [];
+  for (let i = 0; i < R.pulse; i++) {
+    const c = put(.8), P = Math.round((3.4 - .9 * d) * 1e3) / 1e3, act = Math.round(P * .45 * 1e3) / 1e3;
+    if (c != null) zones.push({ kind: 'pulse', c: Math.round(norm(c) * 1e9) / 1e9, hw: Math.round((.2 + .08 * d) * 1e6) / 1e6, P, ann: .6, off: Math.round((P - act - .6) * 1e3) / 1e3, ph: Math.round(r() * P * 1e6) / 1e6 });
+  }
   // --- vitesse : ω moyenne (facteur de réglage par niveau), normalisée par la loi ---
   // loi irrégulière : 2 ou 3 sinusoïdes (3 fortes pour le Chaos VI), fréquences non multiples, phases tirées au hasard ;
   // elle tourne surtout dans un sens, avec des arrêts et parfois de brefs retours (annoncés par les chevrons)
@@ -263,7 +272,7 @@ function makeLevel(n) {
   const blockers = pre.map(a => ({ a: norm(a), pre: true, k: 1 }));
   for (const wl of walls) for (const p of wallPoints(wl.a0, wl.a1 - wl.a0)) blockers.push({ a: norm(p), pre: true, wall: true, k: 1 });
   const lv = { n, w, boss, special, sp, teach, throws, pre, walls, orbs, sents, speed, omega, pattern: R.law, dir, phase, rot0, trav, vmax, d,
-    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, irr, blockers };
+    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, irr, zones, blockers };
   lv.flags = levelFlags(lv);
   return lv;
 }
@@ -284,6 +293,8 @@ function levelFlags(lv) {
   if (lv.rhythm) f.push('rythme');
   if (lv.inv) f.push('invImpact');
   if (lv.ramp) f.push('rampe');
+  if (lv.zones.some(z => z.kind === 'pulse')) f.push('pulse');
+  if (lv.zones.some(z => z.kind === 'glide')) f.push('glisse');
   return f;
 }
 // arcs libres du bord : complément des zones interdites (±GAP autour de chaque bloqueur)
@@ -298,3 +309,20 @@ function computeArcs(list) {
   for (let i = 0; i < bl.length; i++) { const a = bl[i][1], b = i + 1 < bl.length ? bl[i + 1][0] : bl[0][0] + TAU; if (b - a > .004) free.push([a, b]); }
   return free;
 }
+// arcs libres moins des intervalles interdits [a, b] (angles quelconques) : arcs restants de plus de 0,004 rad
+function subtractArcs(free, cut) {
+  let out = free.map(q => [q[0], q[1]]);
+  for (const [c0, c1] of cut) {
+    const nx = [];
+    for (const [a, b] of out) {
+      // intervalle interdit ramené près de [a, b] (périodicité 2π)
+      let lo = c0, hi = c1; const k = Math.round(((a + b) / 2 - (c0 + c1) / 2) / TAU); lo += k * TAU; hi += k * TAU;
+      if (hi <= a || lo >= b) { nx.push([a, b]); continue; }
+      if (lo - a > .004) nx.push([a, lo]);
+      if (b - hi > .004) nx.push([hi, b]);
+    }
+    out = nx;
+  }
+  return out;
+}
+

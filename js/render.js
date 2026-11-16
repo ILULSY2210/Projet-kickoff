@@ -102,7 +102,8 @@ function syncScene() {
   const ro = RV.rot;
   S.x = cx; S.y = cy - pulse * 3; S.r = R; S.pl = PL; S.head = HEAD; S.rot = ro; S.stuck = stuck;
   if (arcsDirty) { arcs = litArcs(); arcsDirty = false; }
-  S.arcs = arcs; S.walls = L.walls; S.orbs = L.orbs; S.sents = L.sents; S.st = RV.t; S.rs = RS; S.trav = L.trav;
+  if (L.zones.length) arcs = litArcsAt(RV.t);   // bord allumé = sûr maintenant, zones actives retirées
+  S.arcs = arcs; S.walls = L.walls; S.zones = L.zones; S.orbs = L.orbs; S.sents = L.sents; S.st = RV.t; S.rs = RS; S.trav = L.trav;
   S.rgb = PAL.rgb; S.hi = PAL.hi; S.acc = PAL.acc; S.solid = SOL[PAL.solid]; S.boss = L.boss; S.build = build;
   S.lock = state === 'winning' ? Math.min(1, winT / .26) : 0;
   project(S.solid, ro, TILT, ro * .6 + .4);
@@ -114,6 +115,7 @@ function syncScene() {
     const pr = predict(t), la = pr.a;
     leadA = HPI - (pr.rot - rot); leadOk = true;
     for (const s of stuck) if (angDiff(s.a, la) < GAP || (L.trav && angDiff(s.a, la + Math.PI) < GAP)) { leadOk = false; break; }
+    if (leadOk && L.zones.length && (zoneAt(la, pr.tI) || (L.trav && zoneAt(norm(la + Math.PI), pr.tI)))) leadOk = false;
   }
 }
 function heroRect() {
@@ -124,7 +126,7 @@ function syncMenu() {
   const S = MSC, q = heroRect();
   S.r = q.h > 40 ? Math.max(18, Math.min(R * 1.15, (q.h + 6) / 4.75, SW * .2)) : 0;
   S.x = cx; S.y = q.y; S.pl = S.r; S.head = GAP * S.r; S.rot = demo.rot; S.stuck = demo.stuck; S.arcs = demo.arcs;
-  S.walls = NONE; S.orbs = NONE; S.sents = NONE; S.st = 0; S.rs = 0; S.trav = false;
+  S.walls = NONE; S.zones = NONE; S.orbs = NONE; S.sents = NONE; S.st = 0; S.rs = 0; S.trav = false;
   S.rgb = PAL.rgb; S.hi = PAL.hi; S.acc = PAL.acc; S.solid = SOL[PAL.solid]; S.boss = false; S.build = demo.born === undefined ? 1 : demo.born; S.lock = 0;
   project(S.solid, demo.rot, TILT, demo.rot * .6 + .4);
 }
@@ -211,6 +213,8 @@ function drawBody(c, g, S) {
     for (let i = 0; i <= k; i++) { const an = A0 + (A1 - A0) * i / k, cs = Math.cos(an), sn = Math.sin(an), edge = i === 0 || i === k; c.moveTo(x + cs * (edge ? r : rh - hd * .55), y + sn * (edge ? r : rh - hd * .55)); c.lineTo(x + cs * (edge ? rh - hd : rh + hd * .55), y + sn * (edge ? rh - hd : rh + hd * .55)); }
     c.stroke();
   }
+  // --- zones pulsées : éteinte (pointillés discrets), annoncée (contour pointillé qui clignote), active (bande hachurée) ---
+  if (S.zones.length) for (const z of S.zones) if (z.kind === 'pulse') drawZone(c, g, S, z, lw);
   // --- balises pré-placées : tige + tête creuse ---
   c.globalAlpha = (g ? .3 : .85) * B; c.strokeStyle = C; c.lineWidth = g ? lw * 2.2 : lw; c.beginPath();
   for (const s of st) { if (!s.pre || s.wall) continue; const wa = s.a + ro, cs = Math.cos(wa), sn = Math.sin(wa), r1 = r + pl * eB - hd; c.moveTo(x + cs * (r - 2), y + sn * (r - 2)); c.lineTo(x + cs * r1, y + sn * r1); }
@@ -258,6 +262,30 @@ function drawBody(c, g, S) {
     }
   }
   c.globalAlpha = 1;
+}
+
+// bande d'une zone dynamique sur le cercle des têtes : [centre ± hw] (la tête d'une aiguille qui la touche est perdue)
+function drawZone(c, g, S, z, lw) {
+  const x = S.x, y = S.y, r = S.r, rh = r + S.pl, hd = S.head, B = S.build, C = col(S.rgb, 1), st = zoneState(z, S.st), zc = zoneCenter(z, S.st) + S.rot;
+  const A0 = zc - z.hw, A1 = zc + z.hw;
+  if (st < 2) {
+    if (g && st === 0) return;
+    const bl = st === 1 ? (rm() ? 1 : .55 + .45 * Math.sin(time * 18)) : .3;
+    c.globalAlpha = (g ? .3 : 1) * bl * B; c.strokeStyle = C; c.lineWidth = g ? 3 : st === 1 ? 1.6 : 1; c.setLineDash(st === 1 ? [5, 4] : [1.5, 5]);
+    c.beginPath(); c.arc(x, y, rh - hd, A0, A1); c.arc(x, y, rh + hd, A1, A0, true); c.closePath(); c.stroke(); c.setLineDash([]);
+    c.globalAlpha = 1; return;
+  }
+  c.beginPath(); c.arc(x, y, rh, A0, A1);
+  if (g) { c.globalAlpha = .35 * B; c.strokeStyle = C; c.lineWidth = hd * 2; c.lineCap = 'butt'; c.stroke(); c.lineCap = 'round'; return; }
+  c.lineCap = 'butt';
+  c.globalAlpha = B; c.strokeStyle = C; c.lineWidth = hd * 2; c.stroke();
+  c.strokeStyle = INK; c.lineWidth = hd * 2 - lw * 2.2; c.stroke();
+  c.globalAlpha = .25 * B; c.strokeStyle = C; c.stroke();
+  c.lineCap = 'round';
+  c.globalAlpha = .85 * B; c.lineWidth = lw * .9; c.beginPath();
+  const k = Math.max(2, Math.round((A1 - A0) / .12));
+  for (let i = 0; i < k; i++) { const a1 = A0 + (A1 - A0) * i / k, a2 = A0 + (A1 - A0) * (i + 1) / k; c.moveTo(x + Math.cos(a1) * (rh - hd * .6), y + Math.sin(a1) * (rh - hd * .6)); c.lineTo(x + Math.cos(a2) * (rh + hd * .6), y + Math.sin(a2) * (rh + hd * .6)); }
+  c.stroke(); c.globalAlpha = 1;
 }
 
 // Têtes des bloqueurs (creuses) et des aiguilles plantées (pleines), dessinées par-dessus les aiguilles en vol.

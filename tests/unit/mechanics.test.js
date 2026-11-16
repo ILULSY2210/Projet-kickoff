@@ -75,7 +75,7 @@ const out = [];
       if (k % D.every) { check(G.get('dyn').flips.length === Math.floor(k / D.every), `demi-tour, niveau ${n} : demi-tour programmé trop tôt`); continue; }
       const tf = G.get('dyn').flips[G.get('dyn').flips.length - 1], t = G.get('t');
       check(Math.abs(tf - (t - (t - tf) - 0) - 0) < 1 && tf > t, `demi-tour, niveau ${n} : programmé après l'aiguille ${k}`);
-      const v0 = G.speedAt(tf - .001), v1 = G.speedAt(tf + .081);
+      const v0 = G.run(`flipSign(${tf - .001})`), v1 = G.run(`flipSign(${tf + .081})`);
       check(Math.sign(v0) === -Math.sign(v1), `demi-tour, niveau ${n} : la rotation s'inverse (${v0.toFixed(3)} → ${v1.toFixed(3)})`);
       const e = ahead(t, G.run('announceWindow()'));
       check(e.kind !== null && e.dt <= tf - t + .08, `demi-tour, niveau ${n} : annoncé dès l'impact, ${(tf - t).toFixed(2)} s avant (${e.kind}, ${e.dt})`);
@@ -86,7 +86,7 @@ const out = [];
     for (let j = 0; j < 3; j++) {
       const W = G.run('announceWindow()'), tf = R.t0 + j * R.P, e = ahead(tf - Math.max(.45, R.warn) + .002, W);
       check(e.kind !== null && e.dt <= Math.max(.45, R.warn) + .08, `rythme, niveau ${n} : demi-tour ${j} annoncé ${Math.max(.45, R.warn)} s avant (${e.kind}, ${e.dt})`);
-      check(Math.sign(G.speedAt(tf - .001)) === -Math.sign(G.speedAt(tf + .081)), `rythme, niveau ${n} : inversion au demi-tour ${j}`);
+      check(Math.sign(G.run(`flipSign(${tf - .001})`)) === -Math.sign(G.run(`flipSign(${tf + .081})`)), `rythme, niveau ${n} : inversion au demi-tour ${j}`);
     }
   }
 }
@@ -102,7 +102,7 @@ const out = [];
       G.throwPin(); const p0 = G.get('dyn').planted;
       while (G.get('dyn').planted === p0 && G.get('state') === 'play') G.update(STEP);
       const te = G.get('dyn').flips[G.get('dyn').flips.length - 1];
-      check(Math.sign(G.speedAt(te - .001)) === -Math.sign(G.speedAt(te + .081)) || Math.abs(G.speedAt(te - .001)) < .05, `inversion à l'impact, niveau ${n} : la rotation s'inverse à l'aiguille ${k + 1}`);
+      check(Math.sign(G.run(`flipSign(${te - .001})`)) === -Math.sign(G.run(`flipSign(${te + .081})`)), `inversion à l'impact, niveau ${n} : la rotation s'inverse à l'aiguille ${k + 1}`);
       G.update(.2);
     }
   }
@@ -126,6 +126,32 @@ const out = [];
     const P = mk(n).irr;
     for (let i = 0; i < P.f.length; i++) for (let j = i + 1; j < P.f.length; j++) { const q = P.f[j] / P.f[i]; check(Math.abs(q - Math.round(q)) > .05, `rotation irrégulière, niveau ${n} : fréquences presque multiples (${P.f})`); }
   }
+}
+// zones pulsées : une aiguille qui arrive dans la zone active est perdue ; dans la zone éteinte (ou annoncée), elle reste,
+// et la zone qui s'allume ensuite ne la touche pas ; shotSafe (k = 0) dit la même chose que le jeu
+{
+  const ns = levelsWith(L => L.zones.some(z => z.kind === 'pulse'), 6);
+  check(ns[0] === 111, `zones pulsées : premier niveau ${ns[0]}`);
+  out.push(predictionCheck('zones pulsées', ns));
+  let agree = 0, dead = 0, kept = 0;
+  for (const n of ns.slice(0, 4)) for (let i = 0; i < 300; i++) {
+    G.startLevel(n); G.update(.3 + i * .021);
+    const z = G.get('L').zones[0], t = G.get('t'), tL = t + rnd() * STEP;
+    // tir visé au centre de la zone (même angle que la prédiction)
+    const pr = G.predict(tL), zc = G.run(`zoneCenter(L.zones[0], ${pr.tI})`);
+    G.set('rot', G.get('rot') + (pr.a - zc));   // on tourne l'astre pour que l'impact tombe au centre de la zone
+    const safe = G.run(`shotSafe(${tL}, 0)`), st = G.run(`zoneState(L.zones[0], ${tL + G.get('FLIGHT')})`);
+    G.throwPin(tL);
+    for (let j = 0; j < 20 && G.get('flights').length && G.get('state') === 'play'; j++) G.update(STEP);
+    const lost = G.get('state') !== 'play';
+    if (lost) { dead++; check(G.get('failInfo').kind === 'zone' && st === 2, `zones pulsées, niveau ${n} : perdue hors d'une zone active (${G.get('failInfo').kind}, état ${st})`); }
+    else { check(st !== 2, `zones pulsées, niveau ${n} : aiguille plantée dans une zone active`); kept++;
+      // la zone s'allume plus tard : l'aiguille plantée reste
+      const n0 = G.get('stuck').length; G.update(z.P); check(G.get('state') === 'play' && G.get('stuck').length === n0, `zones pulsées, niveau ${n} : aiguille plantée touchée par la zone`); }
+    if (safe === !lost) agree++;
+  }
+  check(dead > 50 && kept > 50, `zones pulsées : échantillon (${dead} perdues, ${kept} plantées)`);
+  check(agree === dead + kept, `zones pulsées : shotSafe d'accord avec le jeu sur ${agree}/${dead + kept}`);
 }
 console.log(out.join('\n'));
 if (fails.length) { console.log('mechanics : ÉCHEC\n  ' + fails.slice(0, 20).join('\n  ')); process.exit(1); }
