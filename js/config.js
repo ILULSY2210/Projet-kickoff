@@ -3,6 +3,12 @@ const TAU = Math.PI * 2, HPI = Math.PI / 2;
 const GAP = .115, ORBHIT = .2, GS = .5, TILT = 1.02;
 // pas fixe de la simulation (s) : update(dt) avance en pas de STEP, la boucle n'appelle que update(STEP)
 const STEP = 1 / 120;
+// vol : durée constante et positions physiques u (0 = pas de tir, 1 = contact avec l'astre), les mêmes sur tous les écrans,
+// relevées sur la mise en page de référence 390×844. L'aiguille mesure U.len (pointe en u, extrémité de la tête en u − U.len).
+const FLIGHT = .060;
+const U = { len: .24, head: .76, sentIn: .73, sent: .71, sentOut: .69, dial: .66 };
+// marge angulaire des sentinelles (rad) : bout arrondi de leur trait + demi-épaisseur de la tige, mesurée en 390×844
+const SENT_PAD = .038;
 const ALERT = [255, 59, 82], INK = '#04070a';
 
 /* ---------- mondes ---------- */

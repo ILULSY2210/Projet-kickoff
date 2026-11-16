@@ -7,6 +7,9 @@
 //   offline : second chargement sans réseau (service worker) en < 1 s.
 //   update  : une nouvelle VERSION du service worker ne s'applique qu'au menu, jamais pendant un niveau.
 //   guard   : script invalide ou bloqué → message « touche pour recharger » en ≤ 4 s, jamais d'écran noir muet.
+//   ecrans  : sur 320×568, 360×640, 390×664, 390×844 et 430×932 : vol de 60 ± 1 ms ; un même journal de tirs donne les mêmes
+//             issues et les mêmes angles à 1e-9 près ; pointe et tête dessinées croisent l'orbite des sentinelles et le
+//             cercle des têtes à ± 1 ms de l'instant physique.
 // Écrit <out>/summary.json ({ pass, sections, errors }) et sort avec le code 1 en cas d'échec.
 const { chromium, devices } = require('playwright');
 const path = require('path'), fs = require('fs');
@@ -303,6 +306,63 @@ async function guard(b) {
   }
 }
 
+const SCREENS = [[320, 568], [360, 640], [390, 664], [390, 844], [430, 932]];
+async function ecrans(b) {
+  const S = section('ecrans');
+  const runs = [];
+  for (const [w, h] of SCREENS) {
+    const c = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const p = await c.newPage(); hook(p, 'ecrans-' + w + 'x' + h);
+    await p.goto(URL);
+    await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+    const r = await p.evaluate(() => {
+      soundOn = false;
+      const o = {};
+      // durée du vol : pas de 0,1 ms jusqu'au contact
+      startLevel(1); update(1);
+      const n0 = stuck.length, t0 = t; throwPin();
+      while (stuck.length === n0 && state === 'play') update(1e-4);
+      o.vol = (t - t0) * 1000;
+      // instants où la pointe et la tête dessinées croisent l'orbite des sentinelles et le cercle des têtes
+      const ys = [0, 0], cross = (k, y) => { for (let i = 0; i <= 61000; i++) { const tau = i * 1e-6; pinYs(tau / FLIGHT, ys); if (ys[k] <= y + 1e-6) return tau * 1000; } return -1; };
+      o.croise = {
+        pointe_sentinelle: [cross(0, cy + RS), U.sent * FLIGHT * 1000],
+        pointe_tetes: [cross(0, cy + R + PL + HEAD), U.head * FLIGHT * 1000],
+        tete_sentinelle: [cross(1, cy + RS), (U.sent + U.len) * FLIGHT * 1000],
+        tete_tetes: [cross(1, cy + R + PL + HEAD), (U.head + U.len) * FLIGHT * 1000],
+        pointe_contact: [cross(0, cy + R), FLIGHT * 1000]
+      };
+      // même journal de tirs (numéros de pas depuis le début du niveau) sur plusieurs niveaux
+      o.jeux = [8, 13, 21, 26].map(n => {
+        startLevel(n);
+        const journal = [70, 150, 230, 320, 400, 470, 560, 650, 720, 810, 900, 980];
+        let j = 0;
+        for (let k = 0; k < 12 * 120 && (state === 'play' || state === 'dying'); k++) {
+          if (state === 'play' && j < journal.length && k >= journal[j]) { throwPin(); j++; }
+          update(STEP);
+        }
+        return { n, state, angles: stuck.filter(s => !s.pre).map(s => s.a), fail: failInfo && failInfo.kind };
+      });
+      showMenu();
+      return o;
+    });
+    const tag = w + 'x' + h;
+    S.ok(Math.abs(r.vol - 60) <= 1, `${tag} : vol de ${r.vol.toFixed(2)} ms (60 ± 1)`);
+    for (const k in r.croise) { const [d, ph] = r.croise[k]; S.ok(d >= 0 && Math.abs(d - ph) <= 1, `${tag} : ${k} dessinée à ${d.toFixed(3)} ms, physique ${ph.toFixed(3)} ms (± 1)`); }
+    S.note('vol_' + tag, +r.vol.toFixed(2));
+    runs.push([tag, r.jeux]);
+    await c.close();
+  }
+  const [rt, ref] = runs[0];
+  for (const [tag, jeux] of runs.slice(1)) jeux.forEach((g, i) => {
+    const q = ref[i];
+    S.eq(g.state + '/' + g.fail, q.state + '/' + q.fail, `niveau ${g.n} : issue en ${tag} comparée à ${rt}`);
+    const d = g.angles.length === q.angles.length ? Math.max(0, ...g.angles.map((a, k) => Math.abs(a - q.angles[k]))) : Infinity;
+    S.ok(d < 1e-9, `niveau ${g.n} : angles en ${tag} à ${d} de ${rt} (< 1e-9)`);
+  });
+  S.note('journal', ref.map(g => `niv ${g.n} : ${g.state}, ${g.angles.length} aiguilles`).join(' ; '));
+}
+
 (async () => {
   const b = await chromium.launch();
   try {
@@ -311,6 +371,7 @@ async function guard(b) {
     if (want('offline')) await offline(b);
     if (want('update')) await update(b);
     if (want('guard')) await guard(b);
+    if (want('ecrans')) await ecrans(b);
   } catch (e) { errors.push('harness: ' + (e && e.stack || e)); }
   await b.close();
   const fails = Object.entries(results).flatMap(([k, r]) => r.fails.map(f => `[${k}] ${f}`));

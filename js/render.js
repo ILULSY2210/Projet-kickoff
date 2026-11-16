@@ -3,7 +3,7 @@ const cvs = $('c'), ctx = cvs.getContext('2d');
 const glow = document.createElement('canvas'), gctx = glow.getContext('2d');   // couche phosphore (basse résolution, persistante)
 const bg = document.createElement('canvas');                                    // fond statique pré-rendu
 let W = 0, H = 0, DPR = 1, SX = 0, SW = 0, cx = 0, cy = 0, R = 60, PL = 60, HEAD = 6, PW = 2, RS = 150, RD = 170, LAUNCH = 0, FLYV = 2000;
-let SAT = 0, SAB = 0, SENT_PAD = .04, bgKey = '';
+let SAT = 0, SAB = 0, bgKey = '', UMAP = [];
 const GSC = {}, MSC = { r: 0 };
 let hero = null, heroTick = 0;
 
@@ -24,10 +24,26 @@ function layout() {
   RD = Math.min(RS + HEAD * 2.4, SW / 2 - 9);
   cy = Math.max(H * .36, top + 62 + RD);
   LAUNCH = Math.max(cy + RS + HEAD * 2 + 6, Math.min(H * .83, H - PL - HEAD - 30 - SAB));
-  FLYV = H * 6;
-  SENT_PAD = (HEAD * .75 + PW * .5) / RS;
+  FLYV = (LAUNCH - (cy + R)) / FLIGHT;   // vitesse moyenne : (LAUNCH − (cy + R)) / FLYV = FLIGHT
+  // carte affine par morceaux u → rayon, qui passe exactement par les éléments dessinés de cet écran
+  UMAP = [[-U.len, LAUNCH + PL + HEAD - cy], [0, LAUNCH - cy], [U.dial, RD], [U.sentOut, RS + HEAD * .75], [U.sent, RS],
+    [U.sentIn, RS - HEAD * .75], [U.head, R + PL + HEAD], [1, R]];
   document.documentElement.style.setProperty('--sx', SX + 'px');
   document.documentElement.style.setProperty('--sw', SW + 'px');
+}
+// rayon dessiné (distance au centre de l'astre, vers le bas) de la position physique u
+function uR(u) {
+  const m = UMAP;
+  if (u <= m[0][0]) return m[0][1];
+  for (let i = 1; i < m.length; i++) if (u <= m[i][0]) { const a = m[i - 1], b = m[i]; return a[1] + (b[1] - a[1]) * (u - a[0]) / (b[0] - a[0]); }
+  return m[m.length - 1][1];
+}
+// ordonnées dessinées de la pointe et de l'extrémité de la tête d'une aiguille en u ; la longueur dessinée ne descend jamais
+// sous la longueur réelle (couloirs courts), sans changer les instants où pointe et tête croisent sentinelles et têtes plantées
+function pinYs(u, out) {
+  const tip = uR(u);
+  out[0] = cy + tip; out[1] = cy + Math.max(uR(u - U.len), tip + PL + HEAD);
+  return out;
 }
 function resize() {
   DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -82,7 +98,7 @@ function syncScene() {
   project(S.solid, ro, TILT, ro * .6 + .4);
   if (S.boss) project(SOL.octa, -ro * 1.3, .8, ro * .9);
   // aiguille en vol : pointe à l'instant présent, et position de l'image précédente pour la traînée du phosphore
-  if (flying) { const y = flyY(flying); flying.py = flying.ry === undefined ? y : flying.ry; flying.ry = y; flying.y = y; }
+  if (flying) { const f = flying, ys = pinYs(flyU(f), f.ys || (f.ys = [0, 0])); f.pEnd = f.yEnd === undefined ? ys[1] : f.yEnd; f.yTip = ys[0]; f.yEnd = ys[1]; }
 }
 function heroRect() {
   if (!hero || --heroTick <= 0) { const q = $('spacer').getBoundingClientRect(); hero = { x: q.left + q.width / 2, y: q.top + q.height / 2, h: q.height }; heroTick = 30; }
@@ -224,11 +240,12 @@ function drawBody(c, g, S) {
   c.globalAlpha = 1;
 }
 
-function drawFreePin(c, g, x, yt, pl, hd, rgb, a) {
-  const lw = Math.max(1.3, R * .022);
+// aiguille libre (pas de tir, vol) : pointe en yt, extrémité de la tête en ye
+function drawPin(c, g, x, yt, ye, rgb, a) {
+  const lw = Math.max(1.3, R * .022), yh = ye - HEAD;
   c.globalAlpha = a * (g ? .5 : 1); c.strokeStyle = col(rgb, 1); c.lineWidth = g ? lw * 2.4 : lw * 1.2; c.lineCap = 'round';
-  c.beginPath(); c.moveTo(x, yt); c.lineTo(x, yt + pl); c.stroke();
-  c.fillStyle = col(rgb, 1); c.beginPath(); c.arc(x, yt + pl, hd * (g ? 1.2 : 1), 0, TAU); c.fill();
+  c.beginPath(); c.moveTo(x, yt); c.lineTo(x, yh); c.stroke();
+  c.fillStyle = col(rgb, 1); c.beginPath(); c.arc(x, yh, HEAD * (g ? 1.2 : 1), 0, TAU); c.fill();
   c.globalAlpha = 1;
 }
 
@@ -300,9 +317,9 @@ function drawGame(c, g) {
   // --- aiguille en vol / sur le pas de tir ---
   if (flying && g) {
     c.globalAlpha = .5; c.strokeStyle = col(hi, 1); c.lineWidth = lw * 3; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(cx, flying.y); c.lineTo(cx, Math.min(LAUNCH, flying.py) + PL); c.stroke(); c.globalAlpha = 1;
-  } else if (flying) drawFreePin(c, g, cx, flying.y, PL, HEAD, hi, 1);
-  else if (state === 'play' && left > 0) drawFreePin(c, g, cx, LAUNCH + (1 - easeOut(readyK)) * 26, PL, HEAD, hi, easeOut(readyK));
+    c.beginPath(); c.moveTo(cx, flying.yTip); c.lineTo(cx, Math.min(LAUNCH + PL, flying.pEnd - HEAD)); c.stroke(); c.globalAlpha = 1;
+  } else if (flying) drawPin(c, g, cx, flying.yTip, flying.yEnd, hi, 1);
+  else if (state === 'play' && left > 0) { const y = LAUNCH + (1 - easeOut(readyK)) * 26; drawPin(c, g, cx, y, y + PL + HEAD, hi, easeOut(readyK)); }
   if (!g && !sheet) {
     // berceau du pas de tir
     const by = LAUNCH + PL, q = HEAD + 5;

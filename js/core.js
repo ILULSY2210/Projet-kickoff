@@ -102,12 +102,10 @@ function stick(a) {
 
 /* ---------- temps de vol et sentinelles ---------- */
 const angSigned = (a, b) => ((b - a) % TAU + TAU * 1.5) % TAU - Math.PI;   // écart signé b − a dans [−π, π)
-function flightTime() { return (LAUNCH - (cy + R)) / FLYV; }
+function flightTime() { return FLIGHT; }
 // intervalle [début, fin] (s après le lancer) pendant lequel l'aiguille, de la pointe à la tête, occupe l'orbite des sentinelles
-function sentWindow() {
-  const yS = cy + RS, hwY = HEAD * .75;
-  return [(LAUNCH - (yS + hwY)) / FLYV, (LAUNCH + PL + HEAD - (yS - hwY)) / FLYV];
-}
+const SENT_WIN = [U.sentOut * FLIGHT, (U.sentIn + U.len) * FLIGHT];
+function sentWindow() { return SENT_WIN; }
 // premier instant de [s0, s1] où la sentinelle q couvre l'axe de tir (écart < H), ou −1 ; mouvement uniforme
 function sentHit(q, s0, s1, H) {
   if (s1 < s0) return -1;
@@ -234,8 +232,8 @@ function viewAt(a) {
   const h = a * (state === 'dying' ? Math.max(0, spinK - a * 4.5) : 1), t1 = t + h;
   RV.t = t1; RV.rot = rot + h * (speedAt(t) + speedAt(t1)) / 2;
 }
-// pointe de l'aiguille en vol à l'écran (y), à l'instant présent
-function flyY(f) { return Math.max(cy + R, LAUNCH - FLYV * Math.max(0, RV.t - f.tL)); }
+// position u de l'aiguille en vol à l'instant présent
+function flyU(f) { return clamp((RV.t - f.tL) / FLIGHT, 0, 1); }
 
 // mode démo du menu : l'astre du monde en cours se joue tout seul
 function updDemo(dt) {
