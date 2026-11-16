@@ -229,7 +229,8 @@ function drawBody(c, g, S) {
       c.globalAlpha = .4 * B; c.setLineDash([1.5, 4]); c.beginPath(); c.moveTo(x + Math.cos(wa) * (r + 7), y + Math.sin(wa) * (r + 7)); c.lineTo(x + Math.cos(wa) * (d - hd * 2.2), y + Math.sin(wa) * (d - hd * 2.2)); c.stroke(); c.setLineDash([]);
     }
   }
-  // --- sentinelles : arcs en orbite extérieure ---
+  // --- sentinelles : arcs en orbite extérieure. Codage par la forme (ART-3) : obstacle mobile = barre pleine ; zone
+  // interdite = bande hachurée creuse ; bloqueur = tête creuse ; aiguille du joueur = tête pleine ---
   if (S.sents.length) {
     if (!g) { c.setLineDash([1.5, 7]); c.globalAlpha = .45 * B; c.strokeStyle = C; c.lineWidth = 1.2; c.beginPath(); c.arc(x, y, S.rs, 0, TAU); c.stroke(); c.setLineDash([]); }
     for (const q of S.sents) {
@@ -237,8 +238,10 @@ function drawBody(c, g, S) {
       c.beginPath(); c.arc(x, y, S.rs, sa - q.hw, sa + q.hw);
       c.strokeStyle = hot ? col(PAL.alert, 1) : HI; c.lineWidth = SENT_HW * 2;
       if (g) { c.globalAlpha = .4 * B; c.stroke(); continue; }
-      c.globalAlpha = B; c.stroke(); c.strokeStyle = INK; c.lineWidth = SENT_HW * 2 - lw * 2.2; c.stroke();
-      c.globalAlpha = .28 * B; c.strokeStyle = hot ? col(PAL.alert, 1) : HI; c.stroke();
+      c.globalAlpha = B; c.stroke();
+      // sillage : sens de déplacement de la sentinelle
+      const dw = q.w > 0 ? -1 : 1;
+      c.globalAlpha = .35 * B; c.lineWidth = 1.2; c.beginPath(); c.arc(x, y, S.rs, Math.min(sa + dw * q.hw, sa + dw * (q.hw + .22)), Math.max(sa + dw * q.hw, sa + dw * (q.hw + .22))); c.stroke();
     }
   }
   c.globalAlpha = 1;
