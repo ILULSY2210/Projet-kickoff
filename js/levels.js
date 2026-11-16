@@ -30,7 +30,20 @@ function patSpeed(p, s, t) {
 // vitesse moyenne |v| de chaque loi pour s = 1 : la vitesse d'un niveau (ω, table DIFFICULTY) est une vitesse moyenne
 // (arrondies : les fonctions sin, tanh, pow peuvent différer d'un dernier bit d'un moteur JavaScript à l'autre)
 const LAW_MEAN = (() => { const m = []; for (let p = 0; p < 6; p++) { let a = 0; for (let i = 0; i < 20000; i++) a += Math.abs(patSpeed(p, 1, i * .005)); m.push(Math.round(a / 20000 * 1e9) / 1e9); } return m; })();
-function speedAt(t) { return L ? patSpeed(L.pattern, L.speed * L.dir, t) : 0; }
+// multiplicateur d'accélération à l'instant t : × (1 + k) par aiguille plantée, atteint en ACC_RAMP s après l'impact
+// (rampe lisse : vitesse continue), plafonné à cap
+const ACC_RAMP = .3, smooth01 = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
+function accelMult(t) {
+  const A = L.accel, H = dyn.hits; let m = 1;
+  for (let i = 0; i < H.length; i++) m *= 1 + A.k * smooth01((t - H[i]) / ACC_RAMP);
+  return m < A.cap ? m : A.cap;
+}
+function speedAt(t) {
+  if (!L) return 0;
+  let v = patSpeed(L.pattern, L.speed * L.dir, t);
+  if (L.accel) v *= accelMult(t);
+  return v;
+}
 
 // mesure de l'union des arcs [a-half, a+half]
 function unionMeasure(angles, half) {
@@ -74,7 +87,7 @@ function makeLevel(n) {
   const teach = teachOf(n), known = learnedAt(n), has = f => known.has(f);
   const inf = n > LAST_LEVEL;
   // --- recette : loi, sens, obstacles, intensité ---
-  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1 };
+  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null };
   R.N = Math.round(lerp(DW.throws[0], DW.throws[1], d)); R.F = lerp(DW.fixed[0], DW.fixed[1], d); R.omega = lerp(DW.speed[0], DW.speed[1], d);
   R.dir = has('sens') ? (r() < .5 ? 1 : -1) : 1;
   R.orbs = has('etoiles') ? (n < 11 ? 2 : 3) : 0;
@@ -99,10 +112,12 @@ function makeLevel(n) {
     if (teach === 'fentes') { R.fentes = true; R.F = 4; }
     if (teach === 'sentinelle') R.sent = 1;
     if (teach === 'traversantes') { R.trav = true; R.N = 3; R.F = 1; }
+    if (teach === 'accel') { R.N = 5; R.accel = { k: .1, cap: 1.5 }; }
   } else if (boss) {
     const B = BOSSES[bossArch(n)], tier = Math.min(wi, 5);
     R.N = B.throws[tier]; R.omega = B.speed[tier]; R.F = 0; R.orbs = has('etoiles') ? 3 : 0;
     const arch = B.id;
+    if (arch === 'reacteur' && has('accel')) R.accel = { k: Math.pow(B.top[tier] / B.speed[tier], 1 / R.N) - 1, cap: B.top[tier] / B.speed[tier] };
     if (arch === 'reacteur') { if (tier === 1 && has('acoups')) R.law = 3; if (tier === 3 && has('alternee')) R.law = 2; if (tier === 2 || tier === 5) R.F = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
     if (arch === 'pendule') { if (tier >= 1) R.F = 2; if (tier === 2) R.zones = [.4]; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
     if (arch === 'forteresse') { R.zones = tier === 1 ? [.3, .3, .3] : tier === 0 ? [.45, .45] : [.4, .4]; if (tier === 4 && has('sentinelle')) R.sent = 1; }
@@ -118,6 +133,8 @@ function makeLevel(n) {
     if (has('fentes') && r() < (wi === 2 ? .4 : .2)) R.fentes = true;
     else if (r() < zp) R.zones = r() < .3 && wi >= 1 ? [.35, .3] : [.35 + .2 * r()];
     if (has('sentinelle') && r() < (wi >= 4 ? .55 : .2)) R.sent = 1;
+    // accélération à chaque aiguille : idée d'Émeraude (9), cœur d'Ambre
+    if (has('accel') && r() < (wi === 1 ? .55 : .25)) R.accel = { k: .03 + .04 * d, cap: 1.25 + .3 * d };
     if (has('traversantes') && r() < (wi >= 4 ? .3 : .15)) R.trav = true;
     // anti-salve (à partir du monde 2) : au moins deux moyens parmi zones larges, loi à arrêts ou inversions,
     // obstacles mobiles ; à défaut, on ajoute ceux qui sont appris
@@ -195,11 +212,12 @@ function makeLevel(n) {
     rot0 = Math.round(norm(HPI - R0 - c) * 1e9) / 1e9;   // arrondi : identique d'un moteur JavaScript à l'autre
   }
   let vmax = .1; for (let i = 0; i < 160; i++) vmax = Math.max(vmax, Math.abs(patSpeed(R.law, speed, i * .1)));
+  if (R.accel) { R.accel.k = Math.round(R.accel.k * 1e6) / 1e6; R.accel.cap = Math.round(R.accel.cap * 1e6) / 1e6; vmax *= R.accel.cap; }
   vmax = Math.round(vmax * 1e6) / 1e6;
   const blockers = pre.map(a => ({ a: norm(a), pre: true, k: 1 }));
   for (const wl of walls) for (const p of wallPoints(wl.a0, wl.a1 - wl.a0)) blockers.push({ a: norm(p), pre: true, wall: true, k: 1 });
   const lv = { n, w, boss, special, sp, teach, throws, pre, walls, orbs, sents, speed, omega, pattern: R.law, dir, phase, rot0, trav, vmax, d,
-    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), blockers };
+    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, blockers };
   lv.flags = levelFlags(lv);
   return lv;
 }
@@ -215,6 +233,7 @@ function levelFlags(lv) {
   if (lv.fentes) f.push('fentes');
   if (lv.sents.length) f.push('sentinelle');
   if (lv.trav) f.push('traversantes');
+  if (lv.accel) f.push('accel');
   return f;
 }
 // arcs libres du bord : complément des zones interdites (±GAP autour de chaque bloqueur)

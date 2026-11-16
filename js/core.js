@@ -10,6 +10,8 @@ let playPhase = 'jeu', countT = 0;
 let recall = null;
 let pulse = 0, orbHits = 0, winT = 0, wonT = 0, dieT = 0, exploded = false, spinK = 1;
 let intro = 0, wIntro = 0, teachT = 0, build = 1, readyK = 1, thrownAny = false, time = 0, lastStars = 0, wipe = 0, headFlash = 0, starFlash = 0;
+// état des lois qui dépendent des impacts : instants des aiguilles plantées (accélération)
+let dyn = { hits: [] };
 let arcs = [[0, TAU]], arcsDirty = true, failInfo = null, nearMark = null, nearCount = 0, levelTime = 0, lastWorldSeen = -1;
 
 // Les abonnés de « level:start » sont synchrones : thème, écrans masqués, effets remis à zéro, son (le banc d'essai en dépend).
@@ -19,7 +21,7 @@ function startLevel(n, quick) {
   const cause = retry && failInfo && L && L.n === n ? failCause(failInfo, L).short : null;
   recall = cause ? { txt: cause, life: RECALL } : null;
   L = makeLevel(n);
-  rot = L.rot0 || 0; t = L.phase; spinK = 1; lawVer++;
+  rot = L.rot0 || 0; t = L.phase; spinK = 1; lawVer++; dyn = { hits: [] };
   stuck = L.blockers; arcsDirty = true;
   left = L.throws; flying = null; flights = [];
   orbHits = 0; winT = 0; wonT = 0; dieT = 0; exploded = false;
@@ -104,6 +106,8 @@ function stick(a, f) {
   if (L.trav) { s.tr = true; s.tw = { a: b, pre: false, k: 0, twin: true, deg: idx + 2 }; stuck.push(s.tw); }
   if (f) { flights.splice(flights.indexOf(f), 1); flying = flights.length ? flights[flights.length - 1] : null; }
   arcsDirty = true; pulse = 1;
+  // l'astre accélère à chaque aiguille plantée (rampe douce à partir de l'impact)
+  if (L.accel) { dyn.hits.push(t); lawVer++; }
   bus.emit('hit', s, idx);
   // frôlement : moins de 2 × GAP d'un voisin
   if (d < GAP * 2) {
@@ -290,6 +294,7 @@ function step(h) {
   else if (L && (state === 'play' || state === 'dying' || state === 'winning')) {
     const k = state === 'dying' ? (spinK = Math.max(0, spinK - h * 4.5)) : 1;
     const t0 = t, r0 = rot, v0 = speedAt(t0), t1 = t0 + h * k, r1 = r0 + (t1 - t0) * (v0 + speedAt(t1)) / 2;
+    let lc = false, tp = t0, rp = r0, vp = v0;
     if (state === 'play' && flights.length) {
       // événements du pas (sentinelle, contact), traités dans l'ordre chronologique
       const ev = [];
@@ -310,12 +315,16 @@ function step(h) {
       if (ev.length > 1) ev.sort((x, y) => x.te - y.te);
       for (const e of ev) {
         if (state !== 'play') break;
-        // instant exact de l'événement : rotation intégrée jusqu'à lui dans le pas
-        t = e.te; rot = r0 + (e.te - t0) * (v0 + speedAt(e.te)) / 2;
+        // instant exact de l'événement : rotation intégrée jusqu'à lui dans le pas (par morceaux si un impact précédent
+        // du même pas a changé la loi de vitesse)
+        t = e.te; rot = lc ? rp + (e.te - tp) * (vp + speedAt(e.te)) / 2 : r0 + (e.te - t0) * (v0 + speedAt(e.te)) / 2;
+        const lv = lawVer;
         if (e.who) fail('sent', 0, 0, e.who); else stick(norm(HPI - rot), e.f);
+        if (lawVer !== lv) { lc = true; tp = e.te; rp = rot; vp = speedAt(e.te); }
       }
     }
-    t = t1; rot = r1;
+    // un impact qui change la loi (accélération, demi-tour…) : la fin du pas est intégrée avec la nouvelle loi
+    t = t1; rot = lc ? rp + (t1 - tp) * (vp + speedAt(t1)) / 2 : r1;
     // boîte à musique : chaque bloqueur qui passe sous la tête de lecture (en haut) fait tinter sa note
     if (state === 'play' && rot !== r0) {
       for (const s of stuck) {
