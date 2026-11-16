@@ -1,6 +1,6 @@
 # Orbita
 
-Petit jeu mobile à une touche (HTML5, un seul fichier, aucune dépendance).
+Petit jeu mobile à une touche (HTML5, sans dépendance ni outil de compilation : `index.html` et ses scripts `js/`).
 
 **But :** un astre tourne. Touche l'écran pour lancer une aiguille qui se plante dessus.
 Si deux aiguilles se touchent, c'est perdu. Plante-les toutes pour passer au niveau suivant.

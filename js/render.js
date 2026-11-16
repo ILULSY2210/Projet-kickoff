@@ -1,0 +1,469 @@
+// ORBITA · render.js — canvas, mise en page, thème, fond pré-rendu, scène, HUD, bandeaux et couche phosphore.
+const cvs = $('c'), ctx = cvs.getContext('2d');
+const glow = document.createElement('canvas'), gctx = glow.getContext('2d');   // couche phosphore (basse résolution, persistante)
+const bg = document.createElement('canvas');                                    // fond statique pré-rendu
+let W = 0, H = 0, DPR = 1, SX = 0, SW = 0, cx = 0, cy = 0, R = 60, PL = 60, HEAD = 6, PW = 2, RS = 150, RD = 170, LAUNCH = 0, FLYV = 2000;
+let SAT = 0, SAB = 0, SENT_PAD = .04, bgKey = '';
+const GSC = {}, MSC = { r: 0 };
+let hero = null, heroTick = 0;
+
+let PAL = worldInfo(0);
+function setTheme(w) {
+  PAL = worldInfo(w);
+  const s = document.documentElement.style;
+  s.setProperty('--c', `rgb(${PAL.rgb})`); s.setProperty('--rgb', PAL.rgb.join(',')); s.setProperty('--hi', `rgb(${PAL.hi})`); s.setProperty('--acc', `rgb(${PAL.acc})`);
+}
+
+function layout() {
+  SW = Math.min(W, Math.max(300, Math.round(H * .62)));
+  SX = (W - SW) / 2; cx = W / 2;
+  const top = Math.max(12, SAT);
+  R = Math.max(26, Math.min(SW * .18, H * .112, (H - top - 108 - SAB) / 6.26));
+  PL = R; HEAD = (GAP - .012) * (R + PL) / 2; PW = Math.max(1.4, R * .024);
+  RS = R + PL + HEAD * 3.3;
+  RD = Math.min(RS + HEAD * 2.4, SW / 2 - 9);
+  cy = Math.max(H * .36, top + 62 + RD);
+  LAUNCH = Math.max(cy + RS + HEAD * 2 + 6, Math.min(H * .83, H - PL - HEAD - 30 - SAB));
+  FLYV = H * 6;
+  SENT_PAD = (HEAD * .75 + PW * .5) / RS;
+  document.documentElement.style.setProperty('--sx', SX + 'px');
+  document.documentElement.style.setProperty('--sw', SW + 'px');
+}
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+  W = Math.max(200, innerWidth); H = Math.max(200, innerHeight);
+  cvs.width = Math.round(W * DPR); cvs.height = Math.round(H * DPR);
+  cvs.style.width = W + 'px'; cvs.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  glow.width = Math.ceil(W * GS); glow.height = Math.ceil(H * GS);
+  gctx.setTransform(GS, 0, 0, GS, 0, 0);
+  SAT = $('sat').getBoundingClientRect().height; SAB = $('sab').getBoundingClientRect().height;
+  layout(); bgKey = ''; hero = null;
+}
+
+function buildBg(fx, fy) {
+  bg.width = cvs.width; bg.height = cvs.height;
+  const b = bg.getContext('2d'), rgb = PAL.rgb; b.setTransform(DPR, 0, 0, DPR, 0, 0);
+  b.fillStyle = INK; b.fillRect(0, 0, W, H);
+  let g = b.createRadialGradient(fx, fy, 0, fx, fy, Math.max(W, H) * .62);
+  g.addColorStop(0, col(rgb, .1)); g.addColorStop(.4, col(rgb, .035)); g.addColorStop(1, col(rgb, 0));
+  b.fillStyle = g; b.fillRect(0, 0, W, H);
+  // trame de points, alignée sur le centre de visée
+  const P = 22; b.fillStyle = col(rgb, .2);
+  for (let y = fy % P; y < H; y += P) for (let x = fx % P; x < W; x += P) {
+    const inS = x > SX - 1 && x < SX + SW + 1; b.globalAlpha = inS ? 1 : .45; b.fillRect(x - .5, y - .5, 1, 1);
+  }
+  b.globalAlpha = 1;
+  // cercles de portée et réticule
+  b.strokeStyle = col(rgb, .075); b.lineWidth = 1;
+  for (const k of [1.55, 2.3, 3.3, 4.6]) { b.beginPath(); b.arc(fx, fy, RD * k, 0, TAU); b.stroke(); }
+  b.beginPath(); b.moveTo(0, fy + .5); b.lineTo(W, fy + .5); b.moveTo(fx + .5, 0); b.lineTo(fx + .5, H); b.stroke();
+  // cadre de l'écran de jeu : équerres aux coins
+  const x0 = SX + 5.5, x1 = SX + SW - 5.5, y0 = Math.max(5, SAT) + .5, y1 = H - Math.max(5, SAB) - .5, k = 12;
+  b.strokeStyle = col(rgb, .42); b.beginPath();
+  b.moveTo(x0, y0 + k); b.lineTo(x0, y0); b.lineTo(x0 + k, y0); b.moveTo(x1 - k, y0); b.lineTo(x1, y0); b.lineTo(x1, y0 + k);
+  b.moveTo(x1, y1 - k); b.lineTo(x1, y1); b.lineTo(x1 - k, y1); b.moveTo(x0 + k, y1); b.lineTo(x0, y1); b.lineTo(x0, y1 - k); b.stroke();
+  if (SX > 8) { b.strokeStyle = col(rgb, .1); b.beginPath(); b.moveTo(SX + .5, 0); b.lineTo(SX + .5, H); b.moveTo(SX + SW - .5, 0); b.lineTo(SX + SW - .5, H); b.stroke(); }
+  // vignette
+  g = b.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .45, W / 2, H / 2, Math.max(W, H) * .8);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)');
+  b.fillStyle = g; b.fillRect(0, 0, W, H);
+}
+
+/* ---------- rendu ---------- */
+function syncScene() {
+  const S = GSC;
+  S.x = cx; S.y = cy - pulse * 3; S.r = R; S.pl = PL; S.head = HEAD; S.rot = rot; S.stuck = stuck;
+  if (arcsDirty) { arcs = computeArcs(stuck); arcsDirty = false; }
+  S.arcs = arcs; S.walls = L.walls; S.orbs = L.orbs; S.sents = L.sents; S.st = t; S.rs = RS; S.trav = L.trav;
+  S.rgb = PAL.rgb; S.hi = PAL.hi; S.acc = PAL.acc; S.solid = SOL[PAL.solid]; S.boss = L.boss; S.build = build;
+  S.lock = state === 'winning' ? Math.min(1, winT / .26) : 0;
+  project(S.solid, rot, TILT, rot * .6 + .4);
+  if (S.boss) project(SOL.octa, -rot * 1.3, .8, rot * .9);
+}
+function heroRect() {
+  if (!hero || --heroTick <= 0) { const q = $('spacer').getBoundingClientRect(); hero = { x: q.left + q.width / 2, y: q.top + q.height / 2, h: q.height }; heroTick = 30; }
+  return hero;
+}
+function syncMenu() {
+  const S = MSC, q = heroRect();
+  S.r = q.h > 40 ? Math.max(18, Math.min(R * 1.15, (q.h + 6) / 4.75, SW * .2)) : 0;
+  S.x = cx; S.y = q.y; S.pl = S.r; S.head = (GAP - .012) * S.r; S.rot = demo.rot; S.stuck = demo.stuck; S.arcs = demo.arcs;
+  S.walls = NONE; S.orbs = NONE; S.sents = NONE; S.st = 0; S.rs = 0; S.trav = false;
+  S.rgb = PAL.rgb; S.hi = PAL.hi; S.acc = PAL.acc; S.solid = SOL[PAL.solid]; S.boss = false; S.build = demo.born === undefined ? 1 : demo.born; S.lock = 0;
+  project(S.solid, demo.rot, TILT, demo.rot * .6 + .4);
+}
+const NONE = [];
+
+function drawDial(c, x, y, rd, rgb, a) {
+  c.lineWidth = 1; c.strokeStyle = col(rgb, 1);
+  c.globalAlpha = .2 * a; c.beginPath(); c.arc(x, y, rd, 0, TAU); c.stroke();
+  c.globalAlpha = .55 * a; c.beginPath();
+  for (let i = 0; i < 72; i++) {
+    if (i === 18) continue;   // l'axe de tir reste dégagé
+    const an = i * TAU / 72, r1 = rd + (i % 6 === 0 ? 7 : 3.5), cs = Math.cos(an), sn = Math.sin(an);
+    c.moveTo(x + cs * (rd + 1.5), y + sn * (rd + 1.5)); c.lineTo(x + cs * r1, y + sn * r1);
+  }
+  c.stroke();
+  if (rd > 110) {
+    c.globalAlpha = .5 * a; c.beginPath();
+    for (let i = 1; i < 12; i++) {
+      if (i % 3 === 0) continue;
+      const an = i * TAU / 12, lab = String((i * 30 + 90) % 360).padStart(3, '0'), tw = vwidth(lab, 5);
+      vpath(c, lab, x + Math.cos(an) * (rd + 16) - tw / 2, y + Math.sin(an) * (rd + 16) - 2.5, 5);
+    }
+    c.stroke();
+  }
+  // tête de lecture (en haut) et repère de tir (en bas)
+  c.globalAlpha = (.5 + .5 * headFlash) * a; c.fillStyle = col(rgb, 1);
+  c.beginPath(); c.moveTo(x, y - rd + 7); c.lineTo(x - 4, y - rd - 1); c.lineTo(x + 4, y - rd - 1); c.closePath(); c.fill();
+  c.globalAlpha = .8 * a; c.beginPath(); c.moveTo(x - 5, y + rd + 7); c.lineTo(x, y + rd); c.lineTo(x + 5, y + rd + 7); c.stroke();
+  c.globalAlpha = 1;
+}
+
+function drawBody(c, g, S) {
+  const x = S.x, y = S.y, r = S.r, ro = S.rot, rgb = S.rgb, pl = S.pl, hd = S.head, B = S.build, eB = easeOut(B);
+  const lw = Math.max(1.3, r * .022), C = col(rgb, 1), HI = col(S.hi, 1), ACC = col(S.acc, 1), rh = r + pl, st = S.stuck;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  // --- solide filaire : arêtes arrière atténuées, avant franches ---
+  const sol = S.solid, rr = r * (.7 + .3 * eB);
+  if (!g) { c.globalAlpha = .3 * B; c.strokeStyle = C; c.lineWidth = lw * .75; strokeSolid(c, sol, x, y, rr, false); }
+  c.globalAlpha = (g ? .34 : .95) * B; c.strokeStyle = C; c.lineWidth = g ? lw * 2.4 : lw; strokeSolid(c, sol, x, y, rr, true);
+  if (S.boss) {
+    c.globalAlpha = (g ? .34 : .95) * B; c.strokeStyle = g ? C : HI; strokeSolid(c, SOL.octa, x, y, rr, true);
+    if (!g) { c.globalAlpha = .4 * B; strokeSolid(c, SOL.octa, x, y, rr, false); c.strokeStyle = C; c.setLineDash([2, 5]); c.globalAlpha = .7 * B; c.lineWidth = lw; c.beginPath(); c.arc(x, y, r * .93, ro, ro + TAU); c.stroke(); c.setLineDash([]); }
+  }
+  if (!g && sol.dots) {
+    c.globalAlpha = .95 * B; c.fillStyle = HI; c.beginPath();
+    for (let i = 0; i < sol.n; i++) if (sol.pz[i] > 0) { const vx = x + sol.px[i] * rr, vy = y + sol.py[i] * rr; c.moveTo(vx + 1.6, vy); c.arc(vx, vy, 1.6, 0, TAU); }
+    c.fill();
+  }
+  // --- bord : seuls les arcs LIBRES sont allumés ---
+  c.strokeStyle = C;
+  if (!g) { c.globalAlpha = .24 * B; c.lineWidth = 1; c.beginPath(); c.arc(x, y, r, 0, TAU); c.stroke(); }
+  c.globalAlpha = (g ? .5 : 1) * B; c.lineWidth = g ? lw * 3 : lw * 1.6; c.beginPath();
+  const full = S.arcs.length === 1 && S.arcs[0][1] - S.arcs[0][0] >= TAU - .001;
+  for (const q of S.arcs) {
+    const a0 = q[0] + ro, a1 = q[1] + ro, c0 = Math.cos(a0), s0 = Math.sin(a0);
+    c.moveTo(x + c0 * r, y + s0 * r); c.arc(x, y, r, a0, a1);
+    if (!g && !full) { const c1 = Math.cos(a1), s1 = Math.sin(a1); c.moveTo(x + c0 * (r - 3.5), y + s0 * (r - 3.5)); c.lineTo(x + c0 * (r + 3.5), y + s0 * (r + 3.5)); c.moveTo(x + c1 * (r - 3.5), y + s1 * (r - 3.5)); c.lineTo(x + c1 * (r + 3.5), y + s1 * (r + 3.5)); }
+  }
+  c.stroke();
+  if (S.lock > 0) { c.globalAlpha = S.lock * (g ? .6 : 1); c.strokeStyle = HI; c.lineWidth = g ? lw * 4 : lw * 2; c.beginPath(); c.arc(x, y, r, 0, TAU); c.stroke(); }
+  // --- arcs pleins (zones interdites) ---
+  for (const wl of S.walls) {
+    const A0 = wl.a0 + ro, A1 = wl.a1 + ro;
+    c.beginPath(); c.arc(x, y, rh, A0, A1);
+    if (g) { c.globalAlpha = .3 * B; c.strokeStyle = C; c.lineWidth = hd * 2; c.stroke(); continue; }
+    c.globalAlpha = B; c.strokeStyle = C; c.lineWidth = hd * 2; c.stroke();
+    c.strokeStyle = INK; c.lineWidth = hd * 2 - lw * 2.2; c.stroke();
+    c.globalAlpha = .2 * B; c.strokeStyle = C; c.stroke();
+    c.globalAlpha = .75 * B; c.lineWidth = lw * .9; c.beginPath();
+    const k = Math.max(2, Math.round((A1 - A0) / .16));
+    for (let i = 0; i <= k; i++) { const an = A0 + (A1 - A0) * i / k, cs = Math.cos(an), sn = Math.sin(an), edge = i === 0 || i === k; c.moveTo(x + cs * (edge ? r : rh - hd * .55), y + sn * (edge ? r : rh - hd * .55)); c.lineTo(x + cs * (edge ? rh - hd : rh + hd * .55), y + sn * (edge ? rh - hd : rh + hd * .55)); }
+    c.stroke();
+  }
+  // --- balises pré-placées : tige + tête creuse ---
+  c.globalAlpha = (g ? .3 : .85) * B; c.strokeStyle = C; c.lineWidth = g ? lw * 2.2 : lw; c.beginPath();
+  for (const s of st) { if (!s.pre || s.wall) continue; const wa = s.a + ro, cs = Math.cos(wa), sn = Math.sin(wa), r1 = r + pl * eB - hd; c.moveTo(x + cs * (r - 2), y + sn * (r - 2)); c.lineTo(x + cs * r1, y + sn * r1); }
+  c.stroke();
+  c.globalAlpha = (g ? .4 : 1) * B; c.lineWidth = g ? lw * 2.2 : lw * 1.25; c.beginPath();
+  for (const s of st) { if (!s.pre || s.wall) continue; const wa = s.a + ro, hx = x + Math.cos(wa) * (r + pl * eB), hy = y + Math.sin(wa) * (r + pl * eB), q = hd - lw * .62; c.moveTo(hx + q, hy); c.arc(hx, hy, q, 0, TAU); }
+  c.stroke();
+  // --- aiguilles lancées : tige blanche + tête pleine ---
+  const lockP = S.lock > 0 ? 1 + .4 * Math.sin(S.lock * Math.PI) : 1;
+  c.globalAlpha = g ? .45 : 1; c.strokeStyle = HI; c.lineWidth = g ? lw * 2.4 : lw * 1.2; c.beginPath();
+  for (const s of st) {
+    if (s.pre || s.twin) continue;
+    const k = s.k, e = easeOut(k); let wa = s.a + ro; if (k < 1) wa += Math.sin(k * 19) * (1 - k) * .03;
+    const cs = Math.cos(wa), sn = Math.sin(wa), r0 = r - 2 - (1 - e) * 5;
+    if (s.tr) { const rb = r + pl * easeOut(s.tw.k); c.moveTo(x + cs * rh, y + sn * rh); c.lineTo(x + cs * (r - 2), y + sn * (r - 2)); c.moveTo(x - cs * (r - 2), y - sn * (r - 2)); c.lineTo(x - cs * rb, y - sn * rb); }
+    else { c.moveTo(x + cs * r0, y + sn * r0); c.lineTo(x + cs * rh, y + sn * rh); }
+  }
+  c.stroke();
+  if (S.trav && !g) {
+    c.globalAlpha = .34; c.setLineDash([3, 4]); c.beginPath();
+    for (const s of st) { if (!s.tr) continue; const wa = s.a + ro, cs = Math.cos(wa), sn = Math.sin(wa); c.moveTo(x + cs * (r - 2), y + sn * (r - 2)); c.lineTo(x - cs * (r - 2), y - sn * (r - 2)); }
+    c.stroke(); c.setLineDash([]);
+  }
+  c.globalAlpha = g ? .6 : 1; c.fillStyle = HI; c.beginPath();
+  const hr = hd * (g ? 1.2 : 1) * lockP;
+  for (const s of st) {
+    if (s.pre) continue;
+    const wa = s.a + ro, rb = r + pl * (s.twin ? easeOut(s.k) : 1), hx = x + Math.cos(wa) * rb, hy = y + Math.sin(wa) * rb;
+    c.moveTo(hx + hr, hy); c.arc(hx, hy, hr, 0, TAU);
+  }
+  c.fill();
+  // --- étoiles bonus : éclat à quatre branches + arc de capture sur le bord ---
+  for (const o of S.orbs) {
+    if (o.hit) continue;
+    const wa = o.a + ro, d = r + pl * .55, ox = x + Math.cos(wa) * d, oy = y + Math.sin(wa) * d, pz = 1 + .12 * Math.sin(time * 5 + o.a * 3);
+    c.beginPath(); starPath(c, ox, oy, hd * 1.9 * pz, hd * .62 * pz, time * .7 + o.a, 4); c.closePath();
+    if (!g) { c.globalAlpha = .28 * B; c.fillStyle = ACC; c.fill(); }
+    c.globalAlpha = (g ? .5 : 1) * B; c.strokeStyle = ACC; c.lineWidth = g ? lw * 2.2 : lw * 1.1; c.stroke();
+    if (!g) {
+      c.globalAlpha = .8 * B; c.lineWidth = lw; c.beginPath(); c.arc(x, y, r + 5, wa - ORBHIT, wa + ORBHIT); c.stroke();
+      c.globalAlpha = .4 * B; c.setLineDash([1.5, 4]); c.beginPath(); c.moveTo(x + Math.cos(wa) * (r + 7), y + Math.sin(wa) * (r + 7)); c.lineTo(x + Math.cos(wa) * (d - hd * 2.2), y + Math.sin(wa) * (d - hd * 2.2)); c.stroke(); c.setLineDash([]);
+    }
+  }
+  // --- sentinelles : arcs en orbite extérieure ---
+  if (S.sents.length) {
+    if (!g) { c.setLineDash([1.5, 7]); c.globalAlpha = .45 * B; c.strokeStyle = C; c.lineWidth = 1.2; c.beginPath(); c.arc(x, y, S.rs, 0, TAU); c.stroke(); c.setLineDash([]); }
+    for (const q of S.sents) {
+      const sa = q.a0 + q.w * S.st, hot = failInfo && failInfo.sent === q;
+      c.beginPath(); c.arc(x, y, S.rs, sa - q.hw, sa + q.hw);
+      c.strokeStyle = hot ? col(ALERT, 1) : HI; c.lineWidth = hd * 1.5;
+      if (g) { c.globalAlpha = .4 * B; c.stroke(); continue; }
+      c.globalAlpha = B; c.stroke(); c.strokeStyle = INK; c.lineWidth = hd * 1.5 - lw * 2.2; c.stroke();
+      c.globalAlpha = .28 * B; c.strokeStyle = hot ? col(ALERT, 1) : HI; c.stroke();
+    }
+  }
+  c.globalAlpha = 1;
+}
+
+function drawFreePin(c, g, x, yt, pl, hd, rgb, a) {
+  const lw = Math.max(1.3, R * .022);
+  c.globalAlpha = a * (g ? .5 : 1); c.strokeStyle = col(rgb, 1); c.lineWidth = g ? lw * 2.4 : lw * 1.2; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(x, yt); c.lineTo(x, yt + pl); c.stroke();
+  c.fillStyle = col(rgb, 1); c.beginPath(); c.arc(x, yt + pl, hd * (g ? 1.2 : 1), 0, TAU); c.fill();
+  c.globalAlpha = 1;
+}
+
+function drawFx(c, g) {
+  c.lineCap = 'round';
+  for (const p of segs) {
+    const k = clamp(p.life / p.max, 0, 1), dx = Math.cos(p.a) * p.len / 2, dy = Math.sin(p.a) * p.len / 2;
+    c.globalAlpha = k * (g ? .35 : 1); c.strokeStyle = col(p.rgb, 1); c.lineWidth = g ? 3.2 : 1.5;
+    c.beginPath(); c.moveTo(p.x - dx, p.y - dy); c.lineTo(p.x + dx, p.y + dy); c.stroke();
+  }
+  for (const p of sparks) {
+    const k = clamp(p.life / p.max, 0, 1);
+    c.globalAlpha = k * (g ? .4 : 1); c.strokeStyle = col(p.rgb, 1); c.lineWidth = g ? 3 : 1.4;
+    c.beginPath(); c.moveTo(p.x, p.y); c.lineTo(p.x - p.vx * .035, p.y - p.vy * .035); c.stroke();
+  }
+  for (const p of rings) {
+    const k = clamp(p.life / p.max, 0, 1);
+    c.globalAlpha = k * (g ? .22 : .9); c.strokeStyle = col(p.rgb, 1); c.lineWidth = g ? p.lw * 2.2 : p.lw;
+    c.beginPath(); c.arc(p.x, p.y, Math.max(.5, p.r), 0, TAU); c.stroke();
+  }
+  if (!g) for (const x of texts) {
+    c.globalAlpha = clamp(x.life * 2.5, 0, 1);
+    vtext(c, x.txt, x.x, x.y, x.h, x.al, col(x.rgb, 1), 1.5);
+  }
+  c.globalAlpha = 1;
+}
+
+function drawGame(c, g) {
+  const S = GSC, rgb = PAL.rgb, hi = PAL.hi, lw = Math.max(1.3, R * .022);
+  const sheet = state === 'won' || state === 'failed';
+  if (!g) {
+    drawDial(c, cx, cy, RD, rgb, 1);
+    c.setLineDash([2, 6]); c.globalAlpha = .28; c.strokeStyle = col(rgb, 1); c.lineWidth = 1;
+    c.beginPath(); c.moveTo(cx, cy + R + PL + HEAD + 8); c.lineTo(cx, LAUNCH - 9); c.stroke(); c.setLineDash([]); c.globalAlpha = 1;
+  }
+  if (!exploded) {
+    drawBody(c, g, S);
+    // viseur d'avance : petit index à l'intérieur du bord, plein si la zone est libre
+    if (!g && state === 'play') {
+      const cs = Math.cos(leadA), sn = Math.sin(leadA), tx = -sn, ty = cs, ra = R - 2.5, rb = R - 10;
+      c.beginPath(); c.moveTo(S.x + cs * ra, S.y + sn * ra); c.lineTo(S.x + cs * rb + tx * 4.2, S.y + sn * rb + ty * 4.2); c.lineTo(S.x + cs * rb - tx * 4.2, S.y + sn * rb - ty * 4.2); c.closePath();
+      c.lineWidth = 1.3; c.strokeStyle = col(hi, 1); c.fillStyle = col(hi, 1); c.globalAlpha = leadOk ? 1 : .55;
+      if (leadOk) c.fill(); c.stroke(); c.globalAlpha = 1;
+    }
+    // marque de frôlement : l'intervalle serré
+    if (nearMark && !g) {
+      const a1 = nearMark.a1 + rot, a2 = nearMark.a2 + rot; let dlt = ((a2 - a1) % TAU + TAU * 1.5) % TAU - Math.PI;
+      c.globalAlpha = clamp(nearMark.life * 2, 0, 1); c.strokeStyle = col(PAL.acc, 1); c.lineWidth = 1.4;
+      c.beginPath(); c.arc(S.x, S.y, R + PL + HEAD + 5, Math.min(a1, a1 + dlt), Math.max(a1, a1 + dlt)); c.stroke(); c.globalAlpha = 1;
+    }
+    // collision : croix d'alerte
+    if (failInfo && (state === 'dying' || state === 'failed' || state === 'pause')) {
+      const A = col(ALERT, 1); let fx, fy;
+      if (failInfo.kind === 'sent') { fx = cx; fy = cy + RS; }
+      else { const fa = failInfo.a + rot; fx = S.x + Math.cos(fa) * (R + PL); fy = S.y + Math.sin(fa) * (R + PL); }
+      const who = failInfo.who, q = HEAD * 1.9, bl = rm() ? 1 : .65 + .35 * Math.sin(time * 14);
+      c.strokeStyle = A; c.lineCap = 'round';
+      if (who && failInfo.kind !== 'sent') {
+        const wa = who.a + rot, hx = S.x + Math.cos(wa) * (R + PL), hy = S.y + Math.sin(wa) * (R + PL);
+        c.globalAlpha = g ? .5 : bl; c.lineWidth = g ? 5 : 2; c.beginPath(); c.arc(hx, hy, HEAD + 3, 0, TAU);
+        if (!who.wall) { c.moveTo(S.x + Math.cos(wa) * R, S.y + Math.sin(wa) * R); c.lineTo(S.x + Math.cos(wa) * (R + PL - HEAD - 3), S.y + Math.sin(wa) * (R + PL - HEAD - 3)); }
+        c.stroke();
+      }
+      c.globalAlpha = g ? .6 : 1; c.lineWidth = g ? 6 : 2.4;
+      c.beginPath(); c.moveTo(fx - q, fy - q); c.lineTo(fx + q, fy + q); c.moveTo(fx + q, fy - q); c.lineTo(fx - q, fy + q); c.stroke();
+      c.globalAlpha = 1;
+    }
+  }
+  // --- aiguille en vol / sur le pas de tir ---
+  if (flying && g) {
+    c.globalAlpha = .5; c.strokeStyle = col(hi, 1); c.lineWidth = lw * 3; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(cx, flying.y); c.lineTo(cx, Math.min(LAUNCH, flying.py === undefined ? flying.y : flying.py) + PL); c.stroke(); c.globalAlpha = 1;
+  } else if (flying) drawFreePin(c, g, cx, flying.y, PL, HEAD, hi, 1);
+  else if (state === 'play' && left > 0) drawFreePin(c, g, cx, LAUNCH + (1 - easeOut(readyK)) * 26, PL, HEAD, hi, easeOut(readyK));
+  if (!g && !sheet) {
+    // berceau du pas de tir
+    const by = LAUNCH + PL, q = HEAD + 5;
+    c.globalAlpha = .6; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(cx - q - 5, by - 4); c.lineTo(cx - q, by - 4); c.lineTo(cx - q, by + q); c.lineTo(cx + q, by + q); c.lineTo(cx + q, by - 4); c.lineTo(cx + q + 5, by - 4); c.stroke(); c.globalAlpha = 1;
+  }
+  drawFx(c, g);
+  drawHud(c, g, sheet);
+  if (state === 'won') drawWinStars(c, g);
+}
+
+function drawHud(c, g, sheet) {
+  const rgb = PAL.rgb, hi = PAL.hi, acc = PAL.acc, top = Math.max(12, SAT), x0 = SX + 68, xr = SX + SW - 16;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  // --- haut : niveau, monde, rythme ---
+  const num = pad2(L.n), nw = vwidth(num, 20);
+  c.globalAlpha = g ? .4 : 1; vtext(c, num, x0, top + 20, 20, 0, col(g ? rgb : hi, 1), g ? 5 : 2.3);
+  if (!g) {
+    c.globalAlpha = 1;
+    if (L.boss) { c.fillStyle = col(hi, 1); c.fillRect(x0 - 1, top + 4, vwidth('BOSS', 7) + 8, 11); vtext(c, 'BOSS', x0 + 3, top + 6, 7, 0, INK, 1.3); }
+    else vtext(c, 'NIVEAU', x0, top + 6, 7, 0, col(rgb, .65), 1.1);
+    vtext(c, PAL.name, x0 + nw + 12, top + 20, 8, 0, col(rgb, .95), 1.25);
+    vtext(c, PAT_NAME[L.pattern], x0 + nw + 12, top + 34, 6, 0, col(rgb, .55), 1);
+  }
+  // --- étoiles bonus ---
+  const on = L.orbs.length;
+  if (!g) vtext(c, 'BONUS', xr, top + 6, 7, 1, col(rgb, .65), 1.1);
+  for (let i = 0; i < on; i++) {
+    const sx = xr - 9 - (on - 1 - i) * 24, sy = top + 30, got = i < orbHits, fl = got && i === orbHits - 1 ? starFlash : 0, rr = 9 * (1 + fl * .5);
+    c.beginPath(); starPath(c, sx, sy, rr, rr * .42, -HPI, 5); c.closePath();
+    if (got) { c.globalAlpha = g ? .5 : .32 + fl * .5; c.fillStyle = col(acc, 1); c.fill(); }
+    if (g && !got) continue;
+    c.globalAlpha = g ? .5 : got ? 1 : .45; c.strokeStyle = col(got ? acc : rgb, 1); c.lineWidth = g ? 3.5 : 1.4; c.stroke();
+  }
+  c.globalAlpha = 1;
+  if (sheet) return;
+  // --- bas gauche : aiguilles restantes ---
+  const py = LAUNCH + 4, xl = SX + 18;
+  if (!g) vtext(c, 'AIGUILLES', xl, py, 7, 0, col(rgb, .65), 1.1);
+  c.globalAlpha = g ? .4 : 1; vtext(c, pad2(left), xl, py + 14, 22, 0, col(g ? rgb : hi, 1), g ? 5 : 2.4); c.globalAlpha = 1;
+  if (!g) {
+    const n = L.throws, stp = Math.min(9, (cx - 30 - xl) / n);
+    c.lineWidth = 1.3;
+    for (let i = 0; i < n; i++) {
+      const px = xl + 2 + i * stp, onp = i < left;
+      c.globalAlpha = onp ? 1 : .28; c.strokeStyle = c.fillStyle = col(onp ? hi : rgb, 1);
+      c.beginPath(); c.moveTo(px, py + 46); c.lineTo(px, py + 54); c.stroke();
+      c.beginPath(); c.arc(px, py + 56.5, 2.1, 0, TAU); c.fill();
+    }
+    c.globalAlpha = 1;
+  }
+  // --- bas droite : oscillo, la vitesse de rotation passée et À VENIR ---
+  const sw = Math.min(136, SW / 2 - 46), sx = xr - sw, sy = py + 14, sh = 38, mid = sy + sh / 2, T0 = -.45, T1 = 1.75, xn = sx + sw * (-T0) / (T1 - T0);
+  if (!g) {
+    vtext(c, 'ROTATION', sx, py, 7, 0, col(rgb, .65), 1.1);
+    c.strokeStyle = col(rgb, 1); c.lineWidth = 1;
+    c.globalAlpha = .5; c.beginPath();
+    c.moveTo(sx, sy + 5); c.lineTo(sx, sy); c.lineTo(sx + 5, sy); c.moveTo(sx + sw - 5, sy); c.lineTo(sx + sw, sy); c.lineTo(sx + sw, sy + 5);
+    c.moveTo(sx + sw, sy + sh - 5); c.lineTo(sx + sw, sy + sh); c.lineTo(sx + sw - 5, sy + sh); c.moveTo(sx + 5, sy + sh); c.lineTo(sx, sy + sh); c.lineTo(sx, sy + sh - 5); c.stroke();
+    c.globalAlpha = .3; c.setLineDash([1.5, 4]); c.beginPath(); c.moveTo(sx + 2, mid); c.lineTo(sx + sw - 2, mid); c.stroke(); c.setLineDash([]);
+    c.globalAlpha = .7; c.beginPath(); c.moveTo(xn, sy + 2); c.lineTo(xn, sy + sh - 2); c.stroke();
+    vtext(c, '+', sx + sw + 3.5, sy + 1, 5, 0, col(rgb, .55), 1); vtext(c, '-', sx + sw + 3.5, sy + sh - 6, 5, 0, col(rgb, .55), 1);
+  }
+  const N = 46, amp = (sh / 2 - 4) * .66 / L.vmax, frozen = state === 'dying' ? spinK : 1;
+  const ty = k => mid - speedAt(t + (T0 + (T1 - T0) * k / N)) * amp * frozen, tx = k => sx + sw * k / N;
+  const kn = Math.round(N * (-T0) / (T1 - T0));
+  if (!g) { c.globalAlpha = .45; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.2; c.beginPath(); c.moveTo(tx(0), ty(0)); for (let k = 1; k <= kn; k++) c.lineTo(tx(k), ty(k)); c.stroke(); }
+  c.globalAlpha = g ? .45 : 1; c.strokeStyle = col(g ? rgb : hi, 1); c.lineWidth = g ? 3.6 : 1.5;
+  c.beginPath(); c.moveTo(tx(kn), ty(kn)); for (let k = kn + 1; k <= N; k++) c.lineTo(tx(k), ty(k)); c.stroke();
+  c.fillStyle = col(hi, 1); c.beginPath(); c.arc(xn, ty(kn), g ? 3.4 : 2.3, 0, TAU); c.fill();
+  c.globalAlpha = 1;
+  // --- annonces dans le couloir de tir ---
+  drawIntro(c, g);
+}
+
+function typed(str, k) { const n = [...str]; return k >= 1 ? str : n.slice(0, Math.ceil(n.length * k)).join(''); }
+function drawIntro(c, g) {
+  const rgb = PAL.rgb, hi = PAL.hi, yT = cy + RD + 13, yB = LAUNCH - 14, hC = yB - yT, xl = SX + 24, maxW = SW - 48;
+  if (state !== 'play' || hC < 30) return;
+  if (wIntro > 0) {
+    const el = 2.5 - wIntro, a = clamp(wIntro / .35, 0, 1), nm = PAL.name;
+    let hN = clamp(hC * .4, 16, 42); hN = fitH(nm, hN, maxW);
+    const y0 = yT + (hC - hN) / 2 + 2, yk = y0 - hN * .3 - 13;
+    c.globalAlpha = a * (g ? .45 : 1);
+    vtext(c, typed(nm, el / .42), xl, y0, hN, 0, col(g ? rgb : hi, 1), g ? hN * .15 : Math.max(2, hN * .085));
+    if (!g) {
+      c.globalAlpha = a; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, yk); c.lineTo(xl - 9, y0 + hN + 17); c.stroke();
+      vtext(c, 'MONDE ' + pad2(L.w + 1), xl, yk, 7, 0, col(rgb, .8), 1.15);
+      if (el > .35) vtext(c, typed(PAL.rule, (el - .35) / .5), xl, y0 + hN + 10, 7, 0, col(rgb, .95), 1.15);
+    }
+    c.globalAlpha = 1; return;
+  }
+  if (intro > 0) {
+    const el = 1.3 - intro, a = clamp(intro / .3, 0, 1), big = L.boss ? 'BOSS' : 'NIVEAU ' + pad2(L.n), hN = fitH(big, clamp(hC * .34, 14, 30), maxW), y0 = yT + (hC - hN) / 2 - 2;
+    c.globalAlpha = a * (g ? .45 : 1);
+    vtext(c, typed(big, el / .3), xl, y0, hN, 0, col(g ? rgb : hi, 1), g ? hN * .16 : Math.max(1.8, hN * .09));
+    if (!g) {
+      c.globalAlpha = a; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y0 - 2); c.lineTo(xl - 9, y0 + hN + 16); c.stroke();
+      vtext(c, (L.boss ? 'NIVEAU ' + pad2(L.n) + ' · ' : 'ROTATION ') + PAT_NAME[L.pattern], xl, y0 + hN + 9, 7, 0, col(rgb, .9), 1.15);
+    }
+    c.globalAlpha = 1; return;
+  }
+  if (!thrownAny && L.n <= 2 && !g) {
+    const msg = L.n === 1 ? (TOUCH ? 'TOUCHE L’ÉCRAN POUR LANCER' : 'CLIC OU ESPACE POUR LANCER') : 'ARC ALLUMÉ = ZONE LIBRE';
+    c.globalAlpha = rm() ? 1 : .6 + .4 * Math.sin(time * 5);
+    vtext(c, msg, xl, yT + hC / 2 - 4, fitH(msg, 9, maxW), 0, col(hi, 1), 1.4);
+    c.strokeStyle = col(rgb, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, yT + hC / 2 - 8); c.lineTo(xl - 9, yT + hC / 2 + 9); c.stroke();
+    c.globalAlpha = 1;
+  }
+}
+
+// trois grandes étoiles tracées au centre du cadran
+function drawWinStars(c, g) {
+  const acc = PAL.acc, rgb = PAL.rgb;
+  c.lineJoin = 'round'; c.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const mid = i === 1, ro = R * (mid ? .62 : .48), sx = cx + (i - 1) * R * 1.22, sy = cy + (mid ? -R * .16 : R * .1), got = i < lastStars;
+    const k = clamp((wonT - .1 - i * .2) / .3, 0, 1);
+    if (!got) { if (g) continue; c.globalAlpha = .4 * clamp(wonT / .3, 0, 1); c.setLineDash([3, 5]); c.strokeStyle = col(rgb, 1); c.lineWidth = 1.3; c.beginPath(); starPath(c, sx, sy, ro, ro * .42, -HPI, 5); c.closePath(); c.stroke(); c.setLineDash([]); continue; }
+    if (k <= 0) continue;
+    const e = easeOut(k), r2 = ro * (.6 + .4 * e) * (1 + (1 - k) * .25);
+    c.beginPath(); starPath(c, sx, sy, r2, r2 * .42, -HPI + (1 - e) * .6, 5); c.closePath();
+    c.globalAlpha = (g ? .16 : .26) * e; c.fillStyle = col(acc, 1); c.fill();
+    c.globalAlpha = (g ? .5 : 1) * e; c.strokeStyle = col(acc, 1); c.lineWidth = g ? 4.4 : 2.2; c.stroke();
+    if (!g) { c.globalAlpha = e; c.beginPath(); starPath(c, sx, sy, r2 * .45, r2 * .19, -HPI, 5); c.closePath(); c.lineWidth = 1.2; c.stroke(); }
+  }
+  c.globalAlpha = 1;
+}
+
+function drawMenuScene(c, g) {
+  const S = MSC; if (!S.r) return;
+  if (!g) drawDial(c, S.x, S.y, S.r * 2.32, PAL.rgb, .9);
+  if (demo.gone <= 0) drawBody(c, g, S);
+  if (demo.fly) {
+    const k = demo.fly.k, lw = Math.max(1.3, R * .022), yt = lerp(S.y + S.r * 2.5, S.y + S.r, easeOut(Math.min(1, k)));
+    c.globalAlpha = (g ? .5 : 1) * Math.min(1, k * 3); c.strokeStyle = c.fillStyle = col(PAL.hi, 1); c.lineWidth = g ? lw * 2.4 : lw * 1.2; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(S.x, yt); c.lineTo(S.x, yt + S.pl); c.stroke(); c.beginPath(); c.arc(S.x, yt + S.pl, S.head * (g ? 1.2 : 1), 0, TAU); c.fill(); c.globalAlpha = 1;
+  }
+  drawFx(c, g);
+}
+
+function draw(dt) {
+  const inGame = L && state !== 'menu' && state !== 'levels';
+  if (inGame) syncScene(); else if (state === 'menu') syncMenu();
+  const fy = inGame ? cy : (MSC.r ? MSC.y : cy), key = PAL.w + ':' + Math.round(fy) + ':' + W + 'x' + H + ':' + DPR;
+  if (key !== bgKey) { bgKey = key; buildBg(cx, fy); }
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  ctx.drawImage(bg, 0, 0, W, H);
+  // couche phosphore : on efface un peu (rémanence), on redessine les traits vifs en gras et en basse résolution
+  gctx.globalCompositeOperation = 'destination-out'; gctx.globalAlpha = 1;
+  gctx.fillStyle = `rgba(0,0,0,${rm() ? .6 : clamp(1 - Math.exp(-dt / .042), .12, 1)})`; gctx.fillRect(0, 0, W, H);
+  gctx.globalCompositeOperation = 'source-over';
+  if (inGame) drawGame(gctx, true); else if (state === 'menu') drawMenuScene(gctx, true);
+  ctx.save();
+  if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
+  ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .95;
+  ctx.drawImage(glow, 0, 0, W, H);
+  ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+  if (inGame) drawGame(ctx, false); else if (state === 'menu') drawMenuScene(ctx, false);
+  ctx.restore();
+  // balayage de retrace entre deux écrans
+  if (wipe > 0) {
+    const y = (1 - wipe) * H;
+    ctx.globalAlpha = wipe * .5; ctx.fillStyle = col(PAL.rgb, 1); ctx.fillRect(0, y - 1, W, 2);
+    ctx.globalAlpha = wipe * .1; ctx.fillRect(0, y - 26, W, 26); ctx.globalAlpha = 1;
+  }
+}
