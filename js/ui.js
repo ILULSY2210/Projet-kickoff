@@ -92,10 +92,17 @@ function pauseGame() {
 function resumeGame() { if (state !== 'pause') return; hideAll(); state = 'play'; last = performance.now(); }
 const click = (id, fn) => { $(id).onclick = e => { ac(); sfx('ui'); fn(e); }; };
 
-// un seul geste : lancer, ou relancer aussitôt après un échec
-function tap() {
+// Horodatage : instant simulé d'un événement daté ts (ms, horloge de performance.now()). La boucle note simWall, l'heure
+// murale de l'instant simulé t ; l'instant est borné à [t, maintenant] (jamais dans le passé, jamais au-delà de 0,1 s).
+// Certaines WebView datent leurs événements depuis 1970 : au-delà d'une seconde d'écart, on prend performance.now().
+function tapInstant(ts, now, tSim, wall) {
+  if (!(ts >= 0) || Math.abs(ts - now) > 1000) ts = now;
+  return tSim + clamp((ts - wall) / 1000, 0, clamp((now - wall) / 1000, 0, .1));
+}
+// un seul geste : lancer, ou relancer aussitôt après un échec ; ts = horodatage de l'événement
+function tap(ts) {
   ac();
-  if (state === 'play') throwPin();
+  if (state === 'play') throwPin(tapInstant(ts, performance.now(), t, simWall));
   else if (state === 'failed' || (state === 'dying' && dieT > .28)) startLevel(L.n, true);
 }
 
@@ -115,14 +122,13 @@ function bindUI() {
   click('resumeBtn', resumeGame);
   click('restartBtn', () => startLevel(L.n, true));
   click('pauseMenu', showMenu);
-  cvs.addEventListener('pointerdown', e => { e.preventDefault(); tap(); });
-  $('failPanel').addEventListener('pointerdown', e => { if (!(e.target.closest && e.target.closest('button'))) tap(); });
+  cvs.addEventListener('pointerdown', e => { e.preventDefault(); tap(e.timeStamp); });
+  $('failPanel').addEventListener('pointerdown', e => { if (!(e.target.closest && e.target.closest('button'))) tap(e.timeStamp); });
   addEventListener('keydown', e => {
     if (e.repeat) return;
     if (e.code === 'Space' || e.code === 'Enter') {
       e.preventDefault(); ac();
-      if (state === 'play') throwPin();
-      else if (state === 'failed' || (state === 'dying' && dieT > .28)) startLevel(L.n, true);
+      if (state === 'play' || state === 'failed' || state === 'dying') tap(e.timeStamp);
       else if (state === 'won') startLevel(L.n + 1);
       else if (state === 'menu') startLevel(unlocked);
       else if (state === 'pause') resumeGame();

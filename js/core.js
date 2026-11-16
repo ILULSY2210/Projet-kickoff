@@ -25,10 +25,11 @@ function startLevel(n, quick) {
   if (newWorld) sfx('world'); else if (!retry) sfx(L.boss ? 'boss' : 'start');
 }
 
-function throwPin() {
+// throwPin() lance à l'instant simulé courant ; throwPin(tSim) à l'instant tSim (jamais avant le dernier instant simulé)
+function throwPin(tSim) {
   if (state !== 'play' || left <= 0) return;
   if (flying) { queued = true; return; }
-  launch(t);
+  launch(tSim > t ? tSim : t);
 }
 // une aiguille part du pas de tir à l'instant de simulation tL (≥ dernier instant simulé)
 function launch(tL) {

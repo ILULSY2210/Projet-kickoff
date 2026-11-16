@@ -2,8 +2,8 @@
 //   node tests/unit/timing.test.js
 // 1. Pour chaque loi de rotation : 30 s de jeu en pas fixes, puis un tir ; l'angle d'impact doit être à moins de
 //    0,002 rad d'une référence numérique (Simpson, pas de 0,1 ms, erreur < 1e-4 rad vérifiée en divisant le pas par deux).
-// 2. Boucle pilotée par une horloge virtuelle à 30, 60, 90, 120 et 144 Hz, même journal de tirs : mêmes issues et mêmes
-//    angles d'impact à 1e-9 près.
+// 2. Boucle pilotée par une horloge virtuelle à 30, 60, 90, 120 et 144 Hz, même journal de tirs (au début d'un pas, ou
+//    à des instants quelconques au milieu d'un pas par throwPin(tSim)) : mêmes issues et mêmes angles d'impact à 1e-9 près.
 const { chromium } = require('playwright');
 const path = require('path');
 const URL = 'file://' + path.resolve(__dirname, '..', '..', 'index.html');
@@ -65,36 +65,42 @@ const VIRTUAL_RAF = () => {
 
     /* ---------- 2. même journal de tirs à 30/60/90/120/144 Hz ---------- */
     const LEVELS = [8, 13, 21, 26];   // continue, à-coups, sentinelle, traversantes
-    for (const n of LEVELS) {
+    for (const n of LEVELS) for (const mode of ['pas', 'instants']) {
       const res = [];
       for (const hz of RATES) {
-        const r = await p.evaluate(({ n, hz }) => {
+        const r = await p.evaluate(({ n, hz, mode }) => {
           soundOn = false;
           // tirs injectés au début d'un pas, à des numéros de pas fixés (journal), quel que soit le découpage en images
-          const journal = [70, 150, 230, 320, 400, 470, 560, 650, 720, 810, 900, 980];
+          const journal = mode === 'pas' ? [70, 150, 230, 320, 400, 470, 560, 650, 720, 810, 900, 980] : [];
+          // seconde moitié du journal : instants de simulation quelconques (au milieu d'un pas), lancés par throwPin(tSim)
+          // entre deux images, avant que la simulation ne les dépasse
+          const instants = mode === 'pas' ? [] : [.52, 1.237, 1.9811, 2.7303, 3.4417, 4.1, 4.86, 5.5133, 6.2, 6.97, 7.71, 8.4];
           const orig = window.update;
-          let k = 0, j = 0;
+          let k = 0, j = 0, q = 0, t0 = 0;
           window.update = function (dt) { if (state === 'play' && j < journal.length && k >= journal[j]) { throwPin(); j++; } k++; orig(dt); };
           let now = window.__vnow || 1000;
           __frame(now += 1000 / hz); __frame(now += 1000 / hz);   // recale l'horloge de la boucle
-          startLevel(n); k = 0;                                   // le journal compte les pas depuis le début du niveau
-          for (let i = 0; i < Math.ceil(12 * hz) && (state === 'play' || state === 'dying'); i++) __frame(now += 1000 / hz);
+          startLevel(n); k = 0; t0 = t;                           // le journal compte les pas depuis le début du niveau
+          for (let i = 0; i < Math.ceil(14 * hz) && (state === 'play' || state === 'dying'); i++) {
+            if (state === 'play' && q < instants.length && t0 + instants[q] - t <= .05) { throwPin(t0 + instants[q]); q++; }
+            __frame(now += 1000 / hz);
+          }
           window.update = orig; window.__vnow = now;
           const o = { state, steps: k, angles: stuck.filter(s => !s.pre).map(s => s.a), fail: failInfo && { kind: failInfo.kind, a: failInfo.a } };
           showMenu();
           return o;
-        }, { n, hz });
+        }, { n, hz, mode });
         res.push([hz, r]);
       }
       const [, ref] = res[0];
       for (const [hz, r] of res.slice(1)) {
-        check(r.state === ref.state, `niveau ${n} : issue à ${hz} Hz (${r.state}) ≠ 30 Hz (${ref.state})`);
+        check(r.state === ref.state, `niveau ${n} (${mode}) : issue à ${hz} Hz (${r.state}) ≠ 30 Hz (${ref.state})`);
         check(r.angles.length === ref.angles.length, `niveau ${n} : ${r.angles.length} aiguilles à ${hz} Hz contre ${ref.angles.length}`);
         const d = Math.max(0, ...r.angles.map((a, i) => Math.abs(a - ref.angles[i])));
         check(d < 1e-9, `niveau ${n} : angles différents à ${hz} Hz (écart ${d})`);
         if (ref.fail || r.fail) check(!!ref.fail && !!r.fail && ref.fail.kind === r.fail.kind && Math.abs(ref.fail.a - r.fail.a) < 1e-9, `niveau ${n} : échec différent à ${hz} Hz`);
       }
-      console.log(`niveau ${n} : ${ref.state}, ${ref.angles.length} aiguilles, identique sur ${RATES.join('/')} Hz`);
+      console.log(`niveau ${n} (${mode}) : ${ref.state}, ${ref.angles.length} aiguilles, identique sur ${RATES.join('/')} Hz`);
     }
     await c.close();
   } catch (e) { fails.push('harness: ' + (e && e.stack || e)); }

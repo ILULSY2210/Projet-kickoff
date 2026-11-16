@@ -10,6 +10,8 @@
 //   ecrans  : sur 320×568, 360×640, 390×664, 390×844 et 430×932 : vol de 60 ± 1 ms ; un même journal de tirs donne les mêmes
 //             issues et les mêmes angles à 1e-9 près ; pointe et tête dessinées croisent l'orbite des sentinelles et le
 //             cercle des têtes à ± 1 ms de l'instant physique.
+//   tir     : lancer horodaté ; vrais taps à des phases aléatoires de l'image : départ à l'instant du tap à 1 ms près,
+//             jamais avant le dernier instant simulé ; horodatage « depuis 1970 » et événement en retard bien traités.
 // Écrit <out>/summary.json ({ pass, sections, errors }) et sort avec le code 1 en cas d'échec.
 const { chromium, devices } = require('playwright');
 const path = require('path'), fs = require('fs');
@@ -363,6 +365,71 @@ async function ecrans(b) {
   S.note('journal', ref.map(g => `niv ${g.n} : ${g.state}, ${g.angles.length} aiguilles`).join(' ; '));
 }
 
+async function tir(b) {
+  const S = section('tir');
+  const c = await b.newContext({ ...devices['iPhone 13'] });
+  const p = await c.newPage(); hook(p, 'tir');
+  await p.goto(URL);
+  await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+  // chaque lancer est noté : instant de l'événement (ms), instant simulé du départ, et horloge globale correspondante
+  await p.evaluate(() => {
+    soundOn = false; window.__tirs = [];
+    addEventListener('pointerdown', e => { window.__ts = e.timeStamp; }, true);
+    const orig = window.launch;
+    window.launch = function (tL) { window.__tirs.push({ ts: window.__ts, tL, t, E: time + (tL - t) }); window.__ts = undefined; return orig(tL); };
+  });
+  const rnd = (() => { let x = 12345; return () => (x = (x * 16807) % 2147483647) / 2147483647; })();
+  // 1. événements émis à une phase aléatoire entre deux images (minuterie), datés à leur création comme un vrai tap
+  let n = 0, bad = 0, past = 0, worst = 0;
+  for (let i = 0; i < 24; i++) {
+    await p.evaluate(() => startLevel(1));
+    await p.waitForTimeout(60);
+    await p.evaluate(ms => new Promise(res => requestAnimationFrame(() => setTimeout(() => {
+      cvs.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true }));
+      res();
+    }, ms))), rnd() * 16);
+    await p.waitForTimeout(30);
+    const r = await p.evaluate(() => { const x = window.__tirs[window.__tirs.length - 1]; window.__tirs = []; return x ? { ...x, simWall, time } : null; });
+    if (!r || r.ts === undefined) { bad++; continue; }
+    n++;
+    // à cadence réelle, l'horloge globale « time » avance comme l'horloge murale : (simWall − ts) doit valoir (time − E)
+    worst = Math.max(worst, Math.abs((r.simWall - r.ts) / 1000 - (r.time - r.E)) * 1000);
+    if (r.tL < r.t) past++;
+  }
+  S.ok(n === 24 && bad === 0, `taps à phase aléatoire lancés et notés : ${n}/24`);
+  S.ok(worst <= 1, `départ à l'instant du tap à ${worst.toFixed(3)} ms près (≤ 1)`);
+  // 2. vrais taps tactiles (souvent livrés en retard par le navigateur sans écran) : jamais de départ dans le passé
+  let m = 0;
+  for (let i = 0; i < 8; i++) {
+    await p.evaluate(() => startLevel(1));
+    await p.waitForTimeout(60 + Math.floor(rnd() * 17));
+    await p.touchscreen.tap(195, 120);
+    await p.waitForTimeout(30);
+    const r = await p.evaluate(() => { const x = window.__tirs[window.__tirs.length - 1]; window.__tirs = []; return x || null; });
+    if (!r) continue;
+    m++; if (r.tL < r.t) past++;
+  }
+  S.ok(m === 8, `vrais taps lancés : ${m}/8`);
+  S.eq(past, 0, 'lancers avant le dernier instant simulé');
+  S.note('ecart_max_ms', +worst.toFixed(3));
+  // horodatage « depuis 1970 » : remplacé par maintenant ; événement en retard : départ au dernier instant simulé
+  const g = await p.evaluate(() => {
+    startLevel(21); update(.5);
+    const o = {};
+    let now = performance.now(), exp = t + clamp((now - simWall) / 1000, 0, .1);
+    tap(Date.now()); let x = window.__tirs.pop();
+    o.epoch = x ? Math.abs(x.tL - exp) * 1000 : -1;
+    startLevel(21); update(.5);
+    tap(performance.now() - 300); x = window.__tirs.pop();
+    o.late = x ? (x.tL - x.t) * 1000 : -1;
+    showMenu();
+    return o;
+  });
+  S.ok(g.epoch >= 0 && g.epoch < 5, `horodatage depuis 1970 : départ à ${g.epoch.toFixed(2)} ms de maintenant`);
+  S.ok(g.late === 0, `événement en retard : départ au dernier instant simulé (écart ${g.late} ms)`);
+  await c.close();
+}
+
 (async () => {
   const b = await chromium.launch();
   try {
@@ -372,6 +439,7 @@ async function ecrans(b) {
     if (want('update')) await update(b);
     if (want('guard')) await guard(b);
     if (want('ecrans')) await ecrans(b);
+    if (want('tir')) await tir(b);
   } catch (e) { errors.push('harness: ' + (e && e.stack || e)); }
   await b.close();
   const fails = Object.entries(results).flatMap(([k, r]) => r.fails.map(f => `[${k}] ${f}`));
