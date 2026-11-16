@@ -72,10 +72,7 @@ function showFail() {
   $('hudBtn').style.display = 'none';
   $('failKick').textContent = `Niveau ${pad2(L.n)} · ${left + 1} aiguille${left ? 's' : ''} restante${left ? 's' : ''}`;
   setVT($('failTitle'), 'CONTACT !', 26, 3.2, SW - 44);
-  let m;
-  if (failInfo && failInfo.kind === 'sent') m = 'Tir intercepté par la sentinelle.';
-  else if (failInfo && failInfo.kind === 'twin') m = 'L’aiguille a percuté en ressortant de l’autre côté.';
-  else if (failInfo) m = 'Il manquait ' + Math.max(1, Math.ceil((GAP - failInfo.d) * 180 / Math.PI)) + '° pour passer.';
+  const m = failInfo ? failCause(failInfo, L).long : '';
   $('failMsg').textContent = (m ? m + ' ' : '') + failMsgs[(L.n + left * 3) % failMsgs.length];
   btn('retryBtn', 'RÉESSAYER', ARROW, true); btn('failMenu', 'MENU');
   $('failHint').textContent = TOUCH ? 'ou touche l’écran' : 'ou appuie sur Espace';
@@ -106,16 +103,19 @@ function tapInstant(ts, now, tSim, wall) {
 }
 // un seul geste : lancer, ou relancer aussitôt après un échec ; ts = horodatage de l'événement.
 // Anti-rebond : un tap à moins de 40 ms du dernier tap retenu est ignoré (rebond du doigt, deux doigts).
+// Après une relance depuis la feuille d'échec, les tirs sont ignorés RETRY_LOCK secondes (le doigt qui relance n'enchaîne
+// pas sur un tir à l'aveugle). Avant la feuille (0,45 s), les taps sont ignorés : on voit toujours pourquoi on a perdu.
 const DEBOUNCE = 40;
-let lastTap = -1e9;
+let lastTap = -1e9, shotLock = -1e9;
+function retry(ts) { startLevel(L.n, true); shotLock = ts + RETRY_LOCK * 1000; }
 function tap(ts) {
   const now = performance.now();
   if (!(ts >= 0) || Math.abs(ts - now) > 1000) ts = now;
   if (ts - lastTap < DEBOUNCE) return;
   lastTap = ts;
   ac();
-  if (state === 'play') throwPin(tapInstant(ts, now, t, simWall));
-  else if (state === 'failed' || (state === 'dying' && dieT > .28)) startLevel(L.n, true);
+  if (state === 'play') { if (ts >= shotLock) throwPin(tapInstant(ts, now, t, simWall)); }
+  else if (state === 'failed') retry(ts);
 }
 
 // branchements des boutons et des entrées (appelé une fois par main.js)
@@ -128,7 +128,7 @@ function bindUI() {
   click('nextBtn', () => startLevel(L.n + 1));
   click('replayBtn', () => startLevel(L.n, true));
   click('winMenu', showMenu);
-  click('retryBtn', () => startLevel(L.n, true));
+  click('retryBtn', e => retry(e && e.timeStamp >= 0 && Math.abs(e.timeStamp - performance.now()) < 1000 ? e.timeStamp : performance.now()));
   click('failMenu', showMenu);
   $('hudBtn').onclick = e => { e.stopPropagation(); ac(); sfx('ui'); pauseGame(); };
   click('resumeBtn', resumeGame);

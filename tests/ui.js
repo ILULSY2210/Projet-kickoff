@@ -14,6 +14,8 @@
 //             jamais avant le dernier instant simulé ; horodatage « depuis 1970 » et événement en retard bien traités.
 //   reprendre : REPRENDRE → compte à rebours de 0,6 s (rotation figée, taps ignorés, throwPin() et __botSafe() inertes),
 //               puis le jeu reprend.
+//   echec   : sur 5 écrans : feuille d'échec à 0,45 s ; tap (et Espace) à 0,3 s ignoré, tap à 0,5 s → relance ;
+//             tirs ignorés 250 ms après une relance par tap ; cause rappelée près du pas de tir après la relance.
 // Écrit <out>/summary.json ({ pass, sections, errors }) et sort avec le code 1 en cas d'échec.
 const { chromium, devices } = require('playwright');
 const path = require('path'), fs = require('fs');
@@ -471,6 +473,59 @@ async function reprendre(b) {
   await c.close();
 }
 
+async function echec(b) {
+  const S = section('echec');
+  for (const [w, h] of SCREENS) {
+    const tag = w + 'x' + h;
+    const c = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const p = await c.newPage(); hook(p, 'echec-' + tag);
+    await p.goto(URL);
+    await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+    const r = await p.evaluate(async () => {
+      const frame = () => new Promise(res => requestAnimationFrame(() => res()));
+      const until = async cond => { for (let i = 0; i < 1200 && !cond(); i++) await frame(); return cond(); };
+      const sleep = ms => new Promise(res => setTimeout(res, ms));
+      const tapNow = () => cvs.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true }));
+      const o = {};
+      soundOn = false; lastTap = -1e9;
+      startLevel(3);
+      // échec déterministe : tir quand l'impact prévu tombe sur une aiguille
+      let tFail = 0;
+      await until(() => {
+        if (state === 'play' && !flying && left > 0 && stuck.some(s => angDiff(s.a, predict(t).a) < GAP * .4)) throwPin();
+        if (state === 'dying' && !tFail) tFail = performance.now() - dieT * 1000;
+        return state === 'dying';
+      });
+      await until(() => dieT >= .3);
+      o.d03 = dieT; tapNow(); await sleep(20);
+      o.s03 = state;
+      document.dispatchEvent(new KeyboardEvent('keydown', { code: 'Space', bubbles: true })); await sleep(20);
+      o.k03 = state;
+      await until(() => state === 'failed');
+      o.sheet = dieT;
+      while (performance.now() - tFail < 500) await frame();
+      o.at05 = (performance.now() - tFail) / 1000;
+      const t0 = performance.now(); tapNow();
+      o.s05 = state; o.recall = recall && recall.txt; o.recallLife = recall && recall.life;
+      const l0 = left;
+      while (performance.now() - t0 < 100) await frame();
+      tapNow(); o.lock100 = l0 - left;
+      while (performance.now() - t0 < 300) await frame();
+      lastTap = -1e9; tapNow(); o.lock300 = l0 - left;
+      showMenu();
+      return o;
+    });
+    S.eq(r.s03, 'dying', `${tag} : tap à ${r.d03.toFixed(2)} s ignoré`);
+    S.eq(r.k03, 'dying', `${tag} : Espace à 0,3 s ignoré`);
+    S.ok(r.sheet >= .45 && r.sheet < .48, `${tag} : feuille d'échec à ${r.sheet.toFixed(3)} s (0,45)`);
+    S.eq(r.s05, 'play', `${tag} : tap à ${r.at05.toFixed(2)} s → relance`);
+    S.ok(!!r.recall && Math.abs(r.recallLife - 1.2) < .05, `${tag} : cause rappelée après la relance (« ${r.recall} »)`);
+    S.eq(r.lock100, 0, `${tag} : tir ignoré 100 ms après la relance par tap`);
+    S.eq(r.lock300, 1, `${tag} : tir accepté 300 ms après la relance par tap`);
+    await c.close();
+  }
+}
+
 (async () => {
   const b = await chromium.launch();
   try {
@@ -482,6 +537,7 @@ async function reprendre(b) {
     if (want('ecrans')) await ecrans(b);
     if (want('tir')) await tir(b);
     if (want('reprendre')) await reprendre(b);
+    if (want('echec')) await echec(b);
   } catch (e) { errors.push('harness: ' + (e && e.stack || e)); }
   await b.close();
   const fails = Object.entries(results).flatMap(([k, r]) => r.fails.map(f => `[${k}] ${f}`));

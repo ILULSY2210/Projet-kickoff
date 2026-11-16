@@ -4,6 +4,8 @@
 let state = 'menu', L = null, rot = 0, t = 0, stuck = [], left = 0, flying = null, flights = [];
 // sous-phase de « play » : 'jeu', ou 'compte' (compte à rebours de REPRENDRE : rotation figée, tirs ignorés)
 let playPhase = 'jeu', countT = 0;
+// rappel de la cause d'un échec pendant RECALL secondes après la relance : { txt, life }
+let recall = null;
 let pulse = 0, orbHits = 0, winT = 0, wonT = 0, dieT = 0, exploded = false, spinK = 1;
 let intro = 0, wIntro = 0, build = 1, readyK = 1, thrownAny = false, time = 0, lastStars = 0, wipe = 0, headFlash = 0, starFlash = 0;
 let arcs = [[0, TAU]], arcsDirty = true, failInfo = null, nearMark = null, nearCount = 0, levelTime = 0, lastWorldSeen = -1, leadA = HPI, leadOk = true;
@@ -12,6 +14,8 @@ const demo = { stuck: [], rot: 0, t: 0, cool: .8, fly: null, arcs: [[0, TAU]], g
 function startLevel(n, quick) {
   n = Math.max(1, n | 0);
   const retry = !!quick || (L && L.n === n && state !== 'menu' && state !== 'levels');
+  const cause = retry && failInfo && L && L.n === n ? failCause(failInfo, L).short : null;
+  recall = cause ? { txt: cause, life: RECALL } : null;
   L = makeLevel(n);
   if (PAL.w !== L.w) { setTheme(L.w); bgKey = ''; }
   rot = 0; t = L.phase; spinK = 1;
@@ -72,6 +76,13 @@ function win() {
 }
 
 // aiguille f plantée à l'angle a (repère de l'astre)
+// cause d'un échec, en clair : short = rappel près du pas de tir (police vectorielle), long = phrase de la feuille d'échec
+function failCause(info, lv) {
+  if (info.kind === 'sent') return { short: 'INTERCEPTÉE PAR LA SENTINELLE', long: 'Tir intercepté par la sentinelle.' };
+  const deg = Math.max(1, Math.ceil((GAP - info.d) * 180 / Math.PI));
+  if (info.kind === 'twin') return { short: 'CONTACT EN RESSORTANT · ' + deg + '°', long: 'L’aiguille a percuté en ressortant de l’autre côté.' };
+  return { short: 'IL MANQUAIT ' + deg + '°', long: 'Il manquait ' + deg + '° pour passer.' };
+}
 // règle d'atterrissage à l'angle a : occupant le plus proche (et, pour une traversante, de sa sortie opposée)
 const LAND = { d: 9, who: null, twin: false };
 function landing(a) {
@@ -224,12 +235,13 @@ function step(h) {
     build = Math.min(1, build + h * 2.8);
     readyK = Math.min(1, readyK + h * 10);
     levelTime += h;
+    if (recall && (recall.life -= h) <= 0) recall = null;
     // viseur d'avance : où tomberait une aiguille lancée maintenant
     const pr = predict(t), la = pr.a;
     leadA = HPI - (pr.rot - rot); leadOk = true;
     for (const s of stuck) if (angDiff(s.a, la) < GAP || (L.trav && angDiff(s.a, la + Math.PI) < GAP)) { leadOk = false; break; }
   }
-  if (state === 'dying') { dieT += h; if (dieT > .7) showFail(); }
+  if (state === 'dying') { dieT += h; if (dieT >= FAIL_SHEET) showFail(); }
   if (state === 'winning') {
     winT += h;
     if (winT > .26 && !exploded) {

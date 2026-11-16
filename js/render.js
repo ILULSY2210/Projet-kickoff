@@ -453,6 +453,14 @@ function drawIntro(c, g) {
     }
     c.globalAlpha = 1; return;
   }
+  // rappel de la cause de l'échec précédent, juste au-dessus du pas de tir
+  if (recall) {
+    const msg = recall.txt, h = fitH(msg, 9, maxW - 40), y = LAUNCH - 34;
+    c.globalAlpha = clamp(recall.life / .3, 0, 1) * (g ? .45 : 1);
+    vtext(c, msg, xl, y, h, 0, col(ALERT, 1), g ? 3 : 1.4);
+    if (!g) { c.strokeStyle = col(ALERT, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y - 4); c.lineTo(xl - 9, y + h + 4); c.stroke(); }
+    c.globalAlpha = 1; return;
+  }
   if (!thrownAny && L.n <= 2 && !g) {
     const msg = L.n === 1 ? (TOUCH ? 'TOUCHE L’ÉCRAN POUR LANCER' : 'CLIC OU ESPACE POUR LANCER') : 'ARC ALLUMÉ = ZONE LIBRE';
     c.globalAlpha = rm() ? 1 : .6 + .4 * Math.sin(time * 5);

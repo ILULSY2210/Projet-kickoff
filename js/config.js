@@ -11,6 +11,8 @@ const U = { len: .24, head: .76, sentIn: .73, sent: .71, sentOut: .69, dial: .66
 const SENT_PAD = .038;
 // compte à rebours de REPRENDRE (s) : rotation figée, tirs ignorés
 const COUNTDOWN = .6;
+// échec : feuille à 0,45 s (taps ignorés avant) ; après une relance par tap, tirs ignorés 0,25 s ; cause rappelée 1,2 s
+const FAIL_SHEET = .45, RETRY_LOCK = .25, RECALL = 1.2;
 const ALERT = [255, 59, 82], INK = '#04070a';
 
 /* ---------- mondes ---------- */
