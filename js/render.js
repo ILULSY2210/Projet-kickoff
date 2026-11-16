@@ -551,7 +551,7 @@ function drawMenuScene(c, g) {
 function draw(dt) {
   const inGame = L && state !== 'menu' && state !== 'levels';
   if (inGame) syncScene(); else if (state === 'menu') syncMenu();
-  if (state === 'failed') { failViewTarget(); FV.k = Math.min(1, FV.k + dt / .15); } else FV.k = 0;
+  if (state === 'failed') { failViewTarget(); FV.k = rm() ? 1 : Math.min(1, FV.k + dt / .15); } else FV.k = 0;
   const fy = inGame ? cy : (MSC.r ? MSC.y : cy), key = PAL.w + ':' + Math.round(fy) + ':' + W + 'x' + H + ':' + DPR;
   if (key !== bgKey) { bgKey = key; buildBg(cx, fy); }
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;

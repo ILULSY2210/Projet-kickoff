@@ -451,7 +451,7 @@ async function reprendre(b) {
     await p.evaluate(() => {
       window.__cd = { t0: 0, end: 0, rots: [], phases: [] };
       const od = window.draw;
-      window.draw = function (dt) { const w = window.__cd; if (w.t0 && !w.end && state === 'play') { if (playPhase === 'compte') w.seen = true; if (w.seen) { w.rots.push(rot); if (playPhase === 'jeu') w.end = performance.now(); } } od(dt); };
+      window.draw = function (dt) { const w = window.__cd; if (w.t0 && !w.end && state === 'play') { if (playPhase === 'compte' && !w.seen) { w.seen = true; w.f0 = last; } if (w.seen) { w.rots.push(rot); if (playPhase === 'jeu') w.end = last; } } od(dt); };
       window.__cdRestore = () => { window.draw = od; };
     });
     if (via === 'bouton') { await p.evaluate(() => { window.__cd.t0 = performance.now(); }); await p.click('#resumeBtn'); }
@@ -465,9 +465,9 @@ async function reprendre(b) {
     S.eq(inert.left, mid.left, `${via} : tap et throwPin() ignorés pendant le compte à rebours`);
     S.eq(inert.safe, false, `${via} : __botSafe() faux pendant le compte à rebours`);
     await p.waitForTimeout(650);
-    const r = await p.evaluate(() => { const w = window.__cd; window.__cdRestore(); return { s: state, ph: playPhase, dur: w.end - w.t0, frozen: w.rots.slice(0, -1).every(x => x === w.rots[0]), n: w.rots.length }; });
+    const r = await p.evaluate(() => { const w = window.__cd; window.__cdRestore(); return { s: state, ph: playPhase, dur: w.end - w.f0, frozen: w.rots.slice(0, -1).every(x => x === w.rots[0]), n: w.rots.length }; });
     S.eq(r.s + '/' + r.ph, 'play/jeu', `${via} : le jeu reprend après le compte à rebours`);
-    S.ok(r.dur > 560 && r.dur < 720, `${via} : compte à rebours de ${Math.round(r.dur)} ms (0,6 s)`);
+    S.ok(r.dur > 570 && r.dur < 660, `${via} : compte à rebours de ${Math.round(r.dur)} ms d'image en image (0,6 s)`);
     S.ok(r.frozen && r.n > 20, `${via} : rotation figée pendant le compte à rebours (${r.n} images)`);
     const after = await p.evaluate(() => { const l = left; throwPin(); return l - left; });
     S.eq(after, 1, `${via} : throwPin() relance après le compte à rebours`);
