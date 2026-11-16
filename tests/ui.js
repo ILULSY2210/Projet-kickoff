@@ -15,7 +15,9 @@
 //   reprendre : REPRENDRE → compte à rebours de 0,6 s (rotation figée, taps ignorés, throwPin() et __botSafe() inertes),
 //               puis le jeu reprend.
 //   echec   : sur 5 écrans : feuille d'échec à 0,45 s ; tap (et Espace) à 0,3 s ignoré, tap à 0,5 s → relance ;
-//             tirs ignorés 250 ms après une relance par tap ; cause rappelée près du pas de tir après la relance.
+//             tirs ignorés 250 ms après une relance par tap ; cause rappelée près du pas de tir après la relance ;
+//             point de collision (aiguille, niveau 3) et sentinelle fautive (niveau 21) ≥ 4 px au-dessus du filet du
+//             panneau ; MENU à droite ; HUD aligné sur la colonne de texte de la feuille. Captures echec-*.png.
 // Écrit <out>/summary.json ({ pass, sections, errors }) et sort avec le code 1 en cas d'échec.
 const { chromium, devices } = require('playwright');
 const path = require('path'), fs = require('fs');
@@ -522,6 +524,34 @@ async function echec(b) {
     S.ok(!!r.recall && Math.abs(r.recallLife - 1.2) < .05, `${tag} : cause rappelée après la relance (« ${r.recall} »)`);
     S.eq(r.lock100, 0, `${tag} : tir ignoré 100 ms après la relance par tap`);
     S.eq(r.lock300, 1, `${tag} : tir accepté 300 ms après la relance par tap`);
+    // mise en page de la feuille d'échec, collision contre une aiguille puis interception par une sentinelle
+    for (const [n, kind] of [[3, 'pin'], [21, 'sent']]) {
+      const ok = await p.evaluate(async ([n, kind]) => {
+        const frame = () => new Promise(res => requestAnimationFrame(() => res()));
+        startLevel(n);
+        for (let i = 0; i < 1200 && state === 'play'; i++) {
+          if (!flying && left > 0) {
+            const a = predict(t).a, w = sentWindow();
+            if (kind === 'pin' ? stuck.some(s => angDiff(s.a, a) < GAP * .4) : L.sents.some(q => sentMin(q, t + w[0], t + w[1]) < q.hw * .5)) throwPin();
+          }
+          await frame();
+        }
+        return failInfo && failInfo.kind;
+      }, [n, kind]);
+      S.eq(ok, kind, `${tag} : échec provoqué au niveau ${n}`);
+      await p.waitForFunction(() => state === 'failed');
+      await p.waitForTimeout(450);
+      const g = await p.evaluate(() => {
+        const box = failMarkScreen(), pr = $('failPanel').getBoundingClientRect(), mr = $('failMenu').getBoundingClientRect(),
+          hr = $('failHint').getBoundingClientRect(), kr = $('failKick').getBoundingClientRect();
+        return { y1: box && box.y1, filet: pr.top + 18, menuL: mr.left, hintL: hr.left, mid: pr.left + pr.width / 2, hud: hudLeft(true), kick: kr.left, s: FV.s, dy: FV.dy };
+      });
+      await p.screenshot({ path: path.join(OUT, `echec-${tag}-${kind}.png`) });
+      S.ok(g.y1 !== null && g.y1 <= g.filet - 4, `${tag} : ${kind === 'pin' ? 'point de collision' : 'sentinelle fautive'} ${(g.filet - g.y1).toFixed(1)} px au-dessus du filet (≥ 4 ; scène remontée de ${g.dy.toFixed(1)} px, échelle ${g.s.toFixed(2)})`);
+      S.ok(g.menuL > g.mid && g.hintL < g.menuL, `${tag} : MENU à droite de la feuille d'échec (MENU à ${g.menuL}, milieu ${g.mid})`);
+      S.ok(Math.abs(g.hud - g.kick) <= 1, `${tag} : HUD aligné sur la feuille (${g.hud} contre ${g.kick})`);
+      await p.evaluate(() => showMenu());
+    }
     await c.close();
   }
 }

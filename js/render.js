@@ -58,6 +58,7 @@ function resize() {
   gctx.setTransform(GS, 0, 0, GS, 0, 0);
   SAT = $('sat').getBoundingClientRect().height; SAB = $('sab').getBoundingClientRect().height;
   layout(); bgKey = ''; hero = null;
+  if (state === 'failed') measureSheet();
 }
 
 function buildBg(fx, fy) {
@@ -286,9 +287,54 @@ function drawFx(c, g) {
   c.globalAlpha = 1;
 }
 
+/* ---------- feuille d'échec : la scène remonte (et se réduit si besoin) pour garder la collision visible ---------- */
+let sheetTop = 0;                                   // ordonnée du filet du panneau d'échec (px)
+const FV = { k: 0, dy: 0, s: 1, A: 0 };             // avancement de l'animation, décalage vers le haut, échelle, ancre
+function measureSheet() { const p = $('failPanel'); sheetTop = p ? p.offsetTop + 18 : 0; FV.k = 0; }
+// boîte englobante (coordonnées de la scène) de ce qui doit rester visible : croix d'alerte, tête heurtée, sentinelle fautive
+function failMarkBox() {
+  if (!failInfo || !L) return null;
+  const S = GSC, ro = S.rot === undefined ? rot : S.rot, q = HEAD * 1.9 + 2.4, b = { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 };
+  const add = (x, y, r) => { b.x0 = Math.min(b.x0, x - r); b.x1 = Math.max(b.x1, x + r); b.y0 = Math.min(b.y0, y - r); b.y1 = Math.max(b.y1, y + r); };
+  const y = cy - pulse * 3;
+  if (failInfo.kind === 'sent') {
+    add(cx, cy + RS, q);
+    const qs = failInfo.sent, sa = qs.a0 + qs.w * RV.t;
+    for (let i = 0; i <= 16; i++) { const an = sa - qs.hw + 2 * qs.hw * i / 16; add(cx + Math.cos(an) * RS, y + Math.sin(an) * RS, SENT_HW + 1); }
+  } else {
+    const fa = failInfo.a + ro; add(cx + Math.cos(fa) * (R + PL), y + Math.sin(fa) * (R + PL), q);
+    const who = failInfo.who;
+    if (who) { const wa = who.a + ro; add(cx + Math.cos(wa) * (R + PL), y + Math.sin(wa) * (R + PL), HEAD + 4); }
+  }
+  return b;
+}
+// décalage et échelle visés : d'abord remonter dans la marge libre sous le HUD, puis réduire autour du haut du cadran
+function failViewTarget() {
+  FV.A = cy - RD - 20; FV.dy = 0; FV.s = 1;
+  const b = failMarkBox();
+  if (!b || !sheetTop) return;
+  const limit = sheetTop - 6;
+  if (b.y1 <= limit) return;
+  const dyMax = Math.max(0, FV.A - (Math.max(12, SAT) + 44));
+  if (b.y1 - dyMax <= limit) { FV.dy = b.y1 - limit; return; }
+  FV.dy = dyMax; FV.s = clamp((limit + dyMax - FV.A) / (b.y1 - FV.A), .4, 1);
+}
+function failView(c) {
+  const e = easeOut(FV.k), s = 1 + (FV.s - 1) * e, dy = FV.dy * e;
+  c.translate(cx, FV.A - dy); c.scale(s, s); c.translate(-cx, -FV.A);
+}
+// la même boîte à l'écran, transformation en cours comprise (pour les tests)
+function failMarkScreen() {
+  const b = failMarkBox(); if (!b) return null;
+  const e = easeOut(FV.k), s = 1 + (FV.s - 1) * e, dy = FV.dy * e, X = x => cx + (x - cx) * s, Y = y => FV.A - dy + (y - FV.A) * s;
+  return { x0: X(b.x0), y0: Y(b.y0), x1: X(b.x1), y1: Y(b.y1), filet: sheetTop };
+}
+const hudLeft = sheet => SX + (sheet ? 20 : 68);
+
 function drawGame(c, g) {
   const S = GSC, rgb = PAL.rgb, hi = PAL.hi, lw = Math.max(1.3, R * .022);
-  const sheet = state === 'won' || state === 'failed';
+  const sheet = state === 'won' || state === 'failed', moved = state === 'failed' && FV.k > 0;
+  if (moved) { c.save(); failView(c); }
   if (!g) {
     drawDial(c, cx, cy, RD, rgb, 1);
     c.setLineDash([2, 6]); c.globalAlpha = .28; c.strokeStyle = col(rgb, 1); c.lineWidth = 1;
@@ -358,12 +404,13 @@ function drawGame(c, g) {
     c.beginPath(); c.moveTo(cx - q - 5, by - 4); c.lineTo(cx - q, by - 4); c.lineTo(cx - q, by + q); c.lineTo(cx + q, by + q); c.lineTo(cx + q, by - 4); c.lineTo(cx + q + 5, by - 4); c.stroke(); c.globalAlpha = 1;
   }
   drawFx(c, g);
+  if (moved) c.restore();
   drawHud(c, g, sheet);
   if (state === 'won') drawWinStars(c, g);
 }
 
 function drawHud(c, g, sheet) {
-  const rgb = PAL.rgb, hi = PAL.hi, acc = PAL.acc, top = Math.max(12, SAT), x0 = SX + 68, xr = SX + SW - 16;
+  const rgb = PAL.rgb, hi = PAL.hi, acc = PAL.acc, top = Math.max(12, SAT), x0 = hudLeft(sheet), xr = SX + SW - 16;
   c.lineCap = 'round'; c.lineJoin = 'round';
   // --- haut : niveau, monde, rythme ---
   const num = pad2(L.n), nw = vwidth(num, 20);
@@ -504,6 +551,7 @@ function drawMenuScene(c, g) {
 function draw(dt) {
   const inGame = L && state !== 'menu' && state !== 'levels';
   if (inGame) syncScene(); else if (state === 'menu') syncMenu();
+  if (state === 'failed') { failViewTarget(); FV.k = Math.min(1, FV.k + dt / .15); } else FV.k = 0;
   const fy = inGame ? cy : (MSC.r ? MSC.y : cy), key = PAL.w + ':' + Math.round(fy) + ':' + W + 'x' + H + ':' + DPR;
   if (key !== bgKey) { bgKey = key; buildBg(cx, fy); }
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;

@@ -77,6 +77,7 @@ function showFail() {
   btn('retryBtn', 'RÉESSAYER', ARROW, true); btn('failMenu', 'MENU');
   $('failHint').textContent = TOUCH ? 'ou touche l’écran' : 'ou appuie sur Espace';
   show('fail');
+  measureSheet();
 }
 function pauseGame() {
   if (state !== 'play') return;
