@@ -104,7 +104,7 @@ var __sim = (function () {
         var waited = t - tDec, thr = stuck.length ? best * Math.max(.4, .85 - .08 * waited) : -1;
         var a = norm(HPI - (rot + speedAt(t) * (RT + FLIGHT)));
         // il lit les chevrons : pas de tir quand un arrêt ou une inversion est annoncé (0,45 s à l'avance)
-        var ok = clearAt(a) >= thr && !aheadEvent(t, AHEAD).kind;
+        var ok = clearAt(a) >= thr && !aheadEvent(t, announceWindow()).kind;
         if (ok && L.sents.length) { var tL = t + RT, w = sentWindow(); for (var i = 0; i < L.sents.length; i++) { var q = L.sents[i]; if (sentMin(q, tL + w[0] - .12, tL + HEAD_WIN[1] + .12) <= q.hw + SENT_PAD_HEAD) ok = false; } }
         if (ok) { tTap = t + RT; break; }
         update(STEP);

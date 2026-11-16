@@ -3,7 +3,9 @@
 // Pour chaque mécanique réalisée, sur les premiers niveaux qui l'utilisent : des tirs lancés à des instants quelconques
 // (au milieu d'un pas) tombent exactement où predict() l'avait annoncé juste avant (écart < 1e-9 rad), et la règle propre
 // à la mécanique est vérifiée :
-//   accel : après chaque aiguille plantée, la vitesse est multipliée par (1 + k) en 0,3 s (continue), jusqu'au plafond.
+//   accel : après chaque aiguille plantée, la vitesse est multipliée par (1 + k) en 0,3 s (continue), jusqu'au plafond ;
+//   demi-tour : après la k-ième aiguille, la rotation s'inverse warn s plus tard (en 80 ms) ; au rythme : aux instants
+//   t0 + j·P ; chaque demi-tour est annoncé par les chevrons au moins max(0,45 ; warn) s avant.
 const { load } = require('../sim/load');
 const G = load();
 const fails = [], check = (c, m) => { if (!c) fails.push(m); };
@@ -53,6 +55,38 @@ const out = [];
       const v0 = G.speedAt(te - 1e-6), v1 = G.speedAt(te + 1e-6);
       check(Math.abs(v1 - v0) < 1e-4, `accélération, niveau ${n} : saut de vitesse à l'impact (${v0} → ${v1})`);
       prev = want;
+    }
+  }
+}
+// demi-tours annoncés (toutes les k aiguilles, puis au rythme)
+{
+  const ns = levelsWith(L => L.demi, 6), nr = levelsWith(L => L.rhythm, 4);
+  check(ns[0] === 19 && nr[0] === 161, `demi-tour : premiers niveaux ${ns[0]}, au rythme ${nr[0]}`);
+  out.push(predictionCheck('demi-tour', ns));
+  out.push(predictionCheck('demi-tour au rythme', nr));
+  const ahead = G.get('aheadEvent');
+  for (const n of ns.slice(0, 3)) {
+    G.startLevel(n); G.update(.6);
+    const D = G.get('L').demi;
+    for (let k = 1; k <= D.every * 2 && G.get('left') > 1; k++) {
+      while (!G.safe()) G.update(STEP);
+      G.throwPin(); const p0 = G.get('dyn').planted;
+      while (G.get('dyn').planted === p0 && G.get('state') === 'play') G.update(STEP);
+      if (k % D.every) { check(G.get('dyn').flips.length === Math.floor(k / D.every), `demi-tour, niveau ${n} : demi-tour programmé trop tôt`); continue; }
+      const tf = G.get('dyn').flips[G.get('dyn').flips.length - 1], t = G.get('t');
+      check(Math.abs(tf - (t - (t - tf) - 0) - 0) < 1 && tf > t, `demi-tour, niveau ${n} : programmé après l'aiguille ${k}`);
+      const v0 = G.speedAt(tf - .001), v1 = G.speedAt(tf + .081);
+      check(Math.sign(v0) === -Math.sign(v1), `demi-tour, niveau ${n} : la rotation s'inverse (${v0.toFixed(3)} → ${v1.toFixed(3)})`);
+      const e = ahead(t, G.run('announceWindow()'));
+      check(e.kind !== null && e.dt <= tf - t + .08, `demi-tour, niveau ${n} : annoncé dès l'impact, ${(tf - t).toFixed(2)} s avant (${e.kind}, ${e.dt})`);
+    }
+  }
+  for (const n of nr.slice(0, 2)) {
+    G.startLevel(n); const R = G.get('L').rhythm;
+    for (let j = 0; j < 3; j++) {
+      const W = G.run('announceWindow()'), tf = R.t0 + j * R.P, e = ahead(tf - Math.max(.45, R.warn) + .002, W);
+      check(e.kind !== null && e.dt <= Math.max(.45, R.warn) + .08, `rythme, niveau ${n} : demi-tour ${j} annoncé ${Math.max(.45, R.warn)} s avant (${e.kind}, ${e.dt})`);
+      check(Math.sign(G.speedAt(tf - .001)) === -Math.sign(G.speedAt(tf + .081)), `rythme, niveau ${n} : inversion au demi-tour ${j}`);
     }
   }
 }

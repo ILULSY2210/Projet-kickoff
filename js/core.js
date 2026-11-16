@@ -10,8 +10,9 @@ let playPhase = 'jeu', countT = 0;
 let recall = null;
 let pulse = 0, orbHits = 0, winT = 0, wonT = 0, dieT = 0, exploded = false, spinK = 1;
 let intro = 0, wIntro = 0, teachT = 0, build = 1, readyK = 1, thrownAny = false, time = 0, lastStars = 0, wipe = 0, headFlash = 0, starFlash = 0;
-// état des lois qui dépendent des impacts : instants des aiguilles plantées (accélération)
-let dyn = { hits: [] };
+// état des lois qui dépendent des impacts : instants des aiguilles plantées (accélération), instants des demi-tours
+// programmés (demi-tour toutes les k aiguilles), nombre d'aiguilles plantées
+let dyn = { hits: [], flips: [], planted: 0 };
 let arcs = [[0, TAU]], arcsDirty = true, failInfo = null, nearMark = null, nearCount = 0, levelTime = 0, lastWorldSeen = -1;
 
 // Les abonnés de « level:start » sont synchrones : thème, écrans masqués, effets remis à zéro, son (le banc d'essai en dépend).
@@ -21,7 +22,7 @@ function startLevel(n, quick) {
   const cause = retry && failInfo && L && L.n === n ? failCause(failInfo, L).short : null;
   recall = cause ? { txt: cause, life: RECALL } : null;
   L = makeLevel(n);
-  rot = L.rot0 || 0; t = L.phase; spinK = 1; lawVer++; dyn = { hits: [] };
+  rot = L.rot0 || 0; t = L.phase; spinK = 1; lawVer++; dyn = { hits: [], flips: [], planted: 0 };
   stuck = L.blockers; arcsDirty = true;
   left = L.throws; flying = null; flights = [];
   orbHits = 0; winT = 0; wonT = 0; dieT = 0; exploded = false;
@@ -108,6 +109,9 @@ function stick(a, f) {
   arcsDirty = true; pulse = 1;
   // l'astre accélère à chaque aiguille plantée (rampe douce à partir de l'impact)
   if (L.accel) { dyn.hits.push(t); lawVer++; }
+  // demi-tour toutes les k aiguilles : programmé warn s après l'impact (annoncé par les chevrons et un tic)
+  dyn.planted++;
+  if (L.demi && dyn.planted % L.demi.every === 0 && left > 0) { dyn.flips.push(t + L.demi.warn); lawVer++; bus.emit('flip:warn', t + L.demi.warn); }
   bus.emit('hit', s, idx);
   // frôlement : moins de 2 × GAP d'un voisin
   if (d < GAP * 2) {
@@ -242,6 +246,9 @@ window.__botSafe = function (tSim) {
 // passe aussi par là) ; c'est une inversion si la rotation repart ensuite dans l'autre sens. Échantillons de 10 ms puis
 // bissection : instant exact à 0,1 ms près.
 const AHD = { kind: null, dt: 0, dir: 0 };
+// fenêtre d'annonce des chevrons : 0,45 s pour la loi de rotation ; un demi-tour programmé est annoncé dès son annonce
+// (warn s avant, plus la durée de la bascule)
+function announceWindow() { return Math.max(AHEAD, L.demi ? L.demi.warn + FLIP_T : 0, L.rhythm ? L.rhythm.warn + FLIP_T : 0); }
 function aheadEvent(t0, A) {
   const vm = L.vmax * STOP_V, v0 = speedAt(t0);
   AHD.kind = null; AHD.dt = 0; AHD.dir = Math.abs(v0) >= vm ? Math.sign(v0) : 0;

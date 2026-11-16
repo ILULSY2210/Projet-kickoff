@@ -96,6 +96,7 @@ function bindAudio() {
   bus.on('win', lv => sfx('win', lv.throws));
   bus.on('explode', () => sfx('boom'));
   bus.on('tick', c => sfx('tick', c));
+  bus.on('flip:warn', () => sfx('tick', 2));
   // boîte à musique : chaque bloqueur qui passe sous la tête de lecture (en haut) fait tinter sa note
   bus.on('ping', s => { if (soundOn && time - lastPing > .07 && !s.wall) { lastPing = time; sfx('ping', s.pre ? -1 - (Math.round(s.a * 3) % 4) : s.deg); } });
 }

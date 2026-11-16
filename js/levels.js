@@ -38,10 +38,23 @@ function accelMult(t) {
   for (let i = 0; i < H.length; i++) m *= 1 + A.k * smooth01((t - H[i]) / ACC_RAMP);
   return m < A.cap ? m : A.cap;
 }
+// demi-tours : chacun inverse la rotation en FLIP_T s (rampe lisse). Ceux qui suivent les impacts (toutes les k aiguilles)
+// sont notés dans dyn.flips au moment de l'impact, pour un instant à venir (annonce de warn s) ; ceux du rythme tombent aux
+// instants t0 + j·P (j ≥ 0)
+const FLIP_T = .08;
+function flipSign(t) {
+  let s = 1;
+  const F = dyn.flips;
+  for (let i = 0; i < F.length; i++) if (t > F[i]) s *= 1 - 2 * smooth01((t - F[i]) / FLIP_T);
+  const R = L.rhythm;
+  if (R && t > R.t0) { const j = Math.floor((t - R.t0) / R.P); s *= (j % 2 ? -1 : 1) * (1 - 2 * smooth01((t - R.t0 - j * R.P) / FLIP_T)); }
+  return s;
+}
 function speedAt(t) {
   if (!L) return 0;
   let v = patSpeed(L.pattern, L.speed * L.dir, t);
   if (L.accel) v *= accelMult(t);
+  if (L.demi || L.rhythm) v *= flipSign(t);
   return v;
 }
 
@@ -87,7 +100,7 @@ function makeLevel(n) {
   const teach = teachOf(n), known = learnedAt(n), has = f => known.has(f);
   const inf = n > LAST_LEVEL;
   // --- recette : loi, sens, obstacles, intensité ---
-  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null };
+  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null, demi: null, rhythm: null };
   R.N = Math.round(lerp(DW.throws[0], DW.throws[1], d)); R.F = lerp(DW.fixed[0], DW.fixed[1], d); R.omega = lerp(DW.speed[0], DW.speed[1], d);
   R.dir = has('sens') ? (r() < .5 ? 1 : -1) : 1;
   R.orbs = has('etoiles') ? (n < 11 ? 2 : 3) : 0;
@@ -113,12 +126,15 @@ function makeLevel(n) {
     if (teach === 'sentinelle') R.sent = 1;
     if (teach === 'traversantes') { R.trav = true; R.N = 3; R.F = 1; }
     if (teach === 'accel') { R.N = 5; R.accel = { k: .1, cap: 1.5 }; }
+    if (teach === 'demitour') { R.N = 5; R.demi = { every: 2, warn: .9 }; }
+    if (teach === 'rythme') { R.N = 5; R.rhythm = { P: 3, warn: .6 }; }
   } else if (boss) {
     const B = BOSSES[bossArch(n)], tier = Math.min(wi, 5);
     R.N = B.throws[tier]; R.omega = B.speed[tier]; R.F = 0; R.orbs = has('etoiles') ? 3 : 0;
     const arch = B.id;
     if (arch === 'reacteur' && has('accel')) R.accel = { k: Math.pow(B.top[tier] / B.speed[tier], 1 / R.N) - 1, cap: B.top[tier] / B.speed[tier] };
     if (arch === 'reacteur') { if (tier === 1 && has('acoups')) R.law = 3; if (tier === 3 && has('alternee')) R.law = 2; if (tier === 2 || tier === 5) R.F = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
+    if (arch === 'pendule' && has('demitour')) { R.demi = { every: B.every[tier], warn: B.warn[tier] }; if (tier >= 3 && has('rythme')) R.rhythm = { P: [3, 2.5, 2.2][tier - 3], warn: B.warn[tier] }; }
     if (arch === 'pendule') { if (tier >= 1) R.F = 2; if (tier === 2) R.zones = [.4]; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
     if (arch === 'forteresse') { R.zones = tier === 1 ? [.3, .3, .3] : tier === 0 ? [.45, .45] : [.4, .4]; if (tier === 4 && has('sentinelle')) R.sent = 1; }
     if (arch === 'anneaux') { R.F = 2; if (tier === 2) R.zones = [.4]; if (tier === 3 && has('alternee')) R.law = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
@@ -135,6 +151,10 @@ function makeLevel(n) {
     if (has('sentinelle') && r() < (wi >= 4 ? .55 : .2)) R.sent = 1;
     // accélération à chaque aiguille : idée d'Émeraude (9), cœur d'Ambre
     if (has('accel') && r() < (wi === 1 ? .55 : .25)) R.accel = { k: .03 + .04 * d, cap: 1.25 + .3 * d };
+    // demi-tours annoncés : toutes les k aiguilles (19), au rythme (161) ; cœur de Saphir
+    const pd = wi === 3 ? .4 : .2;
+    if (has('rythme') && r() < pd) R.rhythm = { P: 3.2 - .8 * d, warn: Math.max(.45, .7 - .2 * d) };
+    else if (has('demitour') && r() < pd) R.demi = { every: d < .5 ? 3 : 2, warn: Math.max(.45, .9 - .4 * d - .1 * wi) };
     if (has('traversantes') && r() < (wi >= 4 ? .3 : .15)) R.trav = true;
     // anti-salve (à partir du monde 2) : au moins deux moyens parmi zones larges, loi à arrêts ou inversions,
     // obstacles mobiles ; à défaut, on ajoute ceux qui sont appris
@@ -213,11 +233,13 @@ function makeLevel(n) {
   }
   let vmax = .1; for (let i = 0; i < 160; i++) vmax = Math.max(vmax, Math.abs(patSpeed(R.law, speed, i * .1)));
   if (R.accel) { R.accel.k = Math.round(R.accel.k * 1e6) / 1e6; R.accel.cap = Math.round(R.accel.cap * 1e6) / 1e6; vmax *= R.accel.cap; }
+  if (R.demi) R.demi.warn = Math.round(R.demi.warn * 1e3) / 1e3;
+  if (R.rhythm) { R.rhythm.P = Math.round(R.rhythm.P * 1e3) / 1e3; R.rhythm.warn = Math.round(R.rhythm.warn * 1e3) / 1e3; R.rhythm.t0 = Math.round((phase + 1.2 + R.rhythm.P * .5) * 1e6) / 1e6; }
   vmax = Math.round(vmax * 1e6) / 1e6;
   const blockers = pre.map(a => ({ a: norm(a), pre: true, k: 1 }));
   for (const wl of walls) for (const p of wallPoints(wl.a0, wl.a1 - wl.a0)) blockers.push({ a: norm(p), pre: true, wall: true, k: 1 });
   const lv = { n, w, boss, special, sp, teach, throws, pre, walls, orbs, sents, speed, omega, pattern: R.law, dir, phase, rot0, trav, vmax, d,
-    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, blockers };
+    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, blockers };
   lv.flags = levelFlags(lv);
   return lv;
 }
@@ -234,6 +256,8 @@ function levelFlags(lv) {
   if (lv.sents.length) f.push('sentinelle');
   if (lv.trav) f.push('traversantes');
   if (lv.accel) f.push('accel');
+  if (lv.demi) f.push('demitour');
+  if (lv.rhythm) f.push('rythme');
   return f;
 }
 // arcs libres du bord : complément des zones interdites (±GAP autour de chaque bloqueur)

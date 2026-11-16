@@ -448,7 +448,8 @@ let chevron = { kind: null, dir: 0 };
 function chevGeom() { const y = LAUNCH + PL * .4, s = 5.5, gap = HEAD + 9; return { y, s, gap, box: [cx - gap - 7.5, y - s - 1, cx + gap + 7.5, y + s + 1] }; }
 function gaugeGeom() { const xr = SX + SW - 16, sw = Math.min(136, SW / 2 - 46), sx = xr - sw, sy = LAUNCH + 18, sh = 38; return { sx, sy, sw, sh, box: [sx, LAUNCH + 4, sx + sw + 9, sy + sh] }; }
 function drawChevrons(c, g) {
-  const ev = aheadEvent(RV.t, AHEAD); chevron = { kind: ev.kind, dir: ev.dir, dt: ev.dt };
+  // les demi-tours programmés sont annoncés dès leur annonce (jusqu'à 0,9 s avant), les arrêts et inversions de la loi 0,45 s avant
+  const ev = aheadEvent(RV.t, announceWindow()); chevron = { kind: ev.kind, dir: ev.dir, dt: ev.dt };
   const G = chevGeom(), y = G.y, s = G.s, gap = G.gap, blink = ev.kind ? (rm() ? 1 : Math.floor(time / .12) % 2) : 0;
   const v = Math.abs(speedAt(RV.t)) / Math.max(.1, L.vmax), base = .35 + .55 * clamp(v, 0, 1);
   let d = ev.dir;
@@ -464,6 +465,11 @@ function drawChevrons(c, g) {
     for (const k of [0, 1]) { const xa = x0 + (k * 7 - 3.5) * (d > 0 ? 1 : -1); c.moveTo(xa + d * s * .7, y - s); c.lineTo(xa - d * s * .7, y); c.lineTo(xa + d * s * .7, y + s); }
   }
   c.stroke(); c.globalAlpha = 1;
+  // demi-tour toutes les k aiguilles : aiguilles restantes avant le prochain, sous le berceau du pas de tir
+  if (L.demi && !g) {
+    const k = L.demi.every - dyn.planted % L.demi.every, msg = 'DEMI-TOUR DANS ' + k, yb = LAUNCH + PL + HEAD + 10;
+    vtext(c, msg, cx, yb, 7, .5, col(k === 1 ? PAL.acc : PAL.rgb, k === 1 ? 1 : Math.max(.8, PAL.lab)), 1.15);
+  }
 }
 
 function drawHud(c, g, sheet) {
