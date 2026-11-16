@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b0820">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Orbita</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+:root{
+  --bg:#0b0820;--panel:rgba(20,14,48,.92);--text:#f4f1ff;--muted:#a59fc9;
+  --accent:#ffcf4a;--accent2:#ff5e8a;--ok:#4ee6a8;--chip:rgba(255,255,255,.1);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;overscroll-behavior:none}
+canvas{display:block;position:fixed;inset:0;touch-action:none}
+.screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;
+  padding:max(24px,env(safe-area-inset-top)) 16px max(24px,env(safe-area-inset-bottom));text-align:center;z-index:5}
+.screen.show{display:flex;animation:fade .25s ease}
+.dim{background:rgba(6,4,18,.62);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px)}
+@keyframes fade{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:none}}
+h1{font-size:clamp(52px,16vw,88px);font-weight:900;letter-spacing:.04em;line-height:1;
+  background:linear-gradient(180deg,#fff,#ffcf4a 55%,#ff5e8a);-webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 6px 24px rgba(255,94,138,.35))}
+h2{font-size:clamp(30px,9vw,44px);font-weight:900;line-height:1.1}
+.sub{color:var(--muted);font-size:15px;max-width:320px;line-height:1.45}
+.spacer{height:28vh}
+.btn{appearance:none;border:0;font:inherit;font-weight:800;font-size:20px;letter-spacing:.03em;color:#2a1600;
+  background:linear-gradient(180deg,#ffe27a,#ffb422);padding:16px 40px;border-radius:999px;min-width:230px;
+  box-shadow:0 6px 0 #c77d00,0 12px 30px rgba(255,180,34,.35);cursor:pointer;transition:transform .08s,box-shadow .08s}
+.btn:active{transform:translateY(4px);box-shadow:0 2px 0 #c77d00,0 6px 16px rgba(255,180,34,.3)}
+.btn.sec{background:var(--chip);color:var(--text);box-shadow:0 4px 0 rgba(0,0,0,.35);font-size:17px;padding:13px 30px;min-width:200px}
+.btn.sec:active{box-shadow:0 1px 0 rgba(0,0,0,.35)}
+.row{display:flex;gap:10px;flex-wrap:wrap;justify-content:center}
+.row .btn.sec{min-width:0}
+.total{font-weight:800;color:var(--accent);font-size:18px}
+.stars{font-size:56px;letter-spacing:8px;height:70px}
+.star{display:inline-block;color:#3a3360;transform:scale(.6)}
+.star.on{color:var(--accent);animation:pop .5s cubic-bezier(.3,1.9,.5,1) forwards;text-shadow:0 0 18px rgba(255,207,74,.7)}
+@keyframes pop{0%{transform:scale(.2) rotate(-40deg)}100%{transform:scale(1) rotate(0)}}
+#hudBtn{position:fixed;top:max(12px,env(safe-area-inset-top));left:12px;z-index:4;width:44px;height:44px;border-radius:50%;
+  border:0;background:var(--chip);color:#fff;font-size:18px;font-weight:900;display:none;cursor:pointer}
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;width:min(100%,360px);max-height:58vh;overflow-y:auto;touch-action:pan-y;padding:4px}
+.lv{aspect-ratio:1;border-radius:14px;border:0;background:var(--chip);color:#fff;font:inherit;font-weight:800;font-size:18px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer}
+.lv small{font-size:10px;color:var(--accent);letter-spacing:1px;min-height:12px}
+.lv.boss{background:rgba(255,94,138,.28)}
+.lv.cur{outline:2px solid var(--accent)}
+.lv:disabled{opacity:.28;cursor:default}
+.msg{font-size:17px;color:var(--muted);min-height:22px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="sat" style="position:fixed;top:0;height:env(safe-area-inset-top);width:0;pointer-events:none"></div>
+<button id="hudBtn" aria-label="Pause">II</button>
+
+<div id="menu" class="screen">
+  <h1>ORBITA</h1>
+  <p class="sub">Lance tes flèches sur la planète qui tourne.<br>Ne touche jamais une autre flèche !</p>
+  <div class="spacer" id="spacer"></div>
+  <button class="btn" id="playBtn">JOUER</button>
+  <div class="row">
+    <button class="btn sec" id="levelsBtn">Niveaux</button>
+    <button class="btn sec" id="soundBtn">Son : oui</button>
+  </div>
+  <div class="total" id="totalStars"></div>
+</div>
+
+<div id="levels" class="screen dim">
+  <h2>Niveaux</h2>
+  <div class="total" id="totalStars2"></div>
+  <div class="grid" id="grid"></div>
+  <button class="btn sec" id="levelsBack">Retour</button>
+</div>
+
+<div id="win" class="screen dim">
+  <h2 id="winTitle">Bravo !</h2>
+  <div class="stars" id="winStars"></div>
+  <p class="msg" id="winMsg"></p>
+  <button class="btn" id="nextBtn">SUIVANT</button>
+  <div class="row">
+    <button class="btn sec" id="replayBtn">Rejouer</button>
+    <button class="btn sec" id="winMenu">Menu</button>
+  </div>
+</div>
+
+<div id="fail" class="screen dim">
+  <h2>Raté !</h2>
+  <p class="msg" id="failMsg"></p>
+  <button class="btn" id="retryBtn">RÉESSAYER</button>
+  <button class="btn sec" id="failMenu">Menu</button>
+</div>
+
+<div id="pause" class="screen dim">
+  <h2>Pause</h2>
+  <button class="btn" id="resumeBtn">CONTINUER</button>
+  <div class="row">
+    <button class="btn sec" id="restartBtn">Recommencer</button>
+    <button class="btn sec" id="pauseMenu">Menu</button>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const cvs = $('c'), ctx = cvs.getContext('2d');
+const TAU = Math.PI * 2;
+let W = 0, H = 0, DPR = 1, cx = 0, cy = 0, R = 60, PL = 60, HEAD = 7, PW = 4, GAP = .12, ORBHIT = .2, LAUNCH = 0, FLYV = 2000;
+let bgGrad = null, bgStars = [], SAT = 0;
+
+/* ---------- sauvegarde ---------- */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('orbita_' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('orbita_' + k, JSON.stringify(v)); } catch (e) {} }
+};
+let unlocked = store.get('unlocked', 1);
+let bestStars = store.get('stars', {});
+let soundOn = store.get('sound', true);
+
+/* ---------- utilitaires ---------- */
+function rng(seed) {
+  return function () {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+const angDiff = (a, b) => Math.abs(((a - b) % TAU + TAU * 1.5) % TAU - Math.PI);
+const norm = a => ((a % TAU) + TAU) % TAU;
+const easeOut = k => 1 - Math.pow(1 - k, 3);
+const vib = p => { try { navigator.vibrate && navigator.vibrate(p); } catch (e) {} };
+
+/* ---------- son ---------- */
+let AC = null;
+function ac() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (AC && AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function tone(f, d, type = 'sine', v = .2, slide = 0, delay = 0) {
+  const a = ac(); if (!a || !soundOn) return;
+  const t0 = a.currentTime + delay;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type; o.frequency.setValueAtTime(f, t0);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t0 + d);
+  g.gain.setValueAtTime(v, t0); g.gain.exponentialRampToValueAtTime(.001, t0 + d);
+  o.connect(g).connect(a.destination); o.start(t0); o.stop(t0 + d + .03);
+}
+function sfx(k, x = 0) {
+  if (k === 'throw') tone(600, .07, 'triangle', .06, 400);
+  if (k === 'hit') { tone(140 + x * 18, .1, 'square', .08, -60); tone(420 + x * 30, .06, 'triangle', .07); }
+  if (k === 'orb') { tone(880, .14, 'sine', .14); tone(1320, .2, 'sine', .12, 0, .07); }
+  if (k === 'fail') { tone(260, .4, 'sawtooth', .12, -180); tone(90, .3, 'square', .08, -40); }
+  if (k === 'win') [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, .28, 'triangle', .13, 0, i * .08));
+  if (k === 'boom') tone(120, .5, 'sawtooth', .12, -90);
+}
+
+/* ---------- niveaux ---------- */
+function makeLevel(n) {
+  const r = rng(n * 7919 + 17);
+  const boss = n % 5 === 0;
+  const total = Math.min(5 + Math.floor(n * .65), 17) + (boss ? 3 : 0);
+  const preN = n < 2 ? 0 : Math.min(Math.floor(n / 2), 7) + (boss ? 1 : 0);
+  const speed = Math.min(1.35 + n * .07, 3.4) * (boss ? 1.08 : 1);
+  let pattern = n < 3 ? 0 : Math.floor(r() * 4);
+  if (boss) pattern = 2 + (Math.floor(n / 5) % 2);
+  const dir = r() < .5 ? 1 : -1;
+  const pre = []; let tries = 0;
+  while (pre.length < preN && tries++ < 800) { const a = r() * TAU; if (pre.every(p => angDiff(p, a) > .5)) pre.push(a); }
+  const orbN = n < 2 ? 1 : Math.min(1 + Math.floor(n / 4), 3);
+  const orbs = []; tries = 0;
+  while (orbs.length < orbN && tries++ < 800) {
+    const a = r() * TAU;
+    if (pre.every(p => angDiff(p, a) > .4) && orbs.every(o => angDiff(o.a, a) > .7)) orbs.push({ a, hit: false });
+  }
+  const hue = boss ? 350 : Math.floor(r() * 360);
+  return { n, boss, total, pre, speed, pattern, dir, orbs, hue, phase: r() * 10 };
+}
+function speedAt(t) {
+  const s = L.speed * L.dir;
+  switch (L.pattern) {
+    case 1: return s * (.35 + 1.3 * (.5 + .5 * Math.sin(t * 1.6)));
+    case 2: return s * 1.15 * Math.tanh(3 * Math.sin(t * .9));
+    case 3: return s * (.6 + 1.8 * Math.pow(Math.max(0, Math.sin(t * 1.8)), 6));
+    default: return s;
+  }
+}
+
+/* ---------- état ---------- */
+let state = 'menu', L = null, rot = 0, t = 0, stuck = [], left = 0, flying = null, queued = false;
+let debris = [], parts = [], texts = [], shake = 0, pulse = 0, timer = 0, orbHits = 0, winT = 0, exploded = false;
+let intro = 0, readyK = 1, thrownAny = false, menuRot = 0, time = 0, lastStars = 0;
+
+function layout() {
+  cx = W / 2;
+  cy = H * .37;
+  R = Math.min(W * .2, H * .12);
+  PL = R * 1.05;
+  HEAD = R * .11;
+  PW = Math.max(3, R * .055);
+  GAP = 2 * HEAD / (R + PL) + .012;
+  LAUNCH = Math.min(H * .8, H - PL - HEAD - 28);
+  FLYV = H * 3.2;
+}
+function resize() {
+  DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+  W = innerWidth; H = innerHeight;
+  cvs.width = Math.round(W * DPR); cvs.height = Math.round(H * DPR);
+  cvs.style.width = W + 'px'; cvs.style.height = H + 'px';
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  SAT = $('sat').getBoundingClientRect().height;
+  layout();
+  bgGrad = ctx.createLinearGradient(0, 0, 0, H);
+  bgGrad.addColorStop(0, '#120b33'); bgGrad.addColorStop(.6, '#0b0820'); bgGrad.addColorStop(1, '#05040f');
+  const r = rng(42); bgStars = [];
+  for (let i = 0; i < 90; i++) bgStars.push({ x: r() * W, y: r() * H, s: r() * 1.6 + .3, f: r() * 2 + .5, p: r() * 6 });
+}
+addEventListener('resize', resize);
+
+const craters = (() => { const r = rng(7), a = []; for (let i = 0; i < 7; i++) a.push({ a: r() * TAU, d: r() * .7, s: .08 + r() * .14 }); return a; })();
+
+function startLevel(n) {
+  L = makeLevel(n);
+  rot = 0; t = L.phase;
+  stuck = L.pre.map(a => ({ a, pre: true, k: 1 }));
+  left = L.total; flying = null; queued = false;
+  debris = []; parts = []; texts = []; orbHits = 0; winT = 0; exploded = false;
+  intro = 1.4; readyK = 0; thrownAny = false; shake = 0; pulse = 0;
+  state = 'play';
+  hideAll(); $('hudBtn').style.display = 'block';
+}
+
+function throwPin() {
+  if (state !== 'play' || left <= 0) return;
+  if (flying) { queued = true; return; }
+  flying = { y: LAUNCH };
+  left--; thrownAny = true; readyK = 0;
+  sfx('throw');
+}
+
+function burst(x, y, n, color, sp = 260, size = 3) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * TAU, v = sp * (.3 + Math.random());
+    parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: .5 + Math.random() * .5, max: 1, c: color, s: size * (.5 + Math.random()) });
+  }
+}
+
+function fail() {
+  state = 'dying';
+  debris.push({ x: cx, y: flying.y + PL / 2, vx: (Math.random() < .5 ? -1 : 1) * (150 + Math.random() * 150), vy: 350, r: 0, vr: (Math.random() < .5 ? -1 : 1) * 14, c: '#fff' });
+  burst(cx, flying.y, 14, '#ff5e8a', 220, 3);
+  flying = null; shake = 16; timer = .8;
+  sfx('fail'); vib([30, 40, 90]);
+}
+
+function win() {
+  state = 'winning'; winT = 0; exploded = false; pulse = 1.4;
+  const orbN = L.orbs.length;
+  lastStars = 1 + (orbHits > 0 ? 1 : 0) + (orbHits === orbN ? 1 : 0);
+  const n = L.n;
+  if (lastStars > (bestStars[n] || 0)) bestStars[n] = lastStars;
+  if (n + 1 > unlocked) unlocked = n + 1;
+  store.set('stars', bestStars); store.set('unlocked', unlocked);
+  sfx('win'); vib([20, 30, 20]);
+}
+
+function explode() {
+  exploded = true; shake = 12; sfx('boom'); vib(60);
+  const col = `hsl(${L.hue},80%,62%)`;
+  burst(cx, cy, 60, col, 520, 5);
+  burst(cx, cy, 30, '#ffcf4a', 380, 3);
+  for (const s of stuck) {
+    const wa = s.a + rot, d = R + PL / 2;
+    debris.push({ x: cx + Math.cos(wa) * d, y: cy + Math.sin(wa) * d, vx: Math.cos(wa) * (300 + Math.random() * 300), vy: Math.sin(wa) * (300 + Math.random() * 300) - 200,
+      r: wa - Math.PI / 2, vr: (Math.random() - .5) * 16, c: s.pre ? `hsl(${L.hue},40%,80%)` : '#fff' });
+  }
+  stuck = [];
+}
+
+/* ---------- boucle ---------- */
+function update(dt) {
+  time += dt; menuRot += dt * .5;
+  if (L && (state === 'play' || state === 'dying' || state === 'winning')) { t += dt; rot += speedAt(t) * dt; }
+
+  if (state === 'play') {
+    intro = Math.max(0, intro - dt);
+    readyK = Math.min(1, readyK + dt * 7);
+    if (flying) {
+      flying.y -= FLYV * dt;
+      if (flying.y <= cy + R) {
+        const a = norm(Math.PI / 2 - rot);
+        if (stuck.some(s => angDiff(s.a, a) < GAP)) fail();
+        else {
+          stuck.push({ a, pre: false, k: 0 });
+          flying = null; pulse = 1;
+          sfx('hit', L.total - left); vib(12);
+          burst(cx, cy + R, 6, '#fff', 160, 2);
+          for (const o of L.orbs) {
+            if (!o.hit && angDiff(o.a, a) < ORBHIT) {
+              o.hit = true; orbHits++;
+              const wa = o.a + rot, d = R + PL * .6;
+              const ox = cx + Math.cos(wa) * d, oy = cy + Math.sin(wa) * d;
+              burst(ox, oy, 22, '#ffcf4a', 300, 3.5);
+              texts.push({ x: ox, y: oy, txt: '+★', life: 1 });
+              sfx('orb'); vib([10, 20, 10]);
+            }
+          }
+          if (left === 0) win();
+          else if (queued) { queued = false; throwPin(); }
+        }
+      }
+    }
+  }
+  if (state === 'dying') { timer -= dt; if (timer <= 0) showFail(); }
+  if (state === 'winning') {
+    winT += dt;
+    if (winT > .35 && !exploded) explode();
+    if (winT > 1.35) showWin();
+  }
+
+  for (const s of stuck) s.k = Math.min(1, s.k + dt * 8);
+  for (const p of parts) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .96; p.vy = p.vy * .96 + 300 * dt; p.life -= dt; }
+  parts = parts.filter(p => p.life > 0);
+  for (const d of debris) { d.x += d.vx * dt; d.y += d.vy * dt; d.vy += 1800 * dt; d.r += d.vr * dt; }
+  debris = debris.filter(d => d.y < H + 200);
+  for (const x of texts) { x.y -= 60 * dt; x.life -= dt * .9; }
+  texts = texts.filter(x => x.life > 0);
+  shake = Math.max(0, shake - dt * 50);
+  pulse = Math.max(0, pulse - dt * 6);
+}
+
+function drawPin(x1, y1, ang, len, color, alpha = 1) {
+  // pointe en (x1,y1), tête au bout dans la direction ang
+  const x2 = x1 + Math.cos(ang) * len, y2 = y1 + Math.sin(ang) * len;
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = color; ctx.lineWidth = PW; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.beginPath(); ctx.arc(x2, y2, HEAD, 0, TAU); ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function drawPlanet(x, y, r, hue, rt, scale = 1) {
+  r *= scale;
+  const g = ctx.createRadialGradient(x, y, r * .6, x, y, r * 2);
+  g.addColorStop(0, `hsla(${hue},90%,60%,.35)`); g.addColorStop(1, `hsla(${hue},90%,60%,0)`);
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r * 2, 0, TAU); ctx.fill();
+  const b = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+  b.addColorStop(0, `hsl(${hue},85%,74%)`); b.addColorStop(.7, `hsl(${hue},70%,50%)`); b.addColorStop(1, `hsl(${hue},70%,32%)`);
+  ctx.fillStyle = b; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  ctx.save(); ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.clip();
+  ctx.fillStyle = `hsla(${hue},60%,25%,.45)`;
+  for (const c of craters) { ctx.beginPath(); ctx.arc(x + Math.cos(c.a + rt) * c.d * r, y + Math.sin(c.a + rt) * c.d * r, c.s * r, 0, TAU); ctx.fill(); }
+  ctx.restore();
+}
+
+function drawStarShape(x, y, r, c) {
+  ctx.fillStyle = c; ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * .45 : r;
+    ctx.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr);
+  }
+  ctx.closePath(); ctx.fill();
+}
+
+function draw() {
+  ctx.fillStyle = bgGrad; ctx.fillRect(0, 0, W, H);
+  for (const s of bgStars) {
+    ctx.globalAlpha = .25 + .6 * Math.abs(Math.sin(time * s.f + s.p));
+    ctx.fillStyle = '#fff'; ctx.fillRect(s.x, s.y, s.s, s.s);
+  }
+  ctx.globalAlpha = 1;
+
+  if (state === 'menu' || state === 'levels' || !L) {
+    const sp = $('spacer').getBoundingClientRect();
+    const my = sp.height ? sp.top + sp.height / 2 : cy;
+    const mr = sp.height ? Math.min(R, sp.height / 4.6) : R;
+    drawPlanet(cx, my, mr, 265, menuRot);
+    for (let i = 0; i < 6; i++) {
+      const a = i * TAU / 6 + menuRot;
+      drawPin(cx + Math.cos(a) * mr, my + Math.sin(a) * mr, a, mr * 1.05, '#fff', .9);
+    }
+    drawParticles();
+    return;
+  }
+
+  ctx.save();
+  if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
+  const py = cy - pulse * 5;
+
+  if (!exploded) {
+    // orbes bonus
+    for (const o of L.orbs) {
+      if (o.hit) continue;
+      const wa = o.a + rot, d = R + PL * .6;
+      const ox = cx + Math.cos(wa) * d, oy = py + Math.sin(wa) * d;
+      const gl = ctx.createRadialGradient(ox, oy, 0, ox, oy, HEAD * 3.2);
+      gl.addColorStop(0, 'rgba(255,207,74,.55)'); gl.addColorStop(1, 'rgba(255,207,74,0)');
+      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(ox, oy, HEAD * 3.2, 0, TAU); ctx.fill();
+      drawStarShape(ox, oy, HEAD * (1.6 + .15 * Math.sin(time * 6)), '#ffcf4a');
+    }
+    // flèches plantées
+    for (const s of stuck) {
+      const wa = s.a + rot, inset = (1 - easeOut(s.k)) * 8;
+      const rr = R - 3 - inset;
+      drawPin(cx + Math.cos(wa) * rr, py + Math.sin(wa) * rr, wa, PL + 3, s.pre ? `hsl(${L.hue},45%,82%)` : '#fff');
+    }
+    drawPlanet(cx, py, R, L.hue, rot, 1 + pulse * .04);
+    if (L.boss) {
+      ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.font = `900 ${R * .32}px system-ui,sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('BOSS', cx, py);
+    }
+  }
+
+  // flèche en vol
+  if (flying) drawPin(cx, flying.y, Math.PI / 2, PL, '#fff');
+  else if (state === 'play' && left > 0) {
+    const k = easeOut(readyK);
+    drawPin(cx, LAUNCH + (1 - k) * 60, Math.PI / 2, PL, '#fff', k);
+  }
+
+  // débris
+  for (const d of debris) {
+    ctx.save(); ctx.translate(d.x, d.y); ctx.rotate(d.r);
+    drawPin(0, -PL / 2, Math.PI / 2, PL, d.c);
+    ctx.restore();
+  }
+  drawParticles();
+  for (const x of texts) {
+    ctx.globalAlpha = Math.max(0, x.life); ctx.fillStyle = '#ffcf4a';
+    ctx.font = `900 ${Math.round(R * .38)}px system-ui,sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(x.txt, x.x, x.y);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  drawHud();
+}
+
+function drawParticles() {
+  for (const p of parts) {
+    ctx.globalAlpha = Math.max(0, p.life / p.max); ctx.fillStyle = p.c;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.s, 0, TAU); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawHud() {
+  const top = Math.max(12, SAT);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = L.boss ? '#ff5e8a' : '#fff';
+  ctx.font = '800 20px system-ui,sans-serif';
+  ctx.fillText(L.boss ? `BOSS · NIVEAU ${L.n}` : `NIVEAU ${L.n}`, W / 2, top + 22);
+
+  // orbes
+  ctx.textAlign = 'right';
+  ctx.font = '800 18px system-ui,sans-serif';
+  ctx.fillStyle = '#ffcf4a';
+  ctx.fillText(`★ ${orbHits}/${L.orbs.length}`, W - 16, top + 22);
+
+  // flèches restantes
+  const n = L.total, step = Math.min(16, (H * .45) / n);
+  for (let i = 0; i < n; i++) {
+    const y = H - 30 - i * step;
+    const on = i < left;
+    ctx.fillStyle = on ? '#fff' : 'rgba(255,255,255,.18)';
+    ctx.fillRect(18, y - 2, 18, 4);
+    ctx.beginPath(); ctx.arc(38, y, 4, 0, TAU); ctx.fill();
+  }
+
+  // intro / aide
+  if (intro > 0) {
+    ctx.globalAlpha = Math.min(1, intro * 2);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
+    ctx.font = `900 ${Math.min(44, W * .1)}px system-ui,sans-serif`;
+    ctx.fillText(`Niveau ${L.n}`, W / 2, cy + R + PL + 70);
+    ctx.globalAlpha = 1;
+  }
+  if (!thrownAny && L.n <= 2 && state === 'play') {
+    ctx.globalAlpha = .55 + .45 * Math.sin(time * 4);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#ffcf4a';
+    ctx.font = '700 17px system-ui,sans-serif';
+    ctx.fillText('Touche l’écran pour lancer', W / 2, LAUNCH - 26);
+    ctx.globalAlpha = 1;
+  }
+}
+
+let last = performance.now();
+function loop(now) {
+  const dt = Math.min(.033, (now - last) / 1000); last = now;
+  if (state !== 'pause') update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+/* ---------- écrans ---------- */
+const screens = ['menu', 'levels', 'win', 'fail', 'pause'];
+function hideAll() { screens.forEach(s => $(s).classList.remove('show')); }
+function show(id) { hideAll(); $(id).classList.add('show'); }
+function totalStars() { return Object.values(bestStars).reduce((a, b) => a + b, 0); }
+
+function showMenu() {
+  state = 'menu'; L = null; parts = []; debris = [];
+  $('hudBtn').style.display = 'none';
+  $('playBtn').textContent = `JOUER · NIV. ${unlocked}`;
+  $('soundBtn').textContent = 'Son : ' + (soundOn ? 'oui' : 'non');
+  $('totalStars').textContent = totalStars() ? `★ ${totalStars()} étoiles` : '';
+  show('menu');
+}
+function showLevels() {
+  state = 'levels';
+  const g = $('grid'); g.innerHTML = '';
+  const max = Math.max(20, Math.ceil((unlocked + 5) / 5) * 5);
+  for (let i = 1; i <= max; i++) {
+    const b = document.createElement('button');
+    b.className = 'lv' + (i % 5 === 0 ? ' boss' : '') + (i === unlocked ? ' cur' : '');
+    const st = bestStars[i] || 0;
+    b.innerHTML = `${i}<small>${'★'.repeat(st)}</small>`;
+    b.disabled = i > unlocked;
+    b.onclick = () => { ac(); startLevel(i); };
+    g.appendChild(b);
+  }
+  $('totalStars2').textContent = `★ ${totalStars()} / ${(unlocked) * 3}`;
+  show('levels');
+  const cur = g.querySelector('.cur'); if (cur) cur.scrollIntoView({ block: 'center' });
+}
+const winMsgs = ['Trop fort !', 'Incroyable !', 'En feu 🔥', 'Parfait !', 'Imbattable !', 'Quelle précision !'];
+const failMsgs = ['Presque ! Encore une fois ?', 'Tu y étais presque…', 'Le timing, c’est tout !', 'Allez, celle-là c’est la bonne !', 'Respire… et vise.'];
+function showWin() {
+  state = 'won';
+  $('hudBtn').style.display = 'none';
+  $('winTitle').textContent = L.boss ? 'Boss vaincu !' : `Niveau ${L.n} réussi !`;
+  const box = $('winStars'); box.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const s = document.createElement('span'); s.className = 'star'; s.textContent = '★';
+    box.appendChild(s);
+    if (i < lastStars) setTimeout(() => { s.classList.add('on'); tone(700 + i * 220, .15, 'triangle', .12); }, 250 + i * 260);
+  }
+  $('winMsg').textContent = lastStars === 3 ? winMsgs[Math.floor(Math.random() * winMsgs.length)] : 'Attrape toutes les ★ pour 3 étoiles';
+  show('win');
+}
+function showFail() {
+  state = 'failed';
+  $('hudBtn').style.display = 'none';
+  $('failMsg').textContent = failMsgs[Math.floor(Math.random() * failMsgs.length)];
+  show('fail');
+}
+
+$('playBtn').onclick = () => { ac(); startLevel(unlocked); };
+$('levelsBtn').onclick = showLevels;
+$('levelsBack').onclick = showMenu;
+$('soundBtn').onclick = () => { soundOn = !soundOn; store.set('sound', soundOn); $('soundBtn').textContent = 'Son : ' + (soundOn ? 'oui' : 'non'); if (soundOn) tone(660, .1); };
+$('nextBtn').onclick = () => startLevel(L.n + 1);
+$('replayBtn').onclick = () => startLevel(L.n);
+$('winMenu').onclick = showMenu;
+$('retryBtn').onclick = () => startLevel(L.n);
+$('failMenu').onclick = showMenu;
+$('hudBtn').onclick = e => { e.stopPropagation(); if (state === 'play') { state = 'pause'; show('pause'); } };
+$('resumeBtn').onclick = () => { hideAll(); state = 'play'; last = performance.now(); };
+$('restartBtn').onclick = () => startLevel(L.n);
+$('pauseMenu').onclick = showMenu;
+
+cvs.addEventListener('pointerdown', e => { e.preventDefault(); ac(); throwPin(); });
+addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.code === 'Enter') {
+    e.preventDefault();
+    if (state === 'play') throwPin();
+    else if (state === 'failed') startLevel(L.n);
+    else if (state === 'won') startLevel(L.n + 1);
+  }
+});
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') { state = 'pause'; show('pause'); } });
+
+resize();
+showMenu();
+requestAnimationFrame(loop);
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

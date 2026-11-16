@@ -1,0 +1,10 @@
+{
+  "name": "Orbita",
+  "short_name": "Orbita",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0820",
+  "theme_color": "#0b0820",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
