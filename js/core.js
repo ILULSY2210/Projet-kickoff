@@ -1,4 +1,6 @@
 // ORBITA · core.js — état du jeu, règles, collisions, prédiction honnête et simulation (update).
+// Aucun accès au DOM, au canvas ni à l'audio : les règles émettent des événements (bus, util.js) que le rendu, les effets,
+// le son, l'interface et la sauvegarde écoutent. Chargeable dans Node avec config.js, util.js et levels.js (tests/sim).
 /* ---------- état ---------- */
 // flights : aiguilles en vol (deux au plus), dans l'ordre des lancers ; flying = la plus récente, ou null
 let state = 'menu', L = null, rot = 0, t = 0, stuck = [], left = 0, flying = null, flights = [];
@@ -8,28 +10,25 @@ let playPhase = 'jeu', countT = 0;
 let recall = null;
 let pulse = 0, orbHits = 0, winT = 0, wonT = 0, dieT = 0, exploded = false, spinK = 1;
 let intro = 0, wIntro = 0, build = 1, readyK = 1, thrownAny = false, time = 0, lastStars = 0, wipe = 0, headFlash = 0, starFlash = 0;
-let arcs = [[0, TAU]], arcsDirty = true, failInfo = null, nearMark = null, nearCount = 0, levelTime = 0, lastWorldSeen = -1, leadA = HPI, leadOk = true;
-const demo = { stuck: [], rot: 0, t: 0, cool: .8, fly: null, arcs: [[0, TAU]], gone: 0 };
+let arcs = [[0, TAU]], arcsDirty = true, failInfo = null, nearMark = null, nearCount = 0, levelTime = 0, lastWorldSeen = -1;
 
+// Les abonnés de « level:start » sont synchrones : thème, écrans masqués, effets remis à zéro, son (le banc d'essai en dépend).
 function startLevel(n, quick) {
   n = Math.max(1, n | 0);
   const retry = !!quick || (L && L.n === n && state !== 'menu' && state !== 'levels');
   const cause = retry && failInfo && L && L.n === n ? failCause(failInfo, L).short : null;
   recall = cause ? { txt: cause, life: RECALL } : null;
   L = makeLevel(n);
-  if (PAL.w !== L.w) { setTheme(L.w); bgKey = ''; }
-  rot = 0; t = L.phase; spinK = 1;
+  rot = 0; t = L.phase; spinK = 1; lawVer++;
   stuck = L.blockers; arcsDirty = true;
   left = L.throws; flying = null; flights = [];
-  segs = []; sparks = []; rings = []; texts = []; orbHits = 0; winT = 0; wonT = 0; dieT = 0; exploded = false;
-  failInfo = null; nearMark = null; nearCount = 0; levelTime = 0; shake = 0; pulse = 0; readyK = 0; thrownAny = false; starFlash = 0;
+  orbHits = 0; winT = 0; wonT = 0; dieT = 0; exploded = false;
+  failInfo = null; nearMark = null; nearCount = 0; levelTime = 0; pulse = 0; readyK = 0; thrownAny = false; starFlash = 0;
   const newWorld = !retry && (L.pos === 0 || L.w !== lastWorldSeen);
   lastWorldSeen = L.w;
   intro = retry ? 0 : 1.3; wIntro = newWorld ? 2.5 : 0; build = retry ? .7 : 0;
-  if (!retry && !rm()) wipe = 1;
   state = 'play'; playPhase = 'jeu'; countT = 0;
-  hideAll(); $('hudBtn').style.display = 'block';
-  if (newWorld) sfx('world'); else if (!retry) sfx(L.boss ? 'boss' : 'start');
+  bus.emit('level:start', L, retry, newWorld);
 }
 
 // throwPin() lance à l'instant simulé courant ; throwPin(tSim) à l'instant tSim (jamais avant le dernier instant simulé).
@@ -46,34 +45,22 @@ function launch(tL) {
   left--; thrownAny = true; readyK = 0;
   if (wIntro > .4) wIntro = .4;
   if (intro > .3) intro = .3;
-  sfx('throw', f.idx);
+  bus.emit('throw', f);
 }
 
 function fail(kind, a, d, who) {
   state = 'dying'; dieT = 0; spinK = 1;
-  const yT = kind === 'sent' ? cy + RS : cy + R + PL * .5;
   // lost : aiguilles perdues avec l'échec (celle qui échoue et celle qui vole encore derrière elle)
   failInfo = { kind, a: kind === 'twin' ? norm(a + Math.PI) : a, d, who, sent: kind === 'sent' ? who : null, lost: Math.max(1, flights.length) };
-  // l'aiguille se brise en deux traits
-  const s1 = Math.random() < .5 ? -1 : 1;
-  seg(cx, yT - PL * .25, HPI, PL * .5, s1 * (60 + Math.random() * 80), 120, s1 * 7, .7, PAL.hi);
-  seg(cx, yT + PL * .25, HPI, PL * .5, -s1 * (80 + Math.random() * 80), 190, -s1 * 9, .7, PAL.hi);
-  const fa = failInfo.a + rot, fr = R + PL;
-  const fx = kind === 'sent' ? cx : cx + Math.cos(fa) * fr, fy = kind === 'sent' ? cy + RS : cy + Math.sin(fa) * fr;
-  spark(fx, fy, 16, ALERT, 240); ringFx(fx, fy, HEAD, 150, .45, ALERT, 2);
-  flights = []; flying = null; shake = rm() ? 0 : 9; nearMark = null;
-  sfx('fail'); vib([30, 40, 90]);
+  flights = []; flying = null; nearMark = null;
+  bus.emit('fail', failInfo);
 }
 
 function win() {
   state = 'winning'; winT = 0; exploded = false;
   const orbN = L.orbs.length;
   lastStars = 1 + (orbHits > 0 ? 1 : 0) + (orbHits === orbN ? 1 : 0);
-  const n = L.n;
-  if (lastStars > (bestStars[n] || 0)) bestStars[n] = lastStars;
-  if (n + 1 > unlocked) unlocked = n + 1;
-  store.set('stars', bestStars); store.set('unlocked', unlocked);
-  sfx('win', L.throws); vib([20, 30, 20]);
+  bus.emit('win', L, lastStars);
 }
 
 // aiguille f plantée à l'angle a (repère de l'astre)
@@ -109,25 +96,18 @@ function stick(a, f) {
   if (L.trav) { s.tr = true; s.tw = { a: b, pre: false, k: 0, twin: true, deg: idx + 2 }; stuck.push(s.tw); }
   if (f) { flights.splice(flights.indexOf(f), 1); flying = flights.length ? flights[flights.length - 1] : null; }
   arcsDirty = true; pulse = 1;
-  sfx('hit', idx); vib(10);
-  spark(cx, cy + R, 7, PAL.hi, 210, 2.2, HPI);
-  if (L.trav) spark(cx, cy - R, 5, PAL.hi, 180, 2, -HPI);
+  bus.emit('hit', s, idx);
   // frôlement : moins de 2 × GAP d'un voisin
   if (d < GAP * 2) {
     nearCount++;
     const deg = Math.max(1, Math.round((d - GAP) * 180 / Math.PI));
     nearMark = { a1: twinHit ? b : a, a2: who.a, life: .9 };
-    texts = texts.filter(x => !x.near);
-    texts.push({ near: 1, x: cx + HEAD * 3.2, y: cy + R + PL + HEAD * 1.75, txt: 'FRÔLÉ · ' + deg + '°', life: 1.1, rgb: PAL.acc, h: 10, al: 0 });
-    sfx('near', idx); vib([8, 30, 8]);
+    bus.emit('near', deg, idx);
   }
   for (const o of L.orbs) {
     if (!o.hit && (angDiff(o.a, a) < ORBHIT || (L.trav && angDiff(o.a, b) < ORBHIT))) {
       o.hit = true; orbHits++; starFlash = 1;
-      const wa = o.a + rot, dd = R + PL * .55, ox = cx + Math.cos(wa) * dd, oy = cy + Math.sin(wa) * dd;
-      spark(ox, oy, 14, PAL.acc, 230); ringFx(ox, oy, HEAD, 130, .4, PAL.acc, 1.5);
-      texts.push({ x: cx - HEAD * 3.2, y: cy + R + PL + HEAD * 1.75, txt: '★ ' + orbHits + '/' + L.orbs.length, life: 1.1, rgb: PAL.acc, h: 10, al: 1 });
-      sfx('orb', idx); vib([10, 20, 10]);
+      bus.emit('star', o, idx);
     }
   }
   if (left === 0 && !flights.length) win();
@@ -199,30 +179,49 @@ function sentMin(q, s0, s1) {
 }
 
 /* ---------- prédiction : même intégrateur et même grille de pas que le jeu ---------- */
-// pour une aiguille lancée à l'instant tL (≥ t), rotation et angle d'impact ; exact au bit près si le jeu avance en pas de STEP
-function predict(tL) {
+// Pour une aiguille lancée à l'instant tL (≥ t), rotation et angle d'impact ; exact au bit près si le jeu avance en pas de
+// STEP. Les rotations aux instants t + k·STEP sont gardées en cache tant que l'état (t, rot, niveau, loi : lawVer) ne
+// change pas : un planificateur peut interroger des centaines d'instants de lancer pour le prix d'une intégration.
+let lawVer = 0;
+const PC = { t: NaN, rot: NaN, L: null, ver: -1, n: 0, taus: [], rs: [], vs: [] };
+function predict(tL) { const r = predictRot(tL); return { a: norm(HPI - r), rot: r, tI: tL + flightTime() }; }
+// rotation de l'astre à l'impact d'une aiguille lancée à tL (sans allocation)
+function predictRot(tL) {
   const tI = tL + flightTime();
-  let r = rot, tau = t, v = speedAt(tau);
-  while (tau + STEP < tI) { const t2 = tau + STEP, v2 = speedAt(t2); r += (t2 - tau) * (v + v2) / 2; tau = t2; v = v2; }
-  r += (tI - tau) * (v + speedAt(tI)) / 2;
-  return { a: norm(HPI - r), rot: r, tI };
+  if (PC.t !== t || PC.rot !== rot || PC.L !== L || PC.ver !== lawVer) {
+    PC.t = t; PC.rot = rot; PC.L = L; PC.ver = lawVer; PC.n = 1; PC.taus[0] = t; PC.rs[0] = rot; PC.vs[0] = speedAt(t);
+  }
+  const T = PC.taus, Rs = PC.rs, V = PC.vs;
+  // même boucle que l'intégration pas à pas : on avance tant que tau + STEP < tI
+  let k = Math.max(0, Math.min(PC.n - 1, Math.floor((tI - t) / STEP) - 1));
+  while (k > 0 && !(T[k - 1] + STEP < tI)) k--;
+  while (T[k] + STEP < tI) {
+    if (k + 1 >= PC.n) { const tau = T[k], t2 = tau + STEP, v2 = speedAt(t2); Rs[k + 1] = Rs[k] + (t2 - tau) * (V[k] + v2) / 2; T[k + 1] = t2; V[k + 1] = v2; PC.n = k + 2; }
+    k++;
+  }
+  return Rs[k] + (tI - T[k]) * (V[k] + speedAt(tI)) / 2;
+}
+// Un tir lancé à tL survit-il, avec une marge de k × GAP au-delà de la règle ? k = 0 : la règle (sentinelles : tige et
+// tête prises sur leur fenêtre entière, légèrement prudent) ; k = 0,7 : le prédicteur honnête du banc d'essai.
+function shotSafe(tL, k) {
+  const a = norm(HPI - predictRot(tL)), G = GAP * (1 + k), M = GAP * k;
+  for (const s of stuck) if (angDiff(s.a, a) <= G) return false;
+  if (L.trav) { const b = a + Math.PI; for (const s of stuck) if (angDiff(s.a, b) <= G) return false; }
+  if (L.sents.length) {
+    // tige (marge SENT_PAD) sur toute la traversée, tête (marge SENT_PAD_HEAD) sur sa fenêtre, plus M et 20 ms si k > 0
+    const e = k > 0 ? .02 : 0, w = sentWindow(), s0 = tL + w[0] - e, s1 = tL + w[1] + e, h0 = tL + HEAD_WIN[0] - e, h1 = tL + HEAD_WIN[1] + e;
+    for (const q of L.sents) {
+      if (sentMin(q, s0, s1) <= q.hw + SENT_PAD + M) return false;
+      if (sentMin(q, h0, h1) <= q.hw + SENT_PAD_HEAD + M) return false;
+    }
+  }
+  return true;
 }
 // prédicteur honnête pour le banc d'essai : même calcul que le jeu, marge 0,7 × GAP ; tSim (facultatif) = instant du
 // lancer envisagé (≥ t), sinon l'instant simulé courant
 window.__botSafe = function (tSim) {
   if (state !== 'play' || playPhase !== 'jeu' || flying || left <= 0 || !L) return false;
-  const tL = tSim > t ? tSim : t, M = GAP * 1.7, a = predict(tL).a;
-  for (const s of stuck) if (angDiff(s.a, a) <= M) return false;
-  if (L.trav) { const b = a + Math.PI; for (const s of stuck) if (angDiff(s.a, b) <= M) return false; }
-  if (L.sents.length) {
-    // tige (marge SENT_PAD) sur toute la traversée, tête (marge SENT_PAD_HEAD) sur sa fenêtre, plus 0,7 × GAP et 20 ms
-    const w = sentWindow(), s0 = tL + w[0] - .02, s1 = tL + w[1] + .02, h0 = tL + HEAD_WIN[0] - .02, h1 = tL + HEAD_WIN[1] + .02;
-    for (const q of L.sents) {
-      if (sentMin(q, s0, s1) <= q.hw + SENT_PAD + GAP * .7) return false;
-      if (sentMin(q, h0, h1) <= q.hw + SENT_PAD_HEAD + GAP * .7) return false;
-    }
-  }
-  return true;
+  return shotSafe(tSim > t ? tSim : t, .7);
 };
 
 /* ---------- simulation à pas fixe ---------- */
@@ -238,13 +237,12 @@ function update(dt) {
 function step(h) {
   time += h;
   if (wipe > 0) wipe = Math.max(0, wipe - h * 3.4);
-  if (state === 'menu') updDemo(h);
   if (state === 'play' && playPhase === 'compte') {
     const c0 = Math.ceil(countT / (COUNTDOWN / 3));
     countT -= h;
     const c1 = Math.ceil(countT / (COUNTDOWN / 3));
     if (countT <= 0) { countT = 0; playPhase = 'jeu'; }
-    else if (c1 !== c0) sfx('tick', c1);
+    else if (c1 !== c0) bus.emit('tick', c1);
   }
   else if (L && (state === 'play' || state === 'dying' || state === 'winning')) {
     const k = state === 'dying' ? (spinK = Math.max(0, spinK - h * 4.5)) : 1;
@@ -279,10 +277,7 @@ function step(h) {
     if (state === 'play' && rot !== r0) {
       for (const s of stuck) {
         const th = -HPI - s.a;
-        if (Math.floor((rot - th) / TAU) !== Math.floor((r0 - th) / TAU)) {
-          headFlash = 1;
-          if (soundOn && time - lastPing > .07 && !s.wall) { lastPing = time; sfx('ping', s.pre ? -1 - (Math.round(s.a * 3) % 4) : s.deg); }
-        }
+        if (Math.floor((rot - th) / TAU) !== Math.floor((r0 - th) / TAU)) { headFlash = 1; bus.emit('ping', s); }
       }
     }
   }
@@ -292,35 +287,21 @@ function step(h) {
     readyK = Math.min(1, readyK + h * 10);
     levelTime += h;
     if (recall && (recall.life -= h) <= 0) recall = null;
-    // viseur d'avance : où tomberait une aiguille lancée maintenant
-    const pr = predict(t), la = pr.a;
-    leadA = HPI - (pr.rot - rot); leadOk = true;
-    for (const s of stuck) if (angDiff(s.a, la) < GAP || (L.trav && angDiff(s.a, la + Math.PI) < GAP)) { leadOk = false; break; }
   }
-  if (state === 'dying') { dieT += h; if (dieT >= FAIL_SHEET) showFail(); }
+  if (state === 'dying') { dieT += h; if (dieT >= FAIL_SHEET) { state = 'failed'; bus.emit('failed'); } }
   if (state === 'winning') {
     winT += h;
-    if (winT > .26 && !exploded) {
-      syncScene(); explodeScene(GSC, 300); exploded = true; shake = rm() ? 0 : 7; sfx('boom'); vib(50);
-    }
-    if (winT > 1.15) showWin();
+    if (winT > .26 && !exploded) { exploded = true; bus.emit('explode'); }
+    if (winT > 1.15) { state = 'won'; wonT = 0; bus.emit('won'); }
   }
   if (state === 'won') wonT += h;
 
   for (const s of stuck) if (s.k < 1) s.k = Math.min(1, s.k + h * 6);
-  for (const p of sparks) { p.x += p.vx * h; p.y += p.vy * h; p.vx *= .94; p.vy *= .94; p.life -= h; }
-  for (const p of segs) { p.x += p.vx * h; p.y += p.vy * h; p.a += p.va * h; p.vx *= .985; p.vy *= .985; p.life -= h; }
-  for (const p of rings) { p.r += p.vr * h; p.life -= h; }
-  for (const x of texts) x.life -= h;
-  if (sparks.length) sparks = sparks.filter(p => p.life > 0);
-  if (segs.length) segs = segs.filter(p => p.life > 0);
-  if (rings.length) rings = rings.filter(p => p.life > 0);
-  if (texts.length) texts = texts.filter(x => x.life > 0);
   if (nearMark && (nearMark.life -= h) <= 0) nearMark = null;
-  shake = Math.max(0, shake - h * 40);
   pulse = Math.max(0, pulse - h * 7);
   headFlash = Math.max(0, headFlash - h * 5);
   starFlash = Math.max(0, starFlash - h * 2.2);
+  bus.emit('step', h);
 }
 
 /* ---------- vue au présent pour le rendu ---------- */
@@ -336,27 +317,3 @@ function viewAt(a) {
 // position u de l'aiguille en vol à l'instant présent
 function flyU(f) { return clamp((RV.t - f.tL) / FLIGHT, 0, 1); }
 
-// mode démo du menu : l'astre du monde en cours se joue tout seul
-function updDemo(dt) {
-  const D = demo;
-  D.t += dt;
-  const sp = .95 * (.55 + .45 * Math.sin(D.t * .8));
-  D.rot += sp * dt;
-  for (const s of D.stuck) if (s.k < 1) s.k = Math.min(1, s.k + dt * 6);
-  if (D.gone > 0) { D.gone -= dt; if (D.gone <= 0) { D.stuck = []; D.arcs = [[0, TAU]]; D.cool = .7; D.born = 0; } return; }
-  D.born = Math.min(1, (D.born || 0) + dt * 2.2);
-  if (D.fly) {
-    D.fly.k += dt * 6;
-    if (D.fly.k >= 1) {
-      D.stuck.push({ a: norm(HPI - D.rot), pre: false, k: 0 }); D.fly = null; D.arcs = computeArcs(D.stuck);
-      if (D.stuck.length >= 9) {
-        if (rm()) { D.gone = .01; }
-        else if (MSC.r) { syncMenu(); explodeScene(MSC, 210); D.gone = 1.3; }
-        else D.gone = .01;
-      }
-    }
-  } else if ((D.cool -= dt) <= 0) {
-    const a = norm(HPI - (D.rot + sp / 6));
-    if (D.stuck.every(s => angDiff(s.a, a) > GAP * 2.6)) { D.fly = { k: 0 }; D.cool = .5 + Math.random() * .6; }
-  }
-}

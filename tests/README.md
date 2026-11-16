@@ -24,7 +24,22 @@ node tests/ui.js --only=smoke    # une seule section (plusieurs : --only=smoke,e
 node tests/play.js               # gameplay accéléré dans la vraie page (~20 s)
 node tests/perf.js               # régularité, charge, latence (~20 s)
 node tests/lib/serve.js 8080     # sert le jeu en http (le service worker y fonctionne sur localhost)
+node tests/sim/agree.js          # accord du simulateur Node avec la vraie page (~30 s)
 ```
+
+## Simulateur (`tests/sim/`)
+
+Le simulateur exécute le **vrai** cœur du jeu dans Node : `tests/sim/load.js` charge `js/config.js`, `js/util.js`,
+`js/levels.js` et `js/core.js` dans un contexte `vm` (aucune copie de la physique ; `core.js` n'utilise ni le DOM ni le
+canvas, il émet des événements sur `bus` que le rendu, les effets, le son, l'interface et la sauvegarde écoutent).
+`tests/sim/driver.js` contient les politiques de joueur (injectées telles quelles dans Node ou dans la page) : `aim`
+(joueur qui vise, imprécision σ), `reactive` (n'anticipe pas), `mash` (salve à l'aveugle), `bot` (`__botSafe`), et
+`replay` (rejoue un journal d'instants de tir). Leur anticipation passe par `predict()` et `shotSafe()` du cœur, les
+mêmes que `__botSafe`.
+
+| Outil | Ce qui est vérifié |
+|---|---|
+| `tests/sim/agree.js [--n=2000] [--max=400]` | ≥ 2 000 tentatives du joueur qui vise (σ au hasard) rejouées dans Chromium et dans Node : ≥ 99,5 % d'issues identiques, angles à 1e-9 |
 
 | Outil | Section | Ce qui est vérifié |
 |---|---|---|

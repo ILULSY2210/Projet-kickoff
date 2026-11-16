@@ -84,3 +84,18 @@ function sfx(k, x) {
     case 'star': bell(degF(x * 2) * 2, { v: .1, dec: .7 }); break;
   }
 }
+
+// abonnements aux événements du cœur (appelé une fois par main.js)
+function bindAudio() {
+  bus.on('level:start', (lv, retry, newWorld) => { if (newWorld) sfx('world'); else if (!retry) sfx(lv.boss ? 'boss' : 'start'); });
+  bus.on('throw', f => sfx('throw', f.idx));
+  bus.on('hit', (s, idx) => sfx('hit', idx));
+  bus.on('near', (deg, idx) => sfx('near', idx));
+  bus.on('star', (o, idx) => sfx('orb', idx));
+  bus.on('fail', () => sfx('fail'));
+  bus.on('win', lv => sfx('win', lv.throws));
+  bus.on('explode', () => sfx('boom'));
+  bus.on('tick', c => sfx('tick', c));
+  // boîte à musique : chaque bloqueur qui passe sous la tête de lecture (en haut) fait tinter sa note
+  bus.on('ping', s => { if (soundOn && time - lastPing > .07 && !s.wall) { lastPing = time; sfx('ping', s.pre ? -1 - (Math.round(s.a * 3) % 4) : s.deg); } });
+}

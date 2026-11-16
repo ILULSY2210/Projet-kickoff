@@ -120,8 +120,11 @@ function tap(ts) {
   else if (state === 'failed') retry(ts);
 }
 
-// branchements des boutons et des entrées (appelé une fois par main.js)
+// branchements des boutons, des entrées et des événements du cœur (appelé une fois par main.js)
 function bindUI() {
+  bus.on('level:start', () => { hideAll(); $('hudBtn').style.display = 'block'; });
+  bus.on('failed', showFail);
+  bus.on('won', showWin);
   click('playBtn', () => startLevel(unlocked));
   click('levelsBtn', showLevels);
   click('levelsBack', showMenu);

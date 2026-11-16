@@ -15,7 +15,7 @@ function loop(now) {
 
 addEventListener('resize', resize);
 addEventListener('orientationchange', () => setTimeout(resize, 120));
-bindUI();
+bindStore(); bindRender(); bindFx(); bindAudio(); bindUI();
 
 /* ---------- service worker : précache hors ligne, mise à jour appliquée seulement au menu ---------- */
 let swReg = null, swWaiting = null, swAsked = false, swChecked = 0;

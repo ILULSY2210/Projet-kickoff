@@ -16,6 +16,13 @@ const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, k) => a + (b - a) * k;
 const easeOut = k => 1 - Math.pow(1 - k, 3);
 const pad2 = n => (n < 10 ? '0' : '') + n;
+// petit bus d'événements synchrone : core.js émet (« level:start », « throw », « hit », « near », « star », « fail »,
+// « failed », « win », « explode », « won », « tick », « ping », « step ») ; rendu, effets, son, interface et sauvegarde écoutent
+const bus = {
+  h: {},
+  on(ev, fn) { (this.h[ev] || (this.h[ev] = [])).push(fn); },
+  emit(ev, a, b, c) { const l = this.h[ev]; if (l) for (let i = 0; i < l.length; i++) l[i](a, b, c); }
+};
 const _cc = new Map();
 function col(rgb, a) {
   const ai = (a * 40 + .5) | 0, k = ((rgb[0] << 16 | rgb[1] << 8 | rgb[2]) * 64) + ai;

@@ -9,3 +9,13 @@ let bestStars = store.get('stars', {});
 let soundOn = store.get('sound', true);
 if (!(unlocked >= 1)) unlocked = 1;
 if (!bestStars || typeof bestStars !== 'object') bestStars = {};
+
+// abonnements aux événements du cœur (appelé une fois par main.js)
+function bindStore() {
+  bus.on('win', (lv, stars) => {
+    const n = lv.n;
+    if (stars > (bestStars[n] || 0)) bestStars[n] = stars;
+    if (n + 1 > unlocked) unlocked = n + 1;
+    store.set('stars', bestStars); store.set('unlocked', unlocked);
+  });
+}

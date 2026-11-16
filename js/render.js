@@ -6,6 +6,10 @@ let W = 0, H = 0, DPR = 1, SX = 0, SW = 0, cx = 0, cy = 0, R = 60, PL = 60, HEAD
 let SAT = 0, SAB = 0, bgKey = '', UMAP = [], SENT_HW = 5;
 const GSC = {}, MSC = { r: 0 };
 let hero = null, heroTick = 0;
+// viseur d'avance : angle à l'écran où tomberait une aiguille lancée maintenant, et zone libre ou non (calculé au rendu)
+let leadA = HPI, leadOk = true;
+// démo du menu : l'astre du monde en cours se joue tout seul
+const demo = { stuck: [], rot: 0, t: 0, cool: .8, fly: null, arcs: [[0, TAU]], gone: 0 };
 
 let PAL = worldInfo(0);
 function setTheme(w) {
@@ -103,6 +107,12 @@ function syncScene() {
   if (S.boss) project(SOL.octa, -ro * 1.3, .8, ro * .9);
   // aiguille en vol : pointe à l'instant présent, et position de l'image précédente pour la traînée du phosphore
   for (const f of flights) { const ys = pinYs(flyU(f), f.ys || (f.ys = [0, 0])); f.pEnd = f.yEnd === undefined ? ys[1] : f.yEnd; f.yTip = ys[0]; f.yEnd = ys[1]; }
+  // viseur d'avance : où tomberait une aiguille lancée maintenant (même prédiction que le jeu)
+  if (state === 'play') {
+    const pr = predict(t), la = pr.a;
+    leadA = HPI - (pr.rot - rot); leadOk = true;
+    for (const s of stuck) if (angDiff(s.a, la) < GAP || (L.trav && angDiff(s.a, la + Math.PI) < GAP)) { leadOk = false; break; }
+  }
 }
 function heroRect() {
   if (!hero || --heroTick <= 0) { const q = $('spacer').getBoundingClientRect(); hero = { x: q.left + q.width / 2, y: q.top + q.height / 2, h: q.height }; heroTick = 30; }
@@ -576,4 +586,39 @@ function draw(dt) {
     ctx.globalAlpha = wipe * .5; ctx.fillStyle = col(PAL.rgb, 1); ctx.fillRect(0, y - 1, W, 2);
     ctx.globalAlpha = wipe * .1; ctx.fillRect(0, y - 26, W, 26); ctx.globalAlpha = 1;
   }
+}
+
+// mode démo du menu : l'astre du monde en cours se joue tout seul
+function updDemo(dt) {
+  const D = demo;
+  D.t += dt;
+  const sp = .95 * (.55 + .45 * Math.sin(D.t * .8));
+  D.rot += sp * dt;
+  for (const s of D.stuck) if (s.k < 1) s.k = Math.min(1, s.k + dt * 6);
+  if (D.gone > 0) { D.gone -= dt; if (D.gone <= 0) { D.stuck = []; D.arcs = [[0, TAU]]; D.cool = .7; D.born = 0; } return; }
+  D.born = Math.min(1, (D.born || 0) + dt * 2.2);
+  if (D.fly) {
+    D.fly.k += dt * 6;
+    if (D.fly.k >= 1) {
+      D.stuck.push({ a: norm(HPI - D.rot), pre: false, k: 0 }); D.fly = null; D.arcs = computeArcs(D.stuck);
+      if (D.stuck.length >= 9) {
+        if (rm()) { D.gone = .01; }
+        else if (MSC.r) { syncMenu(); explodeScene(MSC, 210); D.gone = 1.3; }
+        else D.gone = .01;
+      }
+    }
+  } else if ((D.cool -= dt) <= 0) {
+    const a = norm(HPI - (D.rot + sp / 6));
+    if (D.stuck.every(s => angDiff(s.a, a) > GAP * 2.6)) { D.fly = { k: 0 }; D.cool = .5 + Math.random() * .6; }
+  }
+}
+
+// abonnements aux événements du cœur (appelé une fois par main.js, avant les autres : le thème précède le son)
+function bindRender() {
+  bus.on('level:start', (lv, retry) => {
+    if (PAL.w !== lv.w) { setTheme(lv.w); bgKey = ''; }
+    if (!retry && !rm()) wipe = 1;
+  });
+  bus.on('explode', () => { syncScene(); explodeScene(GSC, 300); });
+  bus.on('step', h => { if (state === 'menu') updDemo(h); });
 }
