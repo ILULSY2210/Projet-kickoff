@@ -1,10 +1,13 @@
 {
   "name": "Orbita",
   "short_name": "Orbita",
+  "description": "Fais fleurir les planètes : plante tes pousses sans jamais toucher les autres.",
+  "lang": "fr",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0b0820",
-  "theme_color": "#0b0820",
+  "background_color": "#17B3A3",
+  "theme_color": "#17B3A3",
   "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
 }
