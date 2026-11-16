@@ -2,6 +2,8 @@
 /* ---------- état ---------- */
 // flights : aiguilles en vol (deux au plus), dans l'ordre des lancers ; flying = la plus récente, ou null
 let state = 'menu', L = null, rot = 0, t = 0, stuck = [], left = 0, flying = null, flights = [];
+// sous-phase de « play » : 'jeu', ou 'compte' (compte à rebours de REPRENDRE : rotation figée, tirs ignorés)
+let playPhase = 'jeu', countT = 0;
 let pulse = 0, orbHits = 0, winT = 0, wonT = 0, dieT = 0, exploded = false, spinK = 1;
 let intro = 0, wIntro = 0, build = 1, readyK = 1, thrownAny = false, time = 0, lastStars = 0, wipe = 0, headFlash = 0, starFlash = 0;
 let arcs = [[0, TAU]], arcsDirty = true, failInfo = null, nearMark = null, nearCount = 0, levelTime = 0, lastWorldSeen = -1, leadA = HPI, leadOk = true;
@@ -21,7 +23,7 @@ function startLevel(n, quick) {
   lastWorldSeen = L.w;
   intro = retry ? 0 : 1.3; wIntro = newWorld ? 2.5 : 0; build = retry ? .7 : 0;
   if (!retry && !rm()) wipe = 1;
-  state = 'play';
+  state = 'play'; playPhase = 'jeu'; countT = 0;
   hideAll(); $('hudBtn').style.display = 'block';
   if (newWorld) sfx('world'); else if (!retry) sfx(L.boss ? 'boss' : 'start');
 }
@@ -30,7 +32,7 @@ function startLevel(n, quick) {
 // Un tir n'est jamais retardé : il part même si une aiguille vole déjà, dans la limite de deux aiguilles en vol.
 const MAX_FLIGHTS = 2;
 function throwPin(tSim) {
-  if (state !== 'play' || left <= 0 || flights.length >= MAX_FLIGHTS) return;
+  if (state !== 'play' || playPhase !== 'jeu' || left <= 0 || flights.length >= MAX_FLIGHTS) return;
   launch(tSim > t ? tSim : t);
 }
 // une aiguille part du pas de tir à l'instant de simulation tL (≥ dernier instant simulé)
@@ -138,7 +140,7 @@ function predict(tL) {
 // prédicteur honnête pour le banc d'essai : même calcul que le jeu, marge 0,7 × GAP ; tSim (facultatif) = instant du
 // lancer envisagé (≥ t), sinon l'instant simulé courant
 window.__botSafe = function (tSim) {
-  if (state !== 'play' || flying || left <= 0 || !L) return false;
+  if (state !== 'play' || playPhase !== 'jeu' || flying || left <= 0 || !L) return false;
   const tL = tSim > t ? tSim : t, M = GAP * 1.7, a = predict(tL).a;
   for (const s of stuck) if (angDiff(s.a, a) <= M) return false;
   if (L.trav) { const b = a + Math.PI; for (const s of stuck) if (angDiff(s.a, b) <= M) return false; }
@@ -163,7 +165,14 @@ function step(h) {
   time += h;
   if (wipe > 0) wipe = Math.max(0, wipe - h * 3.4);
   if (state === 'menu') updDemo(h);
-  if (L && (state === 'play' || state === 'dying' || state === 'winning')) {
+  if (state === 'play' && playPhase === 'compte') {
+    const c0 = Math.ceil(countT / (COUNTDOWN / 3));
+    countT -= h;
+    const c1 = Math.ceil(countT / (COUNTDOWN / 3));
+    if (countT <= 0) { countT = 0; playPhase = 'jeu'; }
+    else if (c1 !== c0) sfx('tick', c1);
+  }
+  else if (L && (state === 'play' || state === 'dying' || state === 'winning')) {
     const k = state === 'dying' ? (spinK = Math.max(0, spinK - h * 4.5)) : 1;
     const t0 = t, r0 = rot, v0 = speedAt(t0), t1 = t0 + h * k, r1 = r0 + (t1 - t0) * (v0 + speedAt(t1)) / 2;
     if (state === 'play' && flights.length) {
@@ -199,7 +208,7 @@ function step(h) {
       }
     }
   }
-  if (state === 'play') {
+  if (state === 'play' && playPhase === 'jeu') {
     intro = Math.max(0, intro - h); wIntro = Math.max(0, wIntro - h);
     build = Math.min(1, build + h * 2.8);
     readyK = Math.min(1, readyK + h * 10);
@@ -241,7 +250,7 @@ function step(h) {
 const RV = { rot: 0, t: 0 };
 function viewAt(a) {
   RV.rot = rot; RV.t = t;
-  if (!L || !(a > 0) || !(state === 'play' || state === 'dying' || state === 'winning')) return;
+  if (!L || !(a > 0) || !(state === 'play' && playPhase === 'jeu' || state === 'dying' || state === 'winning')) return;
   const h = a * (state === 'dying' ? Math.max(0, spinK - a * 4.5) : 1), t1 = t + h;
   RV.t = t1; RV.rot = rot + h * (speedAt(t) + speedAt(t1)) / 2;
 }

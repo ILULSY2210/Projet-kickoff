@@ -9,6 +9,8 @@ const FLIGHT = .060;
 const U = { len: .24, head: .76, sentIn: .73, sent: .71, sentOut: .69, dial: .66 };
 // marge angulaire des sentinelles (rad) : bout arrondi de leur trait + demi-épaisseur de la tige, mesurée en 390×844
 const SENT_PAD = .038;
+// compte à rebours de REPRENDRE (s) : rotation figée, tirs ignorés
+const COUNTDOWN = .6;
 const ALERT = [255, 59, 82], INK = '#04070a';
 
 /* ---------- mondes ---------- */

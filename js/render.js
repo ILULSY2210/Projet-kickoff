@@ -322,7 +322,18 @@ function drawGame(c, g) {
       c.beginPath(); c.moveTo(cx, f.yTip); c.lineTo(cx, Math.min(LAUNCH + PL, f.pEnd - HEAD)); c.stroke(); c.globalAlpha = 1;
     } else drawPin(c, g, cx, f.yTip, f.yEnd, hi, 1);
   }
-  if (state === 'play' && left > 0 && (!flying || flyU(flying) > U.len)) { const y = LAUNCH + (1 - easeOut(readyK)) * 26; drawPin(c, g, cx, y, y + PL + HEAD, hi, easeOut(readyK)); }
+  const counting = state === 'play' && playPhase === 'compte';
+  if (state === 'play' && left > 0 && (!flying || flyU(flying) > U.len)) { const y = LAUNCH + (1 - easeOut(readyK)) * 26; drawPin(c, g, cx, y, y + PL + HEAD, hi, easeOut(readyK) * (counting ? .45 : 1)); }
+  // compte à rebours de REPRENDRE : 3-2-1 sur le pas de tir, anneau qui se vide, tir verrouillé
+  if (counting) {
+    const k = countT / COUNTDOWN, d = String(Math.max(1, Math.ceil(countT / (COUNTDOWN / 3)))), rr = 15, yc = LAUNCH - rr - 12, h = 14;
+    c.lineCap = 'round';
+    if (!g) { c.globalAlpha = .9; c.fillStyle = INK; c.beginPath(); c.arc(cx, yc, rr + 3, 0, TAU); c.fill(); }
+    c.globalAlpha = g ? .3 : .35; c.strokeStyle = col(rgb, 1); c.lineWidth = g ? 3 : 1.2; c.beginPath(); c.arc(cx, yc, rr, 0, TAU); c.stroke();
+    c.globalAlpha = g ? .6 : 1; c.strokeStyle = col(hi, 1); c.lineWidth = g ? 5 : 2; c.beginPath(); c.arc(cx, yc, rr, -HPI, -HPI + TAU * k); c.stroke();
+    c.globalAlpha = g ? .5 : 1; vtext(c, d, cx - vwidth(d, h) / 2, yc - h / 2, h, 0, col(hi, 1), g ? 4 : 2);
+    c.globalAlpha = 1;
+  }
   if (!g && !sheet) {
     // berceau du pas de tir
     const by = LAUNCH + PL, q = HEAD + 5;

@@ -80,6 +80,7 @@ function sfx(k, x) {
       [0, 2, 4, sc].forEach((dg, i) => bell(degF(dg), { v: .07, dec: .9, at: .12 + i * .13 })); break; }
     case 'start': voice(degF(0), { type: 'triangle', v: .07, dec: .12, send: .4 }); voice(degF(2), { type: 'triangle', v: .07, dec: .18, at: .08, send: .4 }); break;
     case 'boss': voice(mtof(PAL.root - 24), { type: 'sawtooth', v: .12, atk: .05, dec: .9, lp: 600, lpTo: 120 }); voice(mtof(PAL.root - 23), { type: 'sawtooth', v: .08, atk: .05, dec: .9, lp: 500, lpTo: 120 }); voice(degF(0), { type: 'triangle', v: .07, dec: .3, at: .1, send: .5 }); break;
+    case 'tick': voice(degF(x === 1 ? 7 : 4) * 2, { type: 'triangle', v: .05, dec: .05, send: .3 }); break;
     case 'star': bell(degF(x * 2) * 2, { v: .1, dec: .7 }); break;
   }
 }

@@ -12,6 +12,8 @@
 //             cercle des têtes à ± 1 ms de l'instant physique.
 //   tir     : lancer horodaté ; vrais taps à des phases aléatoires de l'image : départ à l'instant du tap à 1 ms près,
 //             jamais avant le dernier instant simulé ; horodatage « depuis 1970 » et événement en retard bien traités.
+//   reprendre : REPRENDRE → compte à rebours de 0,6 s (rotation figée, taps ignorés, throwPin() et __botSafe() inertes),
+//               puis le jeu reprend.
 // Écrit <out>/summary.json ({ pass, sections, errors }) et sort avec le code 1 en cas d'échec.
 const { chromium, devices } = require('playwright');
 const path = require('path'), fs = require('fs');
@@ -430,6 +432,45 @@ async function tir(b) {
   await c.close();
 }
 
+async function reprendre(b) {
+  const S = section('reprendre');
+  const c = await b.newContext({ ...devices['iPhone 13'] });
+  const p = await c.newPage(); hook(p, 'reprendre');
+  await p.goto(URL);
+  await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+  for (const via of ['bouton', 'clavier']) {
+    await p.evaluate(() => { soundOn = false; startLevel(8); });
+    await p.waitForTimeout(500);
+    await p.click('#hudBtn'); await p.waitForTimeout(150);
+    S.eq(await st(p), 'pause', `${via} : pause`);
+    // relevés pendant le compte à rebours : instant, phase, rotation, aiguilles restantes
+    await p.evaluate(() => {
+      window.__cd = { t0: 0, end: 0, rots: [], phases: [] };
+      const od = window.draw;
+      window.draw = function (dt) { const w = window.__cd; if (w.t0 && !w.end && state === 'play') { if (playPhase === 'compte') w.seen = true; if (w.seen) { w.rots.push(rot); if (playPhase === 'jeu') w.end = performance.now(); } } od(dt); };
+      window.__cdRestore = () => { window.draw = od; };
+    });
+    if (via === 'bouton') { await p.evaluate(() => { window.__cd.t0 = performance.now(); }); await p.click('#resumeBtn'); }
+    else { await p.evaluate(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); window.__cd.t0 = performance.now(); }); await p.keyboard.press('Space'); }
+    await p.waitForTimeout(120);
+    const mid = await p.evaluate(() => ({ s: state, ph: playPhase, left }));
+    S.eq(mid.s + '/' + mid.ph, 'play/compte', `${via} : état pendant le compte à rebours`);
+    if (via === 'bouton') await p.screenshot({ path: path.join(OUT, 'reprendre-compte.png') });
+    await p.touchscreen.tap(195, 120); await p.waitForTimeout(40);
+    const inert = await p.evaluate(() => { const a = window.__botSafe(); throwPin(); return { safe: a, left, fl: flights.length }; });
+    S.eq(inert.left, mid.left, `${via} : tap et throwPin() ignorés pendant le compte à rebours`);
+    S.eq(inert.safe, false, `${via} : __botSafe() faux pendant le compte à rebours`);
+    await p.waitForTimeout(650);
+    const r = await p.evaluate(() => { const w = window.__cd; window.__cdRestore(); return { s: state, ph: playPhase, dur: w.end - w.t0, frozen: w.rots.slice(0, -1).every(x => x === w.rots[0]), n: w.rots.length }; });
+    S.eq(r.s + '/' + r.ph, 'play/jeu', `${via} : le jeu reprend après le compte à rebours`);
+    S.ok(r.dur > 560 && r.dur < 720, `${via} : compte à rebours de ${Math.round(r.dur)} ms (0,6 s)`);
+    S.ok(r.frozen && r.n > 20, `${via} : rotation figée pendant le compte à rebours (${r.n} images)`);
+    const after = await p.evaluate(() => { const l = left; throwPin(); return l - left; });
+    S.eq(after, 1, `${via} : throwPin() relance après le compte à rebours`);
+  }
+  await c.close();
+}
+
 (async () => {
   const b = await chromium.launch();
   try {
@@ -440,6 +481,7 @@ async function tir(b) {
     if (want('guard')) await guard(b);
     if (want('ecrans')) await ecrans(b);
     if (want('tir')) await tir(b);
+    if (want('reprendre')) await reprendre(b);
   } catch (e) { errors.push('harness: ' + (e && e.stack || e)); }
   await b.close();
   const fails = Object.entries(results).flatMap(([k, r]) => r.fails.map(f => `[${k}] ${f}`));

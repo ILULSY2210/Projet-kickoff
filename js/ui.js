@@ -89,7 +89,12 @@ function pauseGame() {
   btn('resumeBtn', 'REPRENDRE', ARROW, true); btn('restartBtn', 'RECOMMENCER'); btn('pauseMenu', 'MENU');
   show('pause');
 }
-function resumeGame() { if (state !== 'pause') return; hideAll(); state = 'play'; last = performance.now(); }
+// REPRENDRE : compte à rebours de 0,6 s sur le pas de tir (rotation figée, tirs ignorés), puis le jeu reprend
+function resumeGame() {
+  if (state !== 'pause') return;
+  hideAll(); state = 'play'; playPhase = 'compte'; countT = COUNTDOWN; last = performance.now();
+  sfx('tick', 3);
+}
 const click = (id, fn) => { $(id).onclick = e => { ac(); sfx('ui'); fn(e); }; };
 
 // Horodatage : instant simulé d'un événement daté ts (ms, horloge de performance.now()). La boucle note simWall, l'heure
