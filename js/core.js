@@ -9,7 +9,7 @@ let playPhase = 'jeu', countT = 0;
 // rappel de la cause d'un échec pendant RECALL secondes après la relance : { txt, life }
 let recall = null;
 let pulse = 0, orbHits = 0, winT = 0, wonT = 0, dieT = 0, exploded = false, spinK = 1;
-let intro = 0, wIntro = 0, build = 1, readyK = 1, thrownAny = false, time = 0, lastStars = 0, wipe = 0, headFlash = 0, starFlash = 0;
+let intro = 0, wIntro = 0, teachT = 0, build = 1, readyK = 1, thrownAny = false, time = 0, lastStars = 0, wipe = 0, headFlash = 0, starFlash = 0;
 let arcs = [[0, TAU]], arcsDirty = true, failInfo = null, nearMark = null, nearCount = 0, levelTime = 0, lastWorldSeen = -1;
 
 // Les abonnés de « level:start » sont synchrones : thème, écrans masqués, effets remis à zéro, son (le banc d'essai en dépend).
@@ -26,7 +26,7 @@ function startLevel(n, quick) {
   failInfo = null; nearMark = null; nearCount = 0; levelTime = 0; pulse = 0; readyK = 0; thrownAny = false; starFlash = 0;
   const newWorld = !retry && (L.n === firstOfWorld(L.w) || L.w !== lastWorldSeen);
   lastWorldSeen = L.w;
-  intro = retry ? 0 : 1.3; wIntro = newWorld ? 2.5 : 0; build = retry ? .7 : 0;
+  intro = retry ? 0 : 1.3; wIntro = newWorld ? 2.5 : 0; build = retry ? .7 : 0; teachT = !retry && L.teach ? TEACH_SHOW : 0;
   state = 'play'; playPhase = 'jeu'; countT = 0;
   bus.emit('level:start', L, retry, newWorld);
 }
@@ -83,6 +83,13 @@ function landing(a) {
   if (L.trav) { const b = a + Math.PI; for (const s of stuck) { const x = angDiff(s.a, b); if (x < d) { d = x; who = s; twin = true; } } }
   LAND.d = d; LAND.who = who; LAND.twin = twin;
   return LAND;
+}
+// règles d'un niveau, de l'idée la plus récemment apprise à la plus ancienne : [titre, règle] (pause, sélection)
+function levelRules(lv, max) {
+  const order = Object.values(TEACH), f = lv.flags.filter(x => TEACH_TEXT[x]);
+  f.sort((a, b) => order.indexOf(b) - order.indexOf(a));
+  if (f.length > 1) f.splice(f.indexOf('lancer'), 1);
+  return f.slice(0, max || 3).map(x => TEACH_TEXT[x]);
 }
 // arcs allumés du bord = angles où une aiguille peut se planter : ±GAP autour de chaque occupant éteint ; pour les
 // traversantes, aussi autour des antipodes des bloqueurs (ceux des aiguilles lancées y sont déjà : leur sortie opposée)
@@ -283,7 +290,7 @@ function step(h) {
     }
   }
   if (state === 'play' && playPhase === 'jeu') {
-    intro = Math.max(0, intro - h); wIntro = Math.max(0, wIntro - h);
+    intro = Math.max(0, intro - h); if (wIntro > 0) wIntro = Math.max(0, wIntro - h); else teachT = Math.max(0, teachT - h);
     build = Math.min(1, build + h * 2.8);
     readyK = Math.min(1, readyK + h * 10);
     levelTime += h;

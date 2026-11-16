@@ -54,6 +54,7 @@ mêmes que `__botSafe`.
 | `tests/unit/save.test.js` | — | sauvegarde v2 et migration de la version 1 (unlocked 150 → 150, aucune étoile, `legacyStars`, CONTINUER → niveau 1), valeurs corrompues sans exception (Node, localStorage simulé) |
 | `tests/unit/text.test.js` | — | messages d'échec par cause (zone interdite, degrés exacts au bord d'un arc), accords, glyphes de la police vectorielle |
 | `tests/ui.js` | `smoke` | chaque bouton visible de chaque écran, Espace/Entrée/P/Échap dans chaque état, son, case de niveau, `visibilitychange` |
+| | `regles` | 320×568 : bandeau d'un niveau d'apprentissage (titre et règle ≥ 10 px) affiché ≥ 2 s même après un tir sûr ; règles relisibles dans la pause et dans la sélection des niveaux |
 | | `migration` | vraies clés v1 posées avant le chargement : migration, CONTINUER → niveau 1, grille ouverte, valeurs corrompues sans erreur |
 | | `boot`, `offline`, `update`, `guard` | démarrage sans réseau tiers, hors ligne, mise à jour au menu seulement, garde-fou de démarrage |
 | | `ecrans` | 5 écrans : vol 60 ± 1 ms, même journal → mêmes angles à 1e-9, croisements dessinés à ± 1 ms (pointe, tête, centre de la tête) |

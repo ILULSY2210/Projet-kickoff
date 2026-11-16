@@ -31,9 +31,16 @@ function levelCells(a, b) {
   let html = '';
   for (let i = a; i <= b; i++) {
     const s = +bestStars[i] || 0, boss = isBoss(i), sp = !boss && isSpecial(i);
-    html += `<button class="lv${boss ? ' boss' : sp ? ' sp' : ''}${i === unlocked ? ' cur' : ''}" data-n="${i}" aria-label="Niveau ${i}${boss ? ', boss' : sp ? ', spécial' : ''}"${i > unlocked ? ' disabled' : ''}>${vsvg(String(i), 12, 1.7)}<span class="pips">${[0, 1, 2].map(k => `<i${k < s ? ' class="on"' : ''}></i>`).join('')}</span>${boss ? '<em>BOSS</em>' : ''}</button>`;
+    const tc = !boss && !sp && teachOf(i);
+    html += `<button class="lv${boss ? ' boss' : sp ? ' sp' : ''}${i === unlocked ? ' cur' : ''}" data-n="${i}" aria-label="Niveau ${i}${boss ? ', boss' : sp ? ', spécial' : tc ? ', nouvelle idée' : ''}"${i > unlocked ? ' disabled' : ''}>${vsvg(String(i), 12, 1.7)}<span class="pips">${[0, 1, 2].map(k => `<i${k < s ? ' class="on"' : ''}></i>`).join('')}</span>${boss ? '<em>BOSS</em>' : ''}${tc ? '<span class="tdot"></span>' : ''}</button>`;
   }
   return html;
+}
+// règles relisibles : les idées apprises dans ce monde (niveaux déjà atteints), avec leur niveau d'apprentissage
+function worldRules(a, b) {
+  let h = '';
+  for (const k in TEACH) { const n = +k; if (n < a || n > b || n > unlocked || !teachOf(n)) continue; const [t, r] = TEACH_TEXT[TEACH[k]]; h += `<div><b>${pad2(n)} · ${t}</b>${r}</div>`; }
+  return h ? `<div class="wrules">${h}</div>` : '';
 }
 function showLevels() {
   state = 'levels';
@@ -48,7 +55,7 @@ function showLevels() {
       `<button class="wsh" data-w="${w}" aria-expanded="${w === openWorld}" aria-label="${inf ? 'Cosmos sans fin' : 'Monde ' + (w + 1) + ' ' + wd.name}">${solidSVG(wd.solid, 34)}` +
       `<div class="wn"><small>${inf ? 'NIVEAUX ' + first + ' ET +' : 'MONDE ' + pad2(w + 1) + ' · ' + first + '-' + last}</small>${vsvg(wd.name, 12, 1.7)}<small>${wd.theme}</small></div>` +
       `<div class="wst">${vsvg(lab, 8, 1.25)}<span class="chev">${vsvg(w === openWorld ? '-' : '+', 10, 1.6)}</span></div></button>` +
-      `<div class="cells">${w === openWorld ? levelCells(first, last) : ''}</div></section>`;
+      `<div class="cells">${w === openWorld ? levelCells(first, last) : ''}</div>${w === openWorld ? worldRules(first, last) : ''}</section>`;
   }
   g.innerHTML = html;
   setVT($('lvTitle'), 'NIVEAUX', 20, 2.6);
@@ -107,6 +114,8 @@ function pauseGame() {
   state = 'pause';
   $('pauseKick').textContent = `Niveau ${pad2(L.n)} · ${PAL.name}`;
   setVT($('pauseTitle'), 'PAUSE', 26, 3.2);
+  // règles du niveau, relisibles (de l'idée la plus récente à la plus ancienne)
+  $('pauseRules').innerHTML = levelRules(L, 3).map(([t, r]) => `<div><b>${t}</b>${r}</div>`).join('');
   btn('resumeBtn', 'REPRENDRE', ARROW, true); btn('restartBtn', 'RECOMMENCER'); btn('pauseMenu', 'MENU');
   show('pause');
 }

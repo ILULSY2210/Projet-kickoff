@@ -5,6 +5,8 @@
 //           son basculé, case de niveau, visibilitychange ; 0 erreur console ou page et état attendu après chaque action.
 //   migration : vraies clés de la version 1 posées avant le chargement : unlocked 150 → 150, aucune étoile, legacyStars =
 //           ancien total, CONTINUER → niveau 1 ; valeurs corrompues (v1 et v2) sans erreur.
+//   regles : bandeau de règle d'un niveau d'apprentissage à ≥ 10 px pendant ≥ 2 s (même après un tir), relisible dans
+//           la pause et dans la sélection des niveaux (320×568).
 //   boot  : démarrage avec les domaines Google bloqués : state défini en < 1 s, aucune requête tierce, polices locales.
 //   offline : second chargement sans réseau (service worker) en < 1 s.
 //   update  : une nouvelle VERSION du service worker ne s'applique qu'au menu, jamais pendant un niveau.
@@ -248,6 +250,46 @@ async function migration(b) {
     }
     await c.close();
   }
+}
+
+// bandeaux de règle (UX-4) : niveau d'apprentissage → titre et règle à ≥ 10 px pendant ≥ 2 s, même après un tir sûr ;
+// règles relisibles dans la pause et dans la sélection des niveaux ; en 320×568, texte dans l'écran
+async function regles(b) {
+  const S = section('regles');
+  const c = await b.newContext({ viewport: { width: 320, height: 568 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const p = await c.newPage(); hook(p, 'regles');
+  await p.goto(URL);
+  await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+  for (const n of [29, 51, 2]) {
+    const r = await p.evaluate(n => new Promise(res => {
+      soundOn = false; unlocked = Math.max(unlocked, n); showMenu();
+      const [ttl, rule] = TEACH_TEXT[TEACH[n]], words = rule.split(' ').slice(0, 2).join(' ');
+      const seen = { first: 0, last: 0, minH: 99, maxX: 0, title: false };
+      const ov = window.vtext;
+      window.vtext = function (cx_, str, x, y, h) {
+        if (cx_ === ctx && state === 'play') {
+          if (str.startsWith(words)) { const now = performance.now(); seen.first = seen.first || now; seen.last = now; seen.minH = Math.min(seen.minH, h); seen.maxX = Math.max(seen.maxX, x + vwidth(str, h)); }
+          if (str === ttl) seen.title = true;
+        }
+        return ov.apply(this, arguments);
+      };
+      startLevel(n); const t0 = performance.now();
+      // un tir sûr dès 0,5 s après le début : le bandeau n'est pas écourté
+      setTimeout(() => { const iv = setInterval(() => { if (window.__botSafe()) { throwPin(); clearInterval(iv); } }, 5); }, 500);
+      setTimeout(() => { window.vtext = ov; res({ dur: (seen.last - seen.first) / 1000, minH: seen.minH, title: seen.title, inside: seen.maxX <= SX + SW, start: (seen.first - t0) / 1000 }); }, 6500);
+    }), n);
+    S.ok(r.dur >= 2, `niveau ${n} : règle affichée ${r.dur.toFixed(2)} s (≥ 2 s, après un tir à 0,5 s ; début à ${r.start.toFixed(2)} s)`);
+    S.ok(r.minH >= 10, `niveau ${n} : hauteur du texte ${r.minH} px (≥ 10)`);
+    S.ok(r.title && r.inside, `niveau ${n} : titre affiché, texte dans l'écran`);
+    if (n === 29) await p.evaluate(() => { showMenu(); startLevel(29); }), await p.waitForTimeout(3600), await p.screenshot({ path: path.join(OUT, 'regle-29.png') });
+    const pz = await p.evaluate(n => { startLevel(n); pauseGame(); return $('pauseRules').textContent; }, n);
+    S.ok(pz.includes((await p.evaluate(n => TEACH_TEXT[TEACH[n]][1], n))), `niveau ${n} : règle relisible dans la pause`);
+    if (n === 29) await p.screenshot({ path: path.join(OUT, 'regle-pause.png') });
+    const lv = await p.evaluate(n => { openWorld = worldOf(n); showLevels(); return [...document.querySelectorAll('.ws.open .wrules div')].map(x => x.textContent).join(' | '); }, n);
+    S.ok(lv.includes(await p.evaluate(n => TEACH_TEXT[TEACH[n]][1], n)), `niveau ${n} : règle relisible dans la sélection des niveaux`);
+    if (n === 51) await p.screenshot({ path: path.join(OUT, 'regle-niveaux.png') });
+  }
+  await c.close();
 }
 
 async function boot(b) {
@@ -674,6 +716,7 @@ async function echec(b) {
   try {
     if (want('smoke')) await smoke(b);
     if (want('migration')) await migration(b);
+    if (want('regles')) await regles(b);
     if (want('boot')) await boot(b);
     if (want('offline')) await offline(b);
     if (want('update')) await update(b);

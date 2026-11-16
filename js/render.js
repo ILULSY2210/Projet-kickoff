@@ -505,13 +505,24 @@ function drawIntro(c, g) {
     }
     c.globalAlpha = 1; return;
   }
+  // bandeau de règle d'un niveau d'apprentissage : titre et règle (≥ 10 px), au-dessus du pas de tir, TEACH_SHOW s
+  if (teachT > 0 && L.teach && TEACH_TEXT[L.teach] && !intro) {
+    const [ttl, rule] = TEACH_TEXT[L.teach], a = clamp(teachT / .35, 0, 1) * clamp((TEACH_SHOW - teachT) / .2, 0, 1);
+    const lines = wrapV(rule, 10, maxW - 30), y1 = LAUNCH - 34 - (lines.length - 1) * 15, y0 = y1 - 17;
+    c.globalAlpha = a * (g ? .45 : 1);
+    vtext(c, typed(ttl, (TEACH_SHOW - teachT) / .3), xl, y0, 10, 0, col(g ? PAL.acc : PAL.acc, 1), g ? 3 : 1.5);
+    lines.forEach((ln, i) => vtext(c, ln, xl, y1 + i * 15, 10, 0, col(g ? rgb : hi, 1), g ? 3 : 1.45));
+    if (!g) { c.globalAlpha = a; c.strokeStyle = col(PAL.acc, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y0 - 2); c.lineTo(xl - 9, y1 + (lines.length - 1) * 15 + 12); c.stroke(); }
+    c.globalAlpha = 1; return;
+  }
   if (intro > 0) {
     const el = 1.3 - intro, a = clamp(intro / .3, 0, 1), big = L.boss ? 'BOSS' : 'NIVEAU ' + pad2(L.n), hN = fitH(big, clamp(hC * .34, 14, 30), maxW), y0 = yT + (hC - hN) / 2 - 2;
     c.globalAlpha = a * (g ? .45 : 1);
     vtext(c, typed(big, el / .3), xl, y0, hN, 0, col(g ? rgb : hi, 1), g ? hN * .16 : Math.max(1.8, hN * .09));
     if (!g) {
       c.globalAlpha = a; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y0 - 2); c.lineTo(xl - 9, y0 + hN + 16); c.stroke();
-      vtext(c, (L.boss ? 'NIVEAU ' + pad2(L.n) + ' · ROTATION ' : 'ROTATION ') + PAT_NAME[L.pattern], xl, y0 + hN + 9, 7, 0, col(rgb, .9), 1.15);
+      const sub = L.teach && TEACH_TEXT[L.teach] ? 'NOUVEAU · ' + TEACH_TEXT[L.teach][0] : (L.boss ? 'NIVEAU ' + pad2(L.n) + ' · ROTATION ' : 'ROTATION ') + PAT_NAME[L.pattern];
+      vtext(c, sub, xl, y0 + hN + 9, 7, 0, col(L.teach ? PAL.acc : rgb, .95), 1.15);
     }
     c.globalAlpha = 1; return;
   }

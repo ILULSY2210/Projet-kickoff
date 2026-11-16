@@ -67,6 +67,13 @@ function vsvg(str, h, lw) {
   return `<svg class="vt" width="${f(w)}" height="${h}" viewBox="0 0 ${f(w)} ${h}" aria-hidden="true"><path d="${d}" fill="none" stroke="currentColor" stroke-width="${lw}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 const fitH = (str, h, maxW) => Math.min(h, h * maxW / Math.max(1, vwidth(str, h)));
+// coupe un texte en lignes d'au plus maxW px à la hauteur h (coupure aux espaces)
+function wrapV(str, h, maxW) {
+  const out = []; let cur = '';
+  for (const wd of str.split(' ')) { const t = cur ? cur + ' ' + wd : wd; if (cur && vwidth(t, h) > maxW) { out.push(cur); cur = wd; } else cur = t; }
+  if (cur) out.push(cur);
+  return out;
+}
 function setVT(el, str, h, lw, maxW) {
   if (maxW) { const h2 = fitH(str, h, maxW); lw *= h2 / h; h = h2; }
   el.innerHTML = vsvg(str, +h.toFixed(1), +lw.toFixed(2)); el.setAttribute('aria-label', str);

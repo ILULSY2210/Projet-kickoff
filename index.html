@@ -134,6 +134,13 @@ svg.vt{display:block;overflow:visible;flex:none}
 .stats div{display:flex;flex-direction:column;gap:5px}
 .stats b{font-weight:400;color:var(--hi)}
 .hint{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:rgba(var(--rgb),var(--lab));text-align:left}
+.rules{display:flex;flex-direction:column;gap:5px;margin:-2px 0 4px}
+.rules div{font:11px/1.35 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:rgba(var(--rgb),var(--lab))}
+.rules b{font-weight:400;color:var(--hi);margin-right:6px}
+.wrules{display:flex;flex-direction:column;gap:5px;padding:4px 2px 2px}
+.wrules div{font:10.5px/1.35 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:rgba(var(--rgb),var(--lab))}
+.wrules b{font-weight:400;color:var(--hi);margin-right:6px}
+.lv .tdot{position:absolute;right:6px;top:6px;width:8px;height:8px;border:1.5px solid var(--hi);border-radius:50%}
 #pause::before{content:'';position:fixed;inset:0;background:rgba(4,7,10,.62);z-index:-1}
 #fail .panel::before{background:linear-gradient(90deg,var(--alert) 0,var(--alert) 38px,rgba(var(--rgb),.28) 38px)}
 #fail .ttl{color:var(--alert);filter:drop-shadow(0 0 9px rgba(var(--alert-rgb),.5))}
@@ -257,6 +264,7 @@ svg.vt{display:block;overflow:visible;flex:none}
   <div class="panel">
     <div class="kick" id="pauseKick"></div>
     <div class="ttl" id="pauseTitle"></div>
+    <div class="rules" id="pauseRules"></div>
     <div class="pw"><button class="btn pri" id="resumeBtn"></button></div>
     <div class="row">
       <button class="btn" id="restartBtn"></button>
@@ -265,16 +273,16 @@ svg.vt{display:block;overflow:visible;flex:none}
   </div>
 </div>
 
-<script defer src="js/config.js?v=22"></script>
-<script defer src="js/util.js?v=22"></script>
-<script defer src="js/vector.js?v=22"></script>
-<script defer src="js/levels.js?v=22"></script>
-<script defer src="js/store.js?v=22"></script>
-<script defer src="js/core.js?v=22"></script>
-<script defer src="js/audio.js?v=22"></script>
-<script defer src="js/fx.js?v=22"></script>
-<script defer src="js/render.js?v=22"></script>
-<script defer src="js/ui.js?v=22"></script>
-<script defer src="js/main.js?v=22"></script>
+<script defer src="js/config.js?v=23"></script>
+<script defer src="js/util.js?v=23"></script>
+<script defer src="js/vector.js?v=23"></script>
+<script defer src="js/levels.js?v=23"></script>
+<script defer src="js/store.js?v=23"></script>
+<script defer src="js/core.js?v=23"></script>
+<script defer src="js/audio.js?v=23"></script>
+<script defer src="js/fx.js?v=23"></script>
+<script defer src="js/render.js?v=23"></script>
+<script defer src="js/ui.js?v=23"></script>
+<script defer src="js/main.js?v=23"></script>
 </body>
 </html>

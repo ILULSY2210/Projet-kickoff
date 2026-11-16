@@ -19,6 +19,8 @@ const HEAD_REF = .04833, SENT_PAD_HEAD = .08078;
 const COUNTDOWN = .6;
 // échec : feuille à 0,45 s (taps ignorés avant) ; après une relance par tap, tirs ignorés 0,25 s ; cause rappelée 1,2 s
 const FAIL_SHEET = .45, RETRY_LOCK = .25, RECALL = 1.2;
+// bandeau de règle d'un niveau d'apprentissage : affiché TEACH_SHOW s (après le bandeau du monde), sans être écourté par un tir
+const TEACH_SHOW = 2.6;
 const INK = '#04070a', INK_RGB = [4, 7, 10];
 
 /* ---------- structure : 6 mondes de 50 niveaux (1..300), puis COSMOS ∞ (301 et suivants) ---------- */
