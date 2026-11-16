@@ -13,20 +13,22 @@ function serve(root, { port = 0, host = '127.0.0.1' } = {}) {
   root = path.resolve(root);
   const overrides = new Map(), requests = [];
   const server = http.createServer((req, res) => {
-    const u = new URL(req.url, 'http://x');
-    let p = decodeURIComponent(u.pathname);
-    requests.push(p + u.search);
     const send = (status, body, type) => {
       res.writeHead(status, { 'Content-Type': type || 'application/octet-stream', 'Cache-Control': 'no-store' });
       res.end(body);
     };
+    // adresse malformée (« // », « %E0 »…) : 400, le serveur continue de servir les requêtes suivantes
+    let u, p;
+    try { u = new URL(req.url.replace(/^\/{2,}/, '/'), 'http://x'); p = decodeURIComponent(u.pathname); }
+    catch (e) { requests.push(req.url); return send(400, 'requête invalide'); }
+    requests.push(p + u.search);
     const o = overrides.get(p);
     const go = () => {
       if (o && o.body !== undefined) return send(o.status || 200, o.body, o.type || TYPES[path.extname(p)]);
       if (o && o.status) return send(o.status, '');
       if (p.endsWith('/')) p += 'index.html';
       const f = path.join(root, p);
-      if (!f.startsWith(root)) return send(403, '');
+      if (f !== root && !f.startsWith(root + path.sep)) return send(403, '');
       fs.readFile(f, (err, data) => err ? send(404, 'introuvable') : send(200, data, TYPES[path.extname(f)]));
     };
     if (o && o.delay) setTimeout(go, o.delay); else go();
