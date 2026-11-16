@@ -1072,3 +1072,12 @@ Une relecture critique du plan a vérifié ses références au code (toutes just
 - **Simulateur** : comme le simulateur exécute le vrai cœur, `agree.js` n'est pas une condition de l'étape 1 (où aucun simulateur Node n'existe encore : les mesures de l'étape 1 se font dans la vraie page) mais des étapes 2 et 4.
 - **Zones pulsées** : la relecture plaçait leur apprentissage au niveau 89, pour une Forteresse II au niveau 90 (ancienne position). Avec le nouvel ordre, la Forteresse II tombe au niveau 80. Les zones pulsées sont apprises au niveau 111, en Rubis, le monde de la précision, et utilisées à partir de la Forteresse III (niveau 130) ; la Forteresse II ajoute la rampe (apprise au niveau 71).
 - **Série** : la relecture demandait de remettre la série à zéro à chaque échec, puis de la définir en « 3 tentatives au plus ». Les deux sont conciliés : c'est le 3e échec de suite sur un niveau qui la remet à zéro, toujours écrit au même tick que la collision. Une victoire ne la fait monter que si elle apporte un gain, pour qu'on ne puisse pas accumuler des jetons en rejouant un niveau facile.
+
+## Annexe C — Écarts de réalisation (étape 1)
+
+Écarts décidés pendant la réalisation, chacun versé dans le commit qui le motive.
+
+| Commit | Prévu | Réalisé | Raison |
+|---|---|---|---|
+| 1.3 | Rendu interpolé entre le pas précédent et le pas courant, à α = reste de l'accumulateur / STEP | Rendu **au présent** : le rendu dessine l'instant t + reste de l'accumulateur en prolongeant le pas courant par les mêmes lois (rotation par trapèze, position de l'aiguille en fonction du temps, angle des sentinelles) ; il ne décide rien (contact, collision) et ne modifie pas l'état de la simulation (`viewAt`, `RV`) | L'interpolation entre deux pas dessine l'état d'un pas en arrière (8,3 ms de retard constant) : l'aiguille ne quitterait visiblement le pas de tir à l'image suivante qu'une fois sur deux, ce qui rend inatteignable la latence « ≤ 1 image en médiane » de 1.5. Les lois de vitesse étant connues et déterministes, l'état au présent se calcule exactement, sans extrapolation hasardeuse. Même régularité mesurée (coefficient de variation 0 % à 90 et 120 Hz, `tests/perf.js`) |
+| 1.3 | Sentinelle : test d'intervalle par image | Test continu : premier instant exact où la sentinelle (mouvement uniforme) couvre l'axe de tir pendant que l'aiguille traverse son orbite (`sentHit`), et écart minimal sur l'intervalle pour le prédicteur (`sentMin`) | Le résultat ne doit dépendre ni de la cadence d'image ni du découpage en pas (`tests/unit/timing.test.js`, 1e-9) |

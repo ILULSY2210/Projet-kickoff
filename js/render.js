@@ -73,13 +73,16 @@ function buildBg(fx, fy) {
 /* ---------- rendu ---------- */
 function syncScene() {
   const S = GSC;
-  S.x = cx; S.y = cy - pulse * 3; S.r = R; S.pl = PL; S.head = HEAD; S.rot = rot; S.stuck = stuck;
+  const ro = RV.rot;
+  S.x = cx; S.y = cy - pulse * 3; S.r = R; S.pl = PL; S.head = HEAD; S.rot = ro; S.stuck = stuck;
   if (arcsDirty) { arcs = computeArcs(stuck); arcsDirty = false; }
-  S.arcs = arcs; S.walls = L.walls; S.orbs = L.orbs; S.sents = L.sents; S.st = t; S.rs = RS; S.trav = L.trav;
+  S.arcs = arcs; S.walls = L.walls; S.orbs = L.orbs; S.sents = L.sents; S.st = RV.t; S.rs = RS; S.trav = L.trav;
   S.rgb = PAL.rgb; S.hi = PAL.hi; S.acc = PAL.acc; S.solid = SOL[PAL.solid]; S.boss = L.boss; S.build = build;
   S.lock = state === 'winning' ? Math.min(1, winT / .26) : 0;
-  project(S.solid, rot, TILT, rot * .6 + .4);
-  if (S.boss) project(SOL.octa, -rot * 1.3, .8, rot * .9);
+  project(S.solid, ro, TILT, ro * .6 + .4);
+  if (S.boss) project(SOL.octa, -ro * 1.3, .8, ro * .9);
+  // aiguille en vol : pointe à l'instant présent, et position de l'image précédente pour la traînée du phosphore
+  if (flying) { const y = flyY(flying); flying.py = flying.ry === undefined ? y : flying.ry; flying.ry = y; flying.y = y; }
 }
 function heroRect() {
   if (!hero || --heroTick <= 0) { const q = $('spacer').getBoundingClientRect(); hero = { x: q.left + q.width / 2, y: q.top + q.height / 2, h: q.height }; heroTick = 30; }
@@ -272,7 +275,7 @@ function drawGame(c, g) {
     }
     // marque de frôlement : l'intervalle serré
     if (nearMark && !g) {
-      const a1 = nearMark.a1 + rot, a2 = nearMark.a2 + rot; let dlt = ((a2 - a1) % TAU + TAU * 1.5) % TAU - Math.PI;
+      const a1 = nearMark.a1 + S.rot, a2 = nearMark.a2 + S.rot; let dlt = ((a2 - a1) % TAU + TAU * 1.5) % TAU - Math.PI;
       c.globalAlpha = clamp(nearMark.life * 2, 0, 1); c.strokeStyle = col(PAL.acc, 1); c.lineWidth = 1.4;
       c.beginPath(); c.arc(S.x, S.y, R + PL + HEAD + 5, Math.min(a1, a1 + dlt), Math.max(a1, a1 + dlt)); c.stroke(); c.globalAlpha = 1;
     }
@@ -280,11 +283,11 @@ function drawGame(c, g) {
     if (failInfo && (state === 'dying' || state === 'failed' || state === 'pause')) {
       const A = col(ALERT, 1); let fx, fy;
       if (failInfo.kind === 'sent') { fx = cx; fy = cy + RS; }
-      else { const fa = failInfo.a + rot; fx = S.x + Math.cos(fa) * (R + PL); fy = S.y + Math.sin(fa) * (R + PL); }
+      else { const fa = failInfo.a + S.rot; fx = S.x + Math.cos(fa) * (R + PL); fy = S.y + Math.sin(fa) * (R + PL); }
       const who = failInfo.who, q = HEAD * 1.9, bl = rm() ? 1 : .65 + .35 * Math.sin(time * 14);
       c.strokeStyle = A; c.lineCap = 'round';
       if (who && failInfo.kind !== 'sent') {
-        const wa = who.a + rot, hx = S.x + Math.cos(wa) * (R + PL), hy = S.y + Math.sin(wa) * (R + PL);
+        const wa = who.a + S.rot, hx = S.x + Math.cos(wa) * (R + PL), hy = S.y + Math.sin(wa) * (R + PL);
         c.globalAlpha = g ? .5 : bl; c.lineWidth = g ? 5 : 2; c.beginPath(); c.arc(hx, hy, HEAD + 3, 0, TAU);
         if (!who.wall) { c.moveTo(S.x + Math.cos(wa) * R, S.y + Math.sin(wa) * R); c.lineTo(S.x + Math.cos(wa) * (R + PL - HEAD - 3), S.y + Math.sin(wa) * (R + PL - HEAD - 3)); }
         c.stroke();
@@ -297,7 +300,7 @@ function drawGame(c, g) {
   // --- aiguille en vol / sur le pas de tir ---
   if (flying && g) {
     c.globalAlpha = .5; c.strokeStyle = col(hi, 1); c.lineWidth = lw * 3; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(cx, flying.y); c.lineTo(cx, Math.min(LAUNCH, flying.py === undefined ? flying.y : flying.py) + PL); c.stroke(); c.globalAlpha = 1;
+    c.beginPath(); c.moveTo(cx, flying.y); c.lineTo(cx, Math.min(LAUNCH, flying.py) + PL); c.stroke(); c.globalAlpha = 1;
   } else if (flying) drawFreePin(c, g, cx, flying.y, PL, HEAD, hi, 1);
   else if (state === 'play' && left > 0) drawFreePin(c, g, cx, LAUNCH + (1 - easeOut(readyK)) * 26, PL, HEAD, hi, easeOut(readyK));
   if (!g && !sheet) {
@@ -364,7 +367,7 @@ function drawHud(c, g, sheet) {
     vtext(c, '+', sx + sw + 3.5, sy + 1, 5, 0, col(rgb, .55), 1); vtext(c, '-', sx + sw + 3.5, sy + sh - 6, 5, 0, col(rgb, .55), 1);
   }
   const N = 46, amp = (sh / 2 - 4) * .66 / L.vmax, frozen = state === 'dying' ? spinK : 1;
-  const ty = k => mid - speedAt(t + (T0 + (T1 - T0) * k / N)) * amp * frozen, tx = k => sx + sw * k / N;
+  const ty = k => mid - speedAt(RV.t + (T0 + (T1 - T0) * k / N)) * amp * frozen, tx = k => sx + sw * k / N;
   const kn = Math.round(N * (-T0) / (T1 - T0));
   if (!g) { c.globalAlpha = .45; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.2; c.beginPath(); c.moveTo(tx(0), ty(0)); for (let k = 1; k <= kn; k++) c.lineTo(tx(k), ty(k)); c.stroke(); }
   c.globalAlpha = g ? .45 : 1; c.strokeStyle = col(g ? rgb : hi, 1); c.lineWidth = g ? 3.6 : 1.5;

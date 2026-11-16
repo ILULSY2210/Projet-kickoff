@@ -1,9 +1,15 @@
 // ORBITA · main.js — démarrage et boucle. Seul fichier qui agit au chargement ; chargé en dernier.
-let last = 0;
+// Boucle à pas fixe : le temps écoulé s'accumule (plafonné à 0,25 s par image) et la simulation avance en pas de STEP ;
+// le rendu dessine l'instant présent (viewAt). simWall = heure murale (ms) de l'instant simulé t, pour horodater les taps.
+let last = 0, acc = 0, simWall = 0;
 function loop(now) {
-  const dt = Math.min(.033, Math.max(0, (now - last) / 1000)); last = now;
-  if (state !== 'pause') update(dt);
-  draw(dt);
+  let el = (now - last) / 1000; last = now;
+  if (!(el > 0)) el = 0; else if (el > .25) el = .25;
+  if (state === 'pause') acc = 0;
+  else { acc += el; while (acc >= STEP) { update(STEP); acc -= STEP; } }
+  simWall = now - acc * 1000;
+  viewAt(acc);
+  draw(el);
   requestAnimationFrame(loop);
 }
 

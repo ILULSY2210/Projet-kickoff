@@ -1,6 +1,8 @@
 // ORBITA · config.js — constantes et tables de données (aucune dépendance au DOM).
 const TAU = Math.PI * 2, HPI = Math.PI / 2;
 const GAP = .115, ORBHIT = .2, GS = .5, TILT = 1.02;
+// pas fixe de la simulation (s) : update(dt) avance en pas de STEP, la boucle n'appelle que update(STEP)
+const STEP = 1 / 120;
 const ALERT = [255, 59, 82], INK = '#04070a';
 
 /* ---------- mondes ---------- */

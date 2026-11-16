@@ -28,11 +28,15 @@ function startLevel(n, quick) {
 function throwPin() {
   if (state !== 'play' || left <= 0) return;
   if (flying) { queued = true; return; }
-  flying = { y: LAUNCH };
+  launch(t);
+}
+// une aiguille part du pas de tir à l'instant de simulation tL (≥ dernier instant simulé)
+function launch(tL) {
+  flying = { tL, idx: L.throws - left };
   left--; thrownAny = true; readyK = 0;
   if (wIntro > .4) wIntro = .4;
   if (intro > .3) intro = .3;
-  sfx('throw', L.throws - left - 1);
+  sfx('throw', flying.idx);
 }
 
 function fail(kind, a, d, who) {
@@ -67,7 +71,7 @@ function stick(a) {
   const b = norm(a + Math.PI);
   if (L.trav) for (const s of stuck) { const x = angDiff(s.a, b); if (x < d) { d = x; who = s; twinHit = true; } }
   if (d < GAP) { fail(twinHit ? 'twin' : 'pin', a, d, who); return; }
-  const idx = L.throws - left - 1, s = { a, pre: false, k: 0, deg: idx };
+  const idx = flying ? flying.idx : L.throws - left - 1, s = { a, pre: false, k: 0, deg: idx };
   stuck.push(s);
   if (L.trav) { s.tr = true; s.tw = { a: b, pre: false, k: 0, twin: true, deg: idx + 2 }; stuck.push(s.tw); }
   flying = null; arcsDirty = true; pulse = 1;
@@ -93,37 +97,91 @@ function stick(a) {
     }
   }
   if (left === 0) win();
-  else if (queued) { queued = false; throwPin(); }
+  else if (queued) { queued = false; launch(t); }
 }
 
-/* ---------- prédiction honnête pour le banc d'essai : même calcul que le jeu, marge 0,7 × GAP ---------- */
-function predictRot(travel) { const n = 24, h = travel / n; let r2 = rot, t2 = t; for (let k = 0; k < n; k++) { t2 += h; r2 += speedAt(t2) * h; } return r2; }
+/* ---------- temps de vol et sentinelles ---------- */
+const angSigned = (a, b) => ((b - a) % TAU + TAU * 1.5) % TAU - Math.PI;   // écart signé b − a dans [−π, π)
+function flightTime() { return (LAUNCH - (cy + R)) / FLYV; }
+// intervalle [début, fin] (s après le lancer) pendant lequel l'aiguille, de la pointe à la tête, occupe l'orbite des sentinelles
+function sentWindow() {
+  const yS = cy + RS, hwY = HEAD * .75;
+  return [(LAUNCH - (yS + hwY)) / FLYV, (LAUNCH + PL + HEAD - (yS - hwY)) / FLYV];
+}
+// premier instant de [s0, s1] où la sentinelle q couvre l'axe de tir (écart < H), ou −1 ; mouvement uniforme
+function sentHit(q, s0, s1, H) {
+  if (s1 < s0) return -1;
+  const d0 = angSigned(HPI, q.a0 + q.w * s0);
+  if (Math.abs(d0) < H) return s0;
+  if (!q.w) return -1;
+  const dt = ((d0 > 0 ? H : -H) - d0) / q.w;
+  return dt >= 0 && s0 + dt <= s1 ? s0 + dt : -1;
+}
+// écart minimal entre la sentinelle q et l'axe de tir sur [s0, s1]
+function sentMin(q, s0, s1) {
+  const d0 = angSigned(HPI, q.a0 + q.w * s0), d1 = d0 + q.w * (s1 - s0);
+  return (d0 > 0) !== (d1 > 0) ? 0 : Math.min(Math.abs(d0), Math.abs(d1));
+}
+
+/* ---------- prédiction : même intégrateur et même grille de pas que le jeu ---------- */
+// pour une aiguille lancée à l'instant tL (≥ t), rotation et angle d'impact ; exact au bit près si le jeu avance en pas de STEP
+function predict(tL) {
+  const tI = tL + flightTime();
+  let r = rot, tau = t, v = speedAt(tau);
+  while (tau + STEP < tI) { const t2 = tau + STEP, v2 = speedAt(t2); r += (t2 - tau) * (v + v2) / 2; tau = t2; v = v2; }
+  r += (tI - tau) * (v + speedAt(tI)) / 2;
+  return { a: norm(HPI - r), rot: r, tI };
+}
+// prédicteur honnête pour le banc d'essai : même calcul que le jeu, marge 0,7 × GAP
 window.__botSafe = function () {
   if (state !== 'play' || flying || left <= 0 || !L) return false;
-  const M = GAP * 1.7, a = norm(HPI - predictRot((LAUNCH - (cy + R)) / FLYV));
+  const M = GAP * 1.7, a = predict(t).a;
   for (const s of stuck) if (angDiff(s.a, a) <= M) return false;
   if (L.trav) { const b = a + Math.PI; for (const s of stuck) if (angDiff(s.a, b) <= M) return false; }
   if (L.sents.length) {
-    const hwY = HEAD * .75, yS = cy + RS;
-    const tA = (LAUNCH - (yS + hwY)) / FLYV - .02, tB = (LAUNCH + PL + HEAD - (yS - hwY)) / FLYV + .02;
-    for (const q of L.sents) for (let k = 0; k <= 6; k++) { const tt = t + tA + (tB - tA) * k / 6; if (angDiff(q.a0 + q.w * tt, HPI) <= q.hw + SENT_PAD + GAP * .7) return false; }
+    const w = sentWindow(), s0 = t + w[0] - .02, s1 = t + w[1] + .02;
+    for (const q of L.sents) if (sentMin(q, s0, s1) <= q.hw + SENT_PAD + GAP * .7) return false;
   }
   return true;
 };
 
-/* ---------- boucle ---------- */
+/* ---------- simulation à pas fixe ---------- */
+// update(dt) avance la simulation de dt secondes exactement : pas entiers de STEP, puis un pas fractionnaire s'il reste
 function update(dt) {
-  time += dt;
-  if (wipe > 0) wipe = Math.max(0, wipe - dt * 3.4);
-  if (state === 'menu') updDemo(dt);
+  if (!(dt > 0)) return;
+  const n = Math.floor(dt / STEP + 1e-6);
+  let r = dt - n * STEP; if (r < 1e-9) r = 0;
+  for (let i = 0; i < n; i++) step(STEP);
+  if (r > 0) step(r);
+}
+// un pas : rotation intégrée par la méthode des trapèzes ; vol, sentinelles et impact traités à leur instant exact dans le pas
+function step(h) {
+  time += h;
+  if (wipe > 0) wipe = Math.max(0, wipe - h * 3.4);
+  if (state === 'menu') updDemo(h);
   if (L && (state === 'play' || state === 'dying' || state === 'winning')) {
-    const k = state === 'dying' ? (spinK = Math.max(0, spinK - dt * 4.5)) : 1, prev = rot;
-    t += dt * k; rot += speedAt(t) * dt * k;
+    const k = state === 'dying' ? (spinK = Math.max(0, spinK - h * 4.5)) : 1;
+    const t0 = t, r0 = rot, v0 = speedAt(t0), t1 = t0 + h * k, r1 = r0 + (t1 - t0) * (v0 + speedAt(t1)) / 2;
+    if (state === 'play' && flying) {
+      const f = flying, tI = f.tL + flightTime();
+      let tS = -1;
+      if (L.sents.length) {
+        const w = sentWindow(), s0 = Math.max(t0, f.tL + w[0]), s1 = Math.min(t1, f.tL + w[1], tI);
+        for (const q of L.sents) { const x = sentHit(q, s0, s1, q.hw + SENT_PAD); if (x >= 0 && (tS < 0 || x < tS)) { tS = x; f.sent = q; } }
+      }
+      if (tS >= 0) { t = tS; rot = r0 + (tS - t0) * (v0 + speedAt(tS)) / 2; fail('sent', 0, 0, f.sent); }
+      else if (tI <= t1) {
+        // instant exact du contact : rotation intégrée jusqu'à tI dans le pas
+        t = tI; rot = r0 + (tI - t0) * (v0 + speedAt(tI)) / 2;
+        stick(norm(HPI - rot));
+      }
+    }
+    t = t1; rot = r1;
     // boîte à musique : chaque bloqueur qui passe sous la tête de lecture (en haut) fait tinter sa note
-    if (state === 'play' && rot !== prev) {
+    if (state === 'play' && rot !== r0) {
       for (const s of stuck) {
         const th = -HPI - s.a;
-        if (Math.floor((rot - th) / TAU) !== Math.floor((prev - th) / TAU)) {
+        if (Math.floor((rot - th) / TAU) !== Math.floor((r0 - th) / TAU)) {
           headFlash = 1;
           if (soundOn && time - lastPing > .07 && !s.wall) { lastPing = time; sfx('ping', s.pre ? -1 - (Math.round(s.a * 3) % 4) : s.deg); }
         }
@@ -131,55 +189,53 @@ function update(dt) {
     }
   }
   if (state === 'play') {
-    intro = Math.max(0, intro - dt); wIntro = Math.max(0, wIntro - dt);
-    build = Math.min(1, build + dt * 2.8);
-    readyK = Math.min(1, readyK + dt * 10);
-    levelTime += dt;
-    if (flying) {
-      const y0 = flying.y; flying.y -= FLYV * dt; flying.py = y0;
-      let dead = false;
-      if (L.sents.length) {
-        const yS = cy + RS, hwY = HEAD * .75;
-        if (flying.y <= yS + hwY && y0 + PL + HEAD >= yS - hwY) {
-          for (const q of L.sents) if (angDiff(q.a0 + q.w * t, HPI) < q.hw + SENT_PAD) { fail('sent', 0, 0, q); dead = true; break; }
-        }
-      }
-      if (!dead && flying.y <= cy + R) {
-        // instant exact du contact, indépendant de la cadence d'image
-        const over = (cy + R - flying.y) / FLYV;
-        stick(norm(HPI - (rot - speedAt(t) * over)));
-      }
-    }
+    intro = Math.max(0, intro - h); wIntro = Math.max(0, wIntro - h);
+    build = Math.min(1, build + h * 2.8);
+    readyK = Math.min(1, readyK + h * 10);
+    levelTime += h;
     // viseur d'avance : où tomberait une aiguille lancée maintenant
-    const pr = predictRot((LAUNCH - (cy + R)) / FLYV), la = norm(HPI - pr);
-    leadA = HPI - (pr - rot); leadOk = true;
+    const pr = predict(t), la = pr.a;
+    leadA = HPI - (pr.rot - rot); leadOk = true;
     for (const s of stuck) if (angDiff(s.a, la) < GAP || (L.trav && angDiff(s.a, la + Math.PI) < GAP)) { leadOk = false; break; }
   }
-  if (state === 'dying') { dieT += dt; if (dieT > .7) showFail(); }
+  if (state === 'dying') { dieT += h; if (dieT > .7) showFail(); }
   if (state === 'winning') {
-    winT += dt;
+    winT += h;
     if (winT > .26 && !exploded) {
       syncScene(); explodeScene(GSC, 300); exploded = true; shake = rm() ? 0 : 7; sfx('boom'); vib(50);
     }
     if (winT > 1.15) showWin();
   }
-  if (state === 'won') wonT += dt;
+  if (state === 'won') wonT += h;
 
-  for (const s of stuck) if (s.k < 1) s.k = Math.min(1, s.k + dt * 6);
-  for (const p of sparks) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .94; p.vy *= .94; p.life -= dt; }
-  for (const p of segs) { p.x += p.vx * dt; p.y += p.vy * dt; p.a += p.va * dt; p.vx *= .985; p.vy *= .985; p.life -= dt; }
-  for (const p of rings) { p.r += p.vr * dt; p.life -= dt; }
-  for (const x of texts) x.life -= dt;
+  for (const s of stuck) if (s.k < 1) s.k = Math.min(1, s.k + h * 6);
+  for (const p of sparks) { p.x += p.vx * h; p.y += p.vy * h; p.vx *= .94; p.vy *= .94; p.life -= h; }
+  for (const p of segs) { p.x += p.vx * h; p.y += p.vy * h; p.a += p.va * h; p.vx *= .985; p.vy *= .985; p.life -= h; }
+  for (const p of rings) { p.r += p.vr * h; p.life -= h; }
+  for (const x of texts) x.life -= h;
   if (sparks.length) sparks = sparks.filter(p => p.life > 0);
   if (segs.length) segs = segs.filter(p => p.life > 0);
   if (rings.length) rings = rings.filter(p => p.life > 0);
   if (texts.length) texts = texts.filter(x => x.life > 0);
-  if (nearMark && (nearMark.life -= dt) <= 0) nearMark = null;
-  shake = Math.max(0, shake - dt * 40);
-  pulse = Math.max(0, pulse - dt * 7);
-  headFlash = Math.max(0, headFlash - dt * 5);
-  starFlash = Math.max(0, starFlash - dt * 2.2);
+  if (nearMark && (nearMark.life -= h) <= 0) nearMark = null;
+  shake = Math.max(0, shake - h * 40);
+  pulse = Math.max(0, pulse - h * 7);
+  headFlash = Math.max(0, headFlash - h * 5);
+  starFlash = Math.max(0, starFlash - h * 2.2);
 }
+
+/* ---------- vue au présent pour le rendu ---------- */
+// La simulation est en retard de « a » secondes (reste de l'accumulateur, < STEP) sur l'horloge ; le rendu dessine l'instant
+// présent en prolongeant le pas en cours par les mêmes lois (rotation par trapèze), sans rien décider : pas de retard d'affichage.
+const RV = { rot: 0, t: 0 };
+function viewAt(a) {
+  RV.rot = rot; RV.t = t;
+  if (!L || !(a > 0) || !(state === 'play' || state === 'dying' || state === 'winning')) return;
+  const h = a * (state === 'dying' ? Math.max(0, spinK - a * 4.5) : 1), t1 = t + h;
+  RV.t = t1; RV.rot = rot + h * (speedAt(t) + speedAt(t1)) / 2;
+}
+// pointe de l'aiguille en vol à l'écran (y), à l'instant présent
+function flyY(f) { return Math.max(cy + R, LAUNCH - FLYV * Math.max(0, RV.t - f.tL)); }
 
 // mode démo du menu : l'astre du monde en cours se joue tout seul
 function updDemo(dt) {
