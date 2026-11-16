@@ -7,6 +7,9 @@
 //                en vol (rafales de taps, appels directs de throwPin()).
 //   predicteur : le prédicteur honnête (__botSafe) finit les niveaux 1..200, 4 parties chacun, à dt 1/60 et 1/120 :
 //                0 mort, 0 blocage (niveau fini en moins de 75 s de jeu).
+//   traversantes : niveaux 1..200, au départ puis après 2 et 4 aiguilles du prédicteur : part du bord allumé où un
+//                atterrissage serait mortel = 0 % (échantillonnage tous les 0,001 rad) ; chaque étoile a un angle de
+//                capture sûr.
 // Les taps passent par la vraie couche d'entrée (tap(ts)) ; la boucle est pilotée par une horloge virtuelle à 60 Hz
 // (requestAnimationFrame et performance.now remplacés avant le chargement de la page).
 // Écrit <out>/summary.json ({ pass, sections }) et sort avec le code 1 en cas d'échec.
@@ -171,12 +174,55 @@ async function predicteur(b) {
   await c.close();
 }
 
+async function traversantes(b) {
+  const S = section('traversantes');
+  const [c, p] = await page(b);
+  const r = await p.evaluate(() => {
+    const o = { lit: 0, deadly: [], travLit: 0, stars: 0, noCapture: [] };
+    const scan = (n, when) => {
+      const arcs = litArcs();
+      for (const [a0, a1] of arcs) for (let x = a0 + .0005; x < a1; x += .001) {
+        o.lit++; if (L.trav) o.travLit++;
+        if (landing(x).d < GAP) { o.deadly.push(n + '/' + when + '@' + x.toFixed(3)); if (o.deadly.length > 50) return; }
+      }
+    };
+    for (let n = 1; n <= 200; n++) {
+      startLevel(n);
+      scan(n, 0);
+      for (const st of L.orbs) {
+        o.stars++;
+        let ok = false;
+        for (let x = st.a - ORBHIT + .0005; x < st.a + ORBHIT && !ok; x += .001) if (landing(x).d >= GAP) ok = true;
+        if (!ok) o.noCapture.push(n);
+      }
+      // après 2 puis 4 aiguilles du prédicteur
+      for (const k of [2, 4]) {
+        for (let i = 0; i < 60 * 30 && state === 'play' && (L.throws - left < k || flights.length); i++) {
+          if (!flying && L.throws - left < k && window.__botSafe()) throwPin();
+          update(1 / 60);
+        }
+        if (state !== 'play') break;
+        arcsDirty = true; scan(n, k);
+      }
+    }
+    showMenu();
+    return o;
+  });
+  S.ok(r.deadly.length === 0, `bord allumé mortel : ${r.deadly.length} échantillon(s) sur ${r.lit} (${r.travLit} sur les niveaux à traversantes) ${r.deadly.slice(0, 6).join(' ')}`);
+  S.ok(r.noCapture.length === 0, `étoiles sans angle de capture sûr : ${r.noCapture.length} sur ${r.stars} (niveaux ${r.noCapture.join(', ')})`);
+  S.note('echantillons_allumes', r.lit);
+  S.note('dont_traversantes', r.travLit);
+  S.note('etoiles', r.stars);
+  await c.close();
+}
+
 (async () => {
   const b = await chromium.launch();
   try {
     if (want('doubletap')) await doubletap(b);
     if (want('vol')) await vol(b);
     if (want('predicteur')) await predicteur(b);
+    if (want('traversantes')) await traversantes(b);
   } catch (e) { errors.push('harness: ' + (e && e.stack || e)); }
   await b.close();
   const fails = Object.entries(results).flatMap(([k, r]) => r.fails.map(f => `[${k}] ${f}`));

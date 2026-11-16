@@ -72,11 +72,22 @@ function win() {
 }
 
 // aiguille f plantée à l'angle a (repère de l'astre)
-function stick(a, f) {
-  let d = 9, who = null, twinHit = false;
+// règle d'atterrissage à l'angle a : occupant le plus proche (et, pour une traversante, de sa sortie opposée)
+const LAND = { d: 9, who: null, twin: false };
+function landing(a) {
+  let d = 9, who = null, twin = false;
   for (const s of stuck) { const x = angDiff(s.a, a); if (x < d) { d = x; who = s; } }
-  const b = norm(a + Math.PI);
-  if (L.trav) for (const s of stuck) { const x = angDiff(s.a, b); if (x < d) { d = x; who = s; twinHit = true; } }
+  if (L.trav) { const b = a + Math.PI; for (const s of stuck) { const x = angDiff(s.a, b); if (x < d) { d = x; who = s; twin = true; } } }
+  LAND.d = d; LAND.who = who; LAND.twin = twin;
+  return LAND;
+}
+// arcs allumés du bord = angles où une aiguille peut se planter : ±GAP autour de chaque occupant éteint ; pour les
+// traversantes, aussi autour des antipodes des bloqueurs (ceux des aiguilles lancées y sont déjà : leur sortie opposée)
+function litArcs() {
+  return computeArcs(L.trav ? stuck.concat(stuck.filter(s => s.pre).map(s => ({ a: s.a + Math.PI }))) : stuck);
+}
+function stick(a, f) {
+  const ld = landing(a), d = ld.d, who = ld.who, twinHit = ld.twin, b = norm(a + Math.PI);
   if (d < GAP) { fail(twinHit ? 'twin' : 'pin', a, d, who); return; }
   const idx = f ? f.idx : L.throws - left - 1, s = { a, pre: false, k: 0, deg: idx };
   stuck.push(s);

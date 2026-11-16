@@ -77,6 +77,24 @@ function makeLevel(n) {
     const s1 = pass ? .3 : .42, s2 = pass ? .5 : .75;
     for (let i = 0; i < 500 && orbs.length < orbN; i++) { const a = r() * TAU; if (far(a, s1) && orbs.every(o => angDiff(o.a, a) > s2)) orbs.push({ a, hit: false }); }
   }
+  // aiguilles traversantes : une étoile n'est gardée que si un impact sûr la capture (aiguille ET sortie opposée à plus de
+  // 1,7 × GAP de tout bloqueur, marge du prédicteur) ; sinon elle glisse vers l'angle sûr le plus proche, ou disparaît.
+  // Passe sans tirage aléatoire : le reste du niveau (sentinelles comprises) ne change pas.
+  if (trav) {
+    const both = occ.concat(occ.map(a => a + Math.PI)), M = GAP * 1.7;
+    const clear = a => both.every(p => angDiff(p, a) >= M);
+    const capturable = a => { for (let x = -ORBHIT * .9; x <= ORBHIT * .9 + 1e-9; x += .005) if (clear(a + x)) return true; return false; };
+    for (let i = 0; i < orbs.length; i++) {
+      const o = orbs[i];
+      if (capturable(o.a)) continue;
+      let to = -1;
+      for (let k = 1; k <= 315 && to < 0; k++) for (const sg of [1, -1]) {
+        const a = norm(o.a + sg * k * .01);
+        if (clear(a) && orbs.every(q => q === o || angDiff(q.a, a) > .5)) { to = a; break; }
+      }
+      if (to >= 0) o.a = to; else orbs.splice(i--, 1);
+    }
+  }
   // sentinelles : arcs en orbite extérieure, à contre-sens
   const sents = [];
   if (sentN) { const a0 = r() * TAU, ws = -dir * (.65 + .3 * r()), hw = .2 + .08 * d; for (let i = 0; i < sentN; i++) sents.push({ a0: a0 + i * Math.PI, w: ws, hw }); }

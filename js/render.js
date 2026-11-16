@@ -94,7 +94,7 @@ function syncScene() {
   const S = GSC;
   const ro = RV.rot;
   S.x = cx; S.y = cy - pulse * 3; S.r = R; S.pl = PL; S.head = HEAD; S.rot = ro; S.stuck = stuck;
-  if (arcsDirty) { arcs = computeArcs(stuck); arcsDirty = false; }
+  if (arcsDirty) { arcs = litArcs(); arcsDirty = false; }
   S.arcs = arcs; S.walls = L.walls; S.orbs = L.orbs; S.sents = L.sents; S.st = RV.t; S.rs = RS; S.trav = L.trav;
   S.rgb = PAL.rgb; S.hi = PAL.hi; S.acc = PAL.acc; S.solid = SOL[PAL.solid]; S.boss = L.boss; S.build = build;
   S.lock = state === 'winning' ? Math.min(1, winT / .26) : 0;
