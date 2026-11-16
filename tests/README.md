@@ -52,12 +52,13 @@ mêmes que `__botSafe`.
 | `tests/unit/geometry.test.js` | — | collision = dessin sur 5 écrans : rayon des têtes = GAP × (R + PL) / 2, règle et dessin d'accord à GAP ± 0,002 rad, sentinelles (tige, et tête en vol : aucun recouvrement dessiné sans interception, ≤ 0,1 px en 390×844 et ≤ 2 px ailleurs) ; captures dans `tests/out/geometry/` |
 | `tests/unit/config.test.js` | — | structure 6 × 50 + COSMOS ∞, boss et spéciaux, palettes (trait, libellés ≥ 4,5:1, blanc chaud, alerte), positions u, `TEACH` (Node) |
 | `tests/unit/save.test.js` | — | sauvegarde v2 et migration de la version 1 (unlocked 150 → 150, aucune étoile, `legacyStars`, CONTINUER → niveau 1), valeurs corrompues sans exception (Node, localStorage simulé) |
+| `tests/unit/chevrons.test.js` | — | chevrons de direction : chaque arrêt et chaque inversion (pas à pas, alternée, ressac) annoncé 0,45 s avant, à 2 ms près, avec sa nature ; aucune annonce en rotation continue (Node) |
 | `tests/unit/text.test.js` | — | messages d'échec par cause (zone interdite, degrés exacts au bord d'un arc), accords, glyphes de la police vectorielle |
 | `tests/ui.js` | `smoke` | chaque bouton visible de chaque écran, Espace/Entrée/P/Échap dans chaque état, son, case de niveau, `visibilitychange` |
 | | `regles` | 320×568 : bandeau d'un niveau d'apprentissage (titre et règle ≥ 10 px) affiché ≥ 2 s même après un tir sûr ; règles relisibles dans la pause et dans la sélection des niveaux |
 | | `migration` | vraies clés v1 posées avant le chargement : migration, CONTINUER → niveau 1, grille ouverte, valeurs corrompues sans erreur |
 | | `boot`, `offline`, `update`, `guard` | démarrage sans réseau tiers, hors ligne, mise à jour au menu seulement, garde-fou de démarrage |
-| | `ecrans` | 5 écrans : vol 60 ± 1 ms, même journal → mêmes angles à 1e-9, croisements dessinés à ± 1 ms (pointe, tête, centre de la tête) |
+| | `ecrans` | 5 écrans : chevrons hors de la jauge ROTATION et du compteur, vol 60 ± 1 ms, même journal → mêmes angles à 1e-9, croisements dessinés à ± 1 ms (pointe, tête, centre de la tête) |
 | | `tir` | taps à phase aléatoire : départ à l'instant du tap, jamais dans le passé |
 | | `reprendre` | compte à rebours de 0,6 s, rotation figée, taps et `throwPin()` ignorés, aucun bandeau d’intro sous l’anneau 3-2-1 en 320×568 |
 | | `echec` | 5 écrans : feuille à 0,45 s, tap à 0,3 s ignoré, à 0,5 s relance, verrou de 250 ms, cause rappelée, collision et sentinelle ≥ 4 px au-dessus du filet, MENU à droite, HUD aligné, aiguilles restantes justes avec une ou deux aiguilles en vol |

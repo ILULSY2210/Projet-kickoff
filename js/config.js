@@ -21,6 +21,8 @@ const COUNTDOWN = .6;
 const FAIL_SHEET = .45, RETRY_LOCK = .25, RECALL = 1.2;
 // bandeau de règle d'un niveau d'apprentissage : affiché TEACH_SHOW s (après le bandeau du monde), sans être écourté par un tir
 const TEACH_SHOW = 2.6;
+// chevrons de direction au pas de tir : arrêt (|v| < STOP_V × vmax) ou inversion annoncés AHEAD s à l'avance
+const AHEAD = .45, STOP_V = .12;
 const INK = '#04070a', INK_RGB = [4, 7, 10];
 
 /* ---------- structure : 6 mondes de 50 niveaux (1..300), puis COSMOS ∞ (301 et suivants) ---------- */

@@ -11,7 +11,8 @@
 //   offline : second chargement sans réseau (service worker) en < 1 s.
 //   update  : une nouvelle VERSION du service worker ne s'applique qu'au menu, jamais pendant un niveau.
 //   guard   : script invalide ou bloqué → message « touche pour recharger » en ≤ 4 s, jamais d'écran noir muet.
-//   ecrans  : sur 320×568, 360×640, 390×664, 390×844 et 430×932 : vol de 60 ± 1 ms ; un même journal de tirs donne les mêmes
+//   ecrans  : sur 320×568, 360×640, 390×664, 390×844 et 430×932 : chevrons de direction hors de la jauge et du compteur ;
+//             vol de 60 ± 1 ms ; un même journal de tirs donne les mêmes
 //             issues et les mêmes angles à 1e-9 près ; pointe et tête dessinées croisent l'orbite des sentinelles et le
 //             cercle des têtes à ± 1 ms de l'instant physique, centre de la tête compris (règle tête contre sentinelle).
 //   tir     : lancer horodaté ; vrais taps à des phases aléatoires de l'image : départ à l'instant du tap à 1 ms près,
@@ -453,6 +454,9 @@ async function ecrans(b) {
       return o;
     });
     const tag = w + 'x' + h;
+    // chevrons de direction : ni sur la jauge ROTATION, ni sur le compteur d'aiguilles, ni sous le pas de tir
+    const gb = await p.evaluate(() => { const a = chevGeom().box, b = gaugeGeom().box, nb = [SX + 18, LAUNCH + 4, SX + 18 + vwidth('AIGUILLES', 7), LAUNCH + 60]; const ov = (x, y) => x[0] < y[2] && x[2] > y[0] && x[1] < y[3] && x[3] > y[1]; return { g: ov(a, b), n: ov(a, nb), m: a[2] - b[0], inside: a[0] > SX && a[2] < SX + SW && a[3] < H }; });
+    S.ok(!gb.g && !gb.n && gb.inside, `${tag} : chevrons hors de la jauge ROTATION (marge ${(-gb.m).toFixed(1)} px) et du compteur, dans l'écran`);
     S.ok(Math.abs(r.vol - 60) <= 1, `${tag} : vol de ${r.vol.toFixed(2)} ms (60 ± 1)`);
     for (const k in r.croise) { const [d, ph] = r.croise[k]; S.ok(d >= 0 && Math.abs(d - ph) <= 1, `${tag} : ${k} dessinée à ${d.toFixed(3)} ms, physique ${ph.toFixed(3)} ms (± 1)`); }
     S.note('vol_' + tag, +r.vol.toFixed(2));

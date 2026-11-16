@@ -415,10 +415,37 @@ function drawGame(c, g) {
     c.globalAlpha = .6; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.2;
     c.beginPath(); c.moveTo(cx - q - 5, by - 4); c.lineTo(cx - q, by - 4); c.lineTo(cx - q, by + q); c.lineTo(cx + q, by + q); c.lineTo(cx + q, by - 4); c.lineTo(cx + q + 5, by - 4); c.stroke(); c.globalAlpha = 1;
   }
+  if (state === 'play' && !counting) drawChevrons(c, g);
   drawFx(c, g);
   if (moved) c.restore();
   drawHud(c, g, sheet);
   if (state === 'won') drawWinStars(c, g);
+}
+
+// Chevrons de direction de part et d'autre du pas de tir : sens où défile le bord sous le point d'impact (vitesse > 0 :
+// vers la gauche). Un arrêt ou une inversion à venir dans AHEAD s les fait clignoter à la couleur d'accent : barres
+// « || » pour un arrêt, chevrons qui basculent pour une inversion.
+let chevron = { kind: null, dir: 0 };
+// géométrie des chevrons et de la jauge ROTATION (dessin et tests de chevauchement)
+function chevGeom() { const y = LAUNCH + PL * .4, s = 5.5, gap = HEAD + 9; return { y, s, gap, box: [cx - gap - 7.5, y - s - 1, cx + gap + 7.5, y + s + 1] }; }
+function gaugeGeom() { const xr = SX + SW - 16, sw = Math.min(136, SW / 2 - 46), sx = xr - sw, sy = LAUNCH + 18, sh = 38; return { sx, sy, sw, sh, box: [sx, LAUNCH + 4, sx + sw + 9, sy + sh] }; }
+function drawChevrons(c, g) {
+  const ev = aheadEvent(RV.t, AHEAD); chevron = { kind: ev.kind, dir: ev.dir, dt: ev.dt };
+  const G = chevGeom(), y = G.y, s = G.s, gap = G.gap, blink = ev.kind ? (rm() ? 1 : Math.floor(time / .12) % 2) : 0;
+  const v = Math.abs(speedAt(RV.t)) / Math.max(.1, L.vmax), base = .35 + .55 * clamp(v, 0, 1);
+  let d = ev.dir;
+  if (ev.kind === 'flip' && blink) d = -ev.dir;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  c.globalAlpha = g ? .45 * (ev.kind ? 1 : base) : ev.kind ? 1 : base;
+  c.strokeStyle = col(ev.kind ? PAL.acc : PAL.rgb, 1); c.lineWidth = g ? 3.6 : 1.7;
+  c.beginPath();
+  for (const side of [-1, 1]) {
+    const x0 = cx + side * gap;
+    if (ev.kind === 'stop' && blink || d === 0) { c.moveTo(x0 - 3, y - s); c.lineTo(x0 - 3, y + s); c.moveTo(x0 + 3, y - s); c.lineTo(x0 + 3, y + s); continue; }
+    // d > 0 : le bord défile vers la gauche → « < < »
+    for (const k of [0, 1]) { const xa = x0 + (k * 7 - 3.5) * (d > 0 ? 1 : -1); c.moveTo(xa + d * s * .7, y - s); c.lineTo(xa - d * s * .7, y); c.lineTo(xa + d * s * .7, y + s); }
+  }
+  c.stroke(); c.globalAlpha = 1;
 }
 
 function drawHud(c, g, sheet) {
@@ -463,7 +490,7 @@ function drawHud(c, g, sheet) {
     c.globalAlpha = 1;
   }
   // --- bas droite : jauge ROTATION, la vitesse de rotation passée et À VENIR ---
-  const sw = Math.min(136, SW / 2 - 46), sx = xr - sw, sy = py + 14, sh = 38, mid = sy + sh / 2, T0 = -.45, T1 = 1.75, xn = sx + sw * (-T0) / (T1 - T0);
+  const GG = gaugeGeom(), sw = GG.sw, sx = GG.sx, sy = GG.sy, sh = GG.sh, mid = sy + sh / 2, T0 = -.45, T1 = 1.75, xn = sx + sw * (-T0) / (T1 - T0);
   if (!g) {
     vtext(c, 'ROTATION', sx, py, 7, 0, col(rgb, PAL.lab), 1.1);
     c.strokeStyle = col(rgb, 1); c.lineWidth = 1;

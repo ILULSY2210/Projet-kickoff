@@ -232,6 +232,30 @@ window.__botSafe = function (tSim) {
   return shotSafe(tSim > t ? tSim : t, .7);
 };
 
+/* ---------- annonces des arrêts et des inversions ---------- */
+// premier arrêt ou inversion de la rotation dans ]t0, t0 + A] : { kind: 'stop' | 'flip' | null, dt, dir } (dir = sens
+// actuel, +1 ou −1 ; 0 si l'astre est arrêté). L'événement commence quand |v| passe sous STOP_V × vmax (une inversion
+// passe aussi par là) ; c'est une inversion si la rotation repart ensuite dans l'autre sens. Échantillons de 10 ms puis
+// bissection : instant exact à 0,1 ms près.
+const AHD = { kind: null, dt: 0, dir: 0 };
+function aheadEvent(t0, A) {
+  const vm = L.vmax * STOP_V, v0 = speedAt(t0);
+  AHD.kind = null; AHD.dt = 0; AHD.dir = Math.abs(v0) >= vm ? Math.sign(v0) : 0;
+  if (!AHD.dir) return AHD;
+  const slow = x => Math.abs(speedAt(t0 + x)) < vm || Math.sign(speedAt(t0 + x)) !== AHD.dir;
+  let prev = 0, hit = -1;
+  for (let k = 1; k <= Math.ceil(A / .01) && hit < 0; k++) { const x = Math.min(A, k * .01); if (slow(x)) hit = x; else prev = x; }
+  if (hit < 0) return AHD;
+  let lo = prev, hi = hit;
+  for (let i = 0; i < 7; i++) { const m = (lo + hi) / 2; if (slow(m)) hi = m; else lo = m; }
+  AHD.dt = hi;
+  // sens de la reprise : premier instant où |v| repasse au-dessus du seuil (dans les 2 s)
+  let back = 0;
+  for (let x = hi + .01; x < hi + 2; x += .01) { const v = speedAt(t0 + x); if (Math.abs(v) >= vm) { back = Math.sign(v); break; } }
+  AHD.kind = back === -AHD.dir ? 'flip' : 'stop';
+  return AHD;
+}
+
 /* ---------- simulation à pas fixe ---------- */
 // update(dt) avance la simulation de dt secondes exactement : pas entiers de STEP, puis un pas fractionnaire s'il reste
 function update(dt) {
