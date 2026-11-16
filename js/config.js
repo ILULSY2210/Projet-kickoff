@@ -29,7 +29,22 @@ const WORLDS = [
 const SOLIDS = ['ico', 'saturne', 'cristal', 'tesseract', 'dodeca', 'stella', 'armille', 'cubocta'];
 const ROMAN = ['', ' II', ' III', ' IV', ' V', ' VI', ' VII', ' VIII', ' IX', ' X'];
 
-const PAT_NAME = ['CONTINU', 'RESPIRATION', 'ALTERNÉE', 'À-COUPS', 'PAS À PAS', 'RESSAC'];
+// noms des lois de rotation, accordés à « ROTATION » (bandeaux et HUD : « ROTATION » + nom)
+const PAT_NAME = ['CONTINUE', 'RESPIRANTE', 'ALTERNÉE', 'PAR À-COUPS', 'PAS À PAS', 'EN RESSAC'];
+// messages d'échec par cause : short = rappel près du pas de tir (police vectorielle, {d} = degrés manquants),
+// long = phrase de la feuille d'échec, tips = conseils propres à la cause
+const FAIL_TEXT = {
+  pin: { short: 'IL MANQUAIT {d}°', long: 'Il manquait {d}° pour passer.',
+    tips: ['Attends l’ouverture, puis tire.', 'Vise un arc allumé.', 'Le rythme, pas la vitesse.', 'Respire. Regarde la jauge ROTATION.'] },
+  zone: { short: 'EN PLEINE ZONE INTERDITE', long: 'Aiguille plantée en pleine zone interdite.',
+    tips: ['Vise un arc allumé.', 'Les arcs hachurés sont interdits.'] },
+  twin: { short: 'CONTACT EN RESSORTANT · {d}°', long: 'L’aiguille en a touché une autre en ressortant en face.',
+    tips: ['Vérifie aussi le côté opposé.', 'Un arc allumé est sûr des deux côtés.'] },
+  twinZone: { short: 'SORTIE EN ZONE INTERDITE', long: 'L’aiguille est ressortie en pleine zone interdite.',
+    tips: ['Vérifie aussi le côté opposé.', 'Un arc allumé est sûr des deux côtés.'] },
+  sent: { short: 'INTERCEPTÉE PAR LA SENTINELLE', long: 'Tir intercepté par la sentinelle.',
+    tips: ['Tire quand elle a quitté l’axe.', 'Regarde où elle sera dans un instant.'] }
+};
 // [rythme, dosage (0 = dense et lent, 1 = rapide et aéré), disposition, sentinelles, traversantes]
 const SPEC = [
   [[0, .5, 'none'], [0, .5, 'scatter'], [0, .6, 'scatter'], [1, .4, 'scatter'], [1, .3, 'sym']],

@@ -420,7 +420,7 @@ function drawHud(c, g, sheet) {
     if (L.boss) { c.fillStyle = col(hi, 1); c.fillRect(x0 - 1, top + 4, vwidth('BOSS', 7) + 8, 11); vtext(c, 'BOSS', x0 + 3, top + 6, 7, 0, INK, 1.3); }
     else vtext(c, 'NIVEAU', x0, top + 6, 7, 0, col(rgb, .65), 1.1);
     vtext(c, PAL.name, x0 + nw + 12, top + 20, 8, 0, col(rgb, .95), 1.25);
-    vtext(c, PAT_NAME[L.pattern], x0 + nw + 12, top + 34, 6, 0, col(rgb, .55), 1);
+    vtext(c, 'ROTATION ' + PAT_NAME[L.pattern], x0 + nw + 12, top + 34, 6, 0, col(rgb, .55), 1);
   }
   // --- étoiles bonus ---
   const on = L.orbs.length;
@@ -449,7 +449,7 @@ function drawHud(c, g, sheet) {
     }
     c.globalAlpha = 1;
   }
-  // --- bas droite : oscillo, la vitesse de rotation passée et À VENIR ---
+  // --- bas droite : jauge ROTATION, la vitesse de rotation passée et À VENIR ---
   const sw = Math.min(136, SW / 2 - 46), sx = xr - sw, sy = py + 14, sh = 38, mid = sy + sh / 2, T0 = -.45, T1 = 1.75, xn = sx + sw * (-T0) / (T1 - T0);
   if (!g) {
     vtext(c, 'ROTATION', sx, py, 7, 0, col(rgb, .65), 1.1);
@@ -496,7 +496,7 @@ function drawIntro(c, g) {
     vtext(c, typed(big, el / .3), xl, y0, hN, 0, col(g ? rgb : hi, 1), g ? hN * .16 : Math.max(1.8, hN * .09));
     if (!g) {
       c.globalAlpha = a; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y0 - 2); c.lineTo(xl - 9, y0 + hN + 16); c.stroke();
-      vtext(c, (L.boss ? 'NIVEAU ' + pad2(L.n) + ' · ' : 'ROTATION ') + PAT_NAME[L.pattern], xl, y0 + hN + 9, 7, 0, col(rgb, .9), 1.15);
+      vtext(c, (L.boss ? 'NIVEAU ' + pad2(L.n) + ' · ROTATION ' : 'ROTATION ') + PAT_NAME[L.pattern], xl, y0 + hN + 9, 7, 0, col(rgb, .9), 1.15);
     }
     c.globalAlpha = 1; return;
   }
@@ -509,7 +509,7 @@ function drawIntro(c, g) {
     c.globalAlpha = 1; return;
   }
   if (!thrownAny && L.n <= 2 && !g) {
-    const msg = L.n === 1 ? (TOUCH ? 'TOUCHE L’ÉCRAN POUR LANCER' : 'CLIC OU ESPACE POUR LANCER') : 'ARC ALLUMÉ = ZONE LIBRE';
+    const msg = L.n === 1 ? (TOUCH ? 'TOUCHE L’ÉCRAN POUR TIRER' : 'CLIC OU ESPACE POUR TIRER') : 'ARC ALLUMÉ = ZONE LIBRE';
     c.globalAlpha = rm() ? 1 : .6 + .4 * Math.sin(time * 5);
     vtext(c, msg, xl, yT + hC / 2 - 4, fitH(msg, 9, maxW), 0, col(hi, 1), 1.4);
     c.strokeStyle = col(rgb, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, yT + hC / 2 - 8); c.lineTo(xl - 9, yT + hC / 2 + 9); c.stroke();

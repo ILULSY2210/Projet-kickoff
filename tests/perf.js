@@ -54,7 +54,7 @@ async function regularite(b) {
     }, hz);
     const d = stats(r.drawn), s = stats(r.sim);
     S.ok(d.cv < .05, `${hz} Hz : coefficient de variation ${(d.cv * 100).toFixed(2)} % (< 5 %)`);
-    S.note(hz + 'Hz', { cv_dessin: +(d.cv * 100).toFixed(3) + ' %', cv_sans_interpolation: +(s.cv * 100).toFixed(1) + ' %' });
+    S.note(hz + 'Hz', { cv_dessin: +(d.cv * 100).toFixed(3) + ' %', cv_sans_rendu_au_present: +(s.cv * 100).toFixed(1) + ' %' });
   }
   await c.close();
 }

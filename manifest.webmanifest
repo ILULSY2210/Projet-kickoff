@@ -1,7 +1,7 @@
 {
   "name": "Orbita",
   "short_name": "Orbita",
-  "description": "Un doigt, un tir, zéro contact : plante tes aiguilles sur l'astre qui tourne.",
+  "description": "Un doigt, un tir, zéro contact : plante tes aiguilles sur l’astre qui tourne.",
   "lang": "fr",
   "start_url": "./",
   "scope": "./",

@@ -76,12 +76,15 @@ function win() {
 }
 
 // aiguille f plantée à l'angle a (repère de l'astre)
-// cause d'un échec, en clair : short = rappel près du pas de tir (police vectorielle), long = phrase de la feuille d'échec
+// cause d'un échec, en clair (textes : FAIL_TEXT) : short = rappel près du pas de tir, long = phrase de la feuille d'échec,
+// tip = conseil propre à la cause. Une aiguille plantée (ou ressortie) au milieu d'un arc interdit est signalée comme
+// telle : la distance au bloqueur invisible le plus proche de l'arc n'aurait aucun sens (« il manquait 4° » pour 20°).
+function inZone(a, lv) { return lv.walls.some(wl => angDiff(a, (wl.a0 + wl.a1) / 2) <= (wl.a1 - wl.a0) / 2); }
 function failCause(info, lv) {
-  if (info.kind === 'sent') return { short: 'INTERCEPTÉE PAR LA SENTINELLE', long: 'Tir intercepté par la sentinelle.' };
-  const deg = Math.max(1, Math.ceil((GAP - info.d) * 180 / Math.PI));
-  if (info.kind === 'twin') return { short: 'CONTACT EN RESSORTANT · ' + deg + '°', long: 'L’aiguille a percuté en ressortant de l’autre côté.' };
-  return { short: 'IL MANQUAIT ' + deg + '°', long: 'Il manquait ' + deg + '° pour passer.' };
+  const deg = info.kind === 'sent' ? 0 : Math.max(1, Math.ceil((GAP - info.d) * 180 / Math.PI));
+  const key = info.kind === 'sent' ? 'sent' : inZone(info.a, lv) ? (info.kind === 'twin' ? 'twinZone' : 'zone') : info.kind === 'twin' ? 'twin' : 'pin';
+  const T = FAIL_TEXT[key], f = x => x.replace('{d}', deg);
+  return { key, deg, short: f(T.short), long: f(T.long), tip: T.tips[(lv.n + lv.throws) % T.tips.length] };
 }
 // règle d'atterrissage à l'angle a : occupant le plus proche (et, pour une traversante, de sa sortie opposée)
 const LAND = { d: 9, who: null, twin: false };

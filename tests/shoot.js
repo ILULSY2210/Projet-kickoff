@@ -1,5 +1,6 @@
 // Banc d'essai Orbita.  usage: node shoot.js <chemin/index.html> <dossier_sortie> [--quick]
-// Joue le jeu avec un bot, prend des captures comparables, écrit summary.json (pass:true/false).
+// Joue le jeu avec un bot, prend des captures comparables, écrit summary.json (pass:true/false). Exige aussi l'échec
+// volontaire, déterministe, du niveau 10 (tir quand le point d'impact prévu tombe sur une aiguille déjà plantée).
 const { chromium, devices } = require('playwright');
 const path = require('path'), fs = require('fs');
 const [, , html, out, flag] = process.argv;

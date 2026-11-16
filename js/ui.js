@@ -9,7 +9,7 @@ function totalStars() { let s = 0; for (const k in bestStars) s += +bestStars[k]
 const btn = (id, lbl, aux, big) => { $(id).innerHTML = `<span>${vsvg(lbl, big ? 17 : 11, big ? 2.5 : 1.6)}</span>` + (aux ? `<span class="aux">${aux}</span>` : ''); $(id).setAttribute('aria-label', lbl); };
 const ARROW = vsvg('→', 13, 2);
 
-function soundLabel() { btn('soundBtn', 'SON', vsvg(soundOn ? 'OUI' : 'NON', 9, 1.4)); }
+function soundLabel() { btn('soundBtn', 'SON', vsvg(soundOn ? 'ACTIF' : 'COUPÉ', 9, 1.4)); $('soundBtn').setAttribute('aria-label', soundOn ? 'Son : actif' : 'Son : coupé'); }
 function showMenu() {
   state = 'menu'; L = null; sparks = []; segs = []; rings = []; texts = []; failInfo = null; shake = 0; flying = null; flights = [];
   $('hudBtn').style.display = 'none';
@@ -66,14 +66,13 @@ function showWin() {
   show('win');
   for (let i = 0; i < lastStars; i++) if (live()) bell(degF(i * 2) * 2, { v: .09, dec: .7, at: .12 + i * .2 });
 }
-const failMsgs = ['Attends l’ouverture, puis tire.', 'Le rythme, pas la vitesse.', 'Vise un arc allumé.', 'On recalibre et on repart.', 'Respire. Regarde l’oscillo.'];
 function showFail() {
   state = 'failed';
   $('hudBtn').style.display = 'none';
   $('failKick').textContent = `Niveau ${pad2(L.n)} · ${left + 1} aiguille${left ? 's' : ''} restante${left ? 's' : ''}`;
   setVT($('failTitle'), 'CONTACT !', 26, 3.2, SW - 44);
-  const m = failInfo ? failCause(failInfo, L).long : '';
-  $('failMsg').textContent = (m ? m + ' ' : '') + failMsgs[(L.n + left * 3) % failMsgs.length];
+  const fc = failInfo ? failCause(failInfo, L) : null;
+  $('failMsg').textContent = fc ? fc.long + ' ' + fc.tip : 'Attends l’ouverture, puis tire.';
   btn('retryBtn', 'RÉESSAYER', ARROW, true); btn('failMenu', 'MENU');
   $('failHint').textContent = TOUCH ? 'ou touche l’écran' : 'ou appuie sur Espace';
   show('fail');
