@@ -6,7 +6,7 @@
 //   et le dessin dit la même chose (têtes qui se recouvrent ⇔ défaite) ;
 // - sentinelles : bout arrondi + demi-épaisseur de la tige = SENT_PAD × RS (contact dessiné = interception) ;
 // - tête de l'aiguille en vol (disque) contre une sentinelle : en 390×844, UREF, HEAD_REF et SENT_PAD_HEAD sont ceux de la
-//   mise en page ; lancers sur une grille de 0,5 ms autour des passages des sentinelles sur l'axe (niveaux 21 et 34) :
+//   mise en page ; lancers sur une grille de 0,5 ms autour des passages des sentinelles sur l’axe (deux premiers niveaux à sentinelle) :
 //   jamais de recouvrement dessiné de la tête sans interception (≤ 0,1 px en 390×844, ≤ 2 px sur les autres écrans, dont
 //   le couloir de tir diffère), et la tête dessinée touche la sentinelle à l'instant d'une interception par la tête
 //   (écart ≤ 0,3 px en 390×844, ≤ 1 px ailleurs).
@@ -68,7 +68,9 @@ fs.mkdirSync(OUT, { recursive: true });
           return [Math.hypot(ex, ey - rh) - SENT_HW - HEAD, segD(ex, ey, 0, rt, 0, rh) - SENT_HW - sh];
         };
         const hs = { n: 0, hits: 0, headHits: 0, overlap: 0, gapAtHit: 0 };
-        for (const n of [21, 34]) {
+        const fst = (f, from) => { for (let n = from || 1; n < 400; n++) if (f(makeLevel(n))) return n; return 0; };
+        const s1 = fst(l => l.sents.length > 0), s2 = fst(l => l.sents.length > 0, s1 + 1);
+        for (const n of [s1, s2]) {
           startLevel(n); update(1);
           const T0 = t, edges = [];
           for (const q of L.sents) { let pv = null; for (let x = T0 + .1; x < T0 + 9 && edges.length < 4; x += .001) { const v = Math.abs(angSigned(HPI, q.a0 + q.w * x)) - q.hw; if (pv !== null && (pv > 0) !== (v > 0)) edges.push(x); pv = v; } }

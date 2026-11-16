@@ -44,7 +44,8 @@ mêmes que `__botSafe`.
 
 | Outil | Section | Ce qui est vérifié |
 |---|---|---|
-| `tests/unit/dump.js --check` | — | `makeLevel(1..200)` identique à la référence `tests/ref/levels-ad561a3.json` (hors étoiles des niveaux à traversantes, déplacées au commit 1.9) |
+| `tests/unit/dump.js --check` | — | `makeLevel(1..400)` identique entre Chromium et Node, et identique à la référence `tests/ref/levels-gen2.json` (un changement voulu des niveaux se verse avec `node tests/unit/dump.js --update`) |
+| `tests/unit/levels.test.js` | — | générateur v2 sur 1..400 : une idée à la fois (`drapeaux(n) ⊆ drapeaux(1..n−1) ∪ {TEACH[n]}`, chaque niveau d'apprentissage introduit son idée et elle seule, en 3 à 5 aiguilles), capacité tirs + obstacles fixes ≤ 14, déterminisme, boss et spéciaux |
 | `tests/unit/sw.test.js` | — | précache du service worker cohérent (`VERSION`, `FILES`, `?v=`, empreintes) |
 | `tests/unit/timing.test.js` | — | intégration par trapèzes à 0,002 rad d'une référence après 30 s, pour chaque loi de rotation ; même journal de tirs (au début d'un pas ou au milieu, par `throwPin(tSim)`) → mêmes issues et angles à 1e-9 près à 30, 60, 90, 120 et 144 Hz ; interception par la tête d'une sentinelle au même instant (1e-9) quel que soit le découpage en pas |
 | `tests/unit/input.test.js` | — | horodatage des taps (`tapInstant`) : bornes, garde « depuis 1970 », événement en retard |
@@ -59,10 +60,10 @@ mêmes que `__botSafe`.
 | | `tir` | taps à phase aléatoire : départ à l'instant du tap, jamais dans le passé |
 | | `reprendre` | compte à rebours de 0,6 s, rotation figée, taps et `throwPin()` ignorés, aucun bandeau d’intro sous l’anneau 3-2-1 en 320×568 |
 | | `echec` | 5 écrans : feuille à 0,45 s, tap à 0,3 s ignoré, à 0,5 s relance, verrou de 250 ms, cause rappelée, collision et sentinelle ≥ 4 px au-dessus du filet, MENU à droite, HUD aligné, aiguilles restantes justes avec une ou deux aiguilles en vol |
-| `tests/play.js` | `doubletap` | double tap à 8 ms : 0 mort sur 40 aux niveaux 1, 2, 3, 8, 21 |
+| `tests/play.js` | `doubletap` | double tap à 8 ms : 0 mort sur 40 aux niveaux 1, 2, 3, 8, 21 et au premier niveau à sentinelle |
 | | `vol` | second tap 60-200 ms après le premier : part à son instant exact ; jamais plus de deux aiguilles en vol |
-| | `predicteur` | `__botSafe` : 0 mort, 0 blocage sur 1..200 × 4 parties, à dt 1/60 et 1/120 |
-| | `traversantes` | 0 % de bord allumé mortel (pas de 0,001 rad) ; chaque étoile a un angle de capture sûr |
+| | `predicteur` | `__botSafe` : 0 mort, 0 blocage sur 1..300 × 4 parties, à dt 1/60 et 1/120 |
+| | `traversantes` | 1..300 : 0 % de bord allumé mortel (pas de 0,001 rad) ; chaque étoile a un angle de capture sûr |
 | `tests/perf.js` | `regularite` | horloge virtuelle à 90 et 120 Hz : variation de l'incrément de rotation dessiné < 5 % |
 | | `charge` | CPU ×4 : vitesse de simulation ≥ 0,98 |
 | | `latence` | événement tactile → aiguille visiblement partie : ≤ 1 image en médiane, ≤ 2 au plus |
@@ -76,8 +77,8 @@ virtuelle pilotée par le test, à la cadence voulue.
 (`index.html`, `js/`, `fonts/`, manifeste, icône, `sw.js`), lancer `node tests/unit/sw.test.js --bump` : il
 incrémente `VERSION` et les `?v=`, puis met à jour `tests/ref/sw-hashes.json`. Sinon `sw.test.js` échoue.
 
-`tests/ref/` contient les références produites à partir de `git show ad561a3:index.html` (version d'avant le
-découpage en `js/`) : vidage des niveaux 1..200 et de la mise en page sur 5 écrans, temps du balayage d'équité.
+`tests/ref/` contient la référence des niveaux du générateur v2 (`levels-gen2.json`), les empreintes du service worker
+et, pour mémoire, le balayage d'équité de la version d'avant le découpage (`sweep-ad561a3.json`).
 
 ## Contrat de test
 

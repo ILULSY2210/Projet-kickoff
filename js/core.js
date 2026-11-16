@@ -19,7 +19,7 @@ function startLevel(n, quick) {
   const cause = retry && failInfo && L && L.n === n ? failCause(failInfo, L).short : null;
   recall = cause ? { txt: cause, life: RECALL } : null;
   L = makeLevel(n);
-  rot = 0; t = L.phase; spinK = 1; lawVer++;
+  rot = L.rot0 || 0; t = L.phase; spinK = 1; lawVer++;
   stuck = L.blockers; arcsDirty = true;
   left = L.throws; flying = null; flights = [];
   orbHits = 0; winT = 0; wonT = 0; dieT = 0; exploded = false;
@@ -59,7 +59,8 @@ function fail(kind, a, d, who) {
 function win() {
   state = 'winning'; winT = 0; exploded = false;
   const orbN = L.orbs.length;
-  lastStars = 1 + (orbHits > 0 ? 1 : 0) + (orbHits === orbN ? 1 : 0);
+  // sans étoile bonus sur l'astre, finir le niveau suffit pour 3/3
+  lastStars = orbN ? 1 + (orbHits > 0 ? 1 : 0) + (orbHits === orbN ? 1 : 0) : 3;
   bus.emit('win', L, lastStars);
 }
 

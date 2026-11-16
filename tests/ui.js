@@ -395,7 +395,9 @@ async function ecrans(b) {
         pointe_contact: [cross(0, cy + R), FLIGHT * 1000]
       };
       // même journal de tirs (numéros de pas depuis le début du niveau) sur plusieurs niveaux
-      o.jeux = [8, 13, 21, 26].map(n => {
+      // continue, à-coups, sentinelle, traversantes
+      const fst = (f, from) => { for (let n = from || 1; n < 400; n++) if (f(makeLevel(n))) return n; return 0; };
+      o.jeux = [8, fst(l => l.pattern === 3), fst(l => l.sents.length > 0), fst(l => l.trav)].map(n => {
         startLevel(n);
         const journal = [70, 150, 230, 320, 400, 470, 560, 650, 720, 810, 900, 980];
         let j = 0;
@@ -611,7 +613,8 @@ async function echec(b) {
     S.eq(r.lock100, 0, `${tag} : tir ignoré 100 ms après la relance par tap`);
     S.eq(r.lock300, 1, `${tag} : tir accepté 300 ms après la relance par tap`);
     // mise en page de la feuille d'échec, collision contre une aiguille puis interception par une sentinelle
-    for (const [n, kind] of [[3, 'pin'], [21, 'sent']]) {
+    const nSent = await p.evaluate(() => { for (let n = 1; n < 400; n++) if (makeLevel(n).sents.length) return n; });
+    for (const [n, kind] of [[3, 'pin'], [nSent, 'sent']]) {
       const ok = await p.evaluate(async ([n, kind]) => {
         const frame = () => new Promise(res => requestAnimationFrame(() => res()));
         startLevel(n);

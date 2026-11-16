@@ -4,7 +4,7 @@
 //    0,002 rad d'une référence numérique (Simpson, pas de 0,1 ms, erreur < 1e-4 rad vérifiée en divisant le pas par deux).
 // 2. Boucle pilotée par une horloge virtuelle à 30, 60, 90, 120 et 144 Hz, même journal de tirs (au début d'un pas, ou
 //    à des instants quelconques au milieu d'un pas par throwPin(tSim)) : mêmes issues et mêmes angles d'impact à 1e-9 près.
-// 3. Tête de l'aiguille en vol contre une sentinelle (niveaux 21 et 34) : pour des lancers interceptés par la tête seule
+// 3. Tête de l’aiguille en vol contre une sentinelle (deux premiers niveaux à sentinelle) : pour des lancers interceptés par la tête seule
 //    (la tige passe), même instant d'interception à 1e-9 près que la simulation avance par pas de 1/120 s, de 1/60 s, de
 //    0,1 ms ou de durées tirées au hasard.
 const { chromium } = require('playwright');
@@ -67,7 +67,12 @@ const VIRTUAL_RAF = () => {
     console.log('intégration : ' + acc.map(r => `loi ${r.pat} niv ${r.n} écart ${r.err === null ? '—' : r.err.toExponential(1)}`).join(' ; '));
 
     /* ---------- 2. même journal de tirs à 30/60/90/120/144 Hz ---------- */
-    const LEVELS = [8, 13, 21, 26];   // continue, à-coups, sentinelle, traversantes
+    // continue, à-coups, sentinelle, traversantes ; puis les deux premiers niveaux à sentinelle
+    const [LEVELS, SENT] = await p.evaluate(() => {
+      const fst = (f, from) => { for (let n = from || 1; n < 400; n++) if (f(makeLevel(n))) return n; return 0; };
+      const s1 = fst(l => l.sents.length > 0), s2 = fst(l => l.sents.length > 0, s1 + 1);
+      return [[8, fst(l => l.pattern === 3), s1, fst(l => l.trav)], [s1, s2]];
+    });
     for (const n of LEVELS) for (const mode of ['pas', 'instants']) {
       const res = [];
       for (const hz of RATES) {
@@ -107,7 +112,7 @@ const VIRTUAL_RAF = () => {
     }
 
     /* ---------- 3. tête contre sentinelle : instant d'interception indépendant du découpage en pas ---------- */
-    const hd = await p.evaluate(() => {
+    const hd = await p.evaluate(SENT => {
       soundOn = false;
       const ofail = window.fail; let te = -1;
       window.fail = function () { te = t; return ofail.apply(this, arguments); };
@@ -119,10 +124,10 @@ const VIRTUAL_RAF = () => {
         return { st: state, kind: failInfo && failInfo.kind, te };
       };
       const out = { cases: 0, diffs: [] };
-      for (const n of [21, 34]) {
+      for (const n of SENT) {
         startLevel(n); update(1);
         const T0 = t, w = sentWindow();
-        for (let k = 0; k < 4000 && out.cases < 12 * (n === 21 ? 1 : 2); k++) {
+        for (let k = 0; k < 4000 && out.cases < 12 * (n === SENT[0] ? 1 : 2); k++) {
           const tL = T0 + .05 + k * .0021;
           // tige seule : pas d'interception ; jeu : interception → la tête seule a touché
           startLevel(n); update(1);
@@ -138,7 +143,7 @@ const VIRTUAL_RAF = () => {
       }
       window.fail = ofail; showMenu();
       return out;
-    });
+    }, SENT);
     check(hd.cases >= 12, `tête contre sentinelle : seulement ${hd.cases} interceptions par la tête trouvées`);
     for (const d of hd.diffs) check(false, 'tête contre sentinelle : ' + d);
     console.log(`tête contre sentinelle : ${hd.cases} interceptions par la tête seule, même instant à 1e-9 près par pas de 1/120, 1/60, 0,1 ms et au hasard`);

@@ -437,8 +437,9 @@ function drawHud(c, g, sheet) {
   // --- étoiles bonus ---
   const on = L.orbs.length;
   if (!g) vtext(c, 'BONUS', xr, top + 6, 7, 1, col(rgb, PAL.lab), 1.1);
+  const sp = on > 3 ? Math.min(24, 64 / (on - 1)) : 24, r0 = on > 3 ? 6.5 : 9;   // pluie d'étoiles : rangée resserrée
   for (let i = 0; i < on; i++) {
-    const sx = xr - 9 - (on - 1 - i) * 24, sy = top + 30, got = i < orbHits, fl = got && i === orbHits - 1 ? starFlash : 0, rr = 9 * (1 + fl * .5);
+    const sx = xr - 9 - (on - 1 - i) * sp, sy = top + 30, got = i < orbHits, fl = got && i === orbHits - 1 ? starFlash : 0, rr = r0 * (1 + fl * .5);
     c.beginPath(); starPath(c, sx, sy, rr, rr * .42, -HPI, 5); c.closePath();
     if (got) { c.globalAlpha = g ? .5 : .32 + fl * .5; c.fillStyle = col(acc, 1); c.fill(); }
     if (g && !got) continue;

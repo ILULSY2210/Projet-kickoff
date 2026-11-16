@@ -57,7 +57,7 @@ check(/Espace : tirer · P : pause/.test(fs.readFileSync(path.join(ROOT, 'inde
       startLevel(n);
       o.sent = failCause({ kind: 'sent', a: 0, d: 0, who: L.sents[0] }, L);
       // tous les textes du canevas : glyphes de la police vectorielle
-      const canvas = [...o.pat, ...WORLDS.map(w => w.name), ...WORLDS.map(w => w.theme), ENDLESS.name, ENDLESS.theme, 'MONDE ∞',
+      const canvas = [...o.pat, ...Object.values(TEACH_TEXT).flat(), ...WORLDS.map(w => w.name), ...WORLDS.map(w => w.theme), ENDLESS.name, ENDLESS.theme, 'MONDE ∞',
         ...Object.values(FAIL_TEXT).map(x => x.short.replace('{d}', '12')),
         'TOUCHE L’ÉCRAN POUR TIRER', 'CLIC OU ESPACE POUR TIRER', 'ARC ALLUMÉ = ZONE LIBRE',
         'NIVEAU', 'BOSS', 'AIGUILLES', 'ROTATION', 'BONUS', 'MONDE 01', 'FRÔLÉ · 3°', '★ 2/3', 'NIVEAU 10 · ROTATION ALTERNÉE'];
@@ -67,7 +67,7 @@ check(/Espace : tirer · P : pause/.test(fs.readFileSync(path.join(ROOT, 'inde
       showMenu();
       return o;
     });
-    check(JSON.stringify(r.pat) === JSON.stringify(['ROTATION CONTINUE', 'ROTATION RESPIRANTE', 'ROTATION ALTERNÉE', 'ROTATION PAR À-COUPS', 'ROTATION PAS À PAS', 'ROTATION EN RESSAC']), 'lois de rotation : ' + r.pat.join(', '));
+    check(JSON.stringify(r.pat) === JSON.stringify(['ROTATION CONTINUE', 'ROTATION RESPIRANTE', 'ROTATION ALTERNÉE', 'ROTATION PAR À-COUPS', 'ROTATION PAS À PAS', 'ROTATION EN RESSAC', 'ROTATION IRRÉGULIÈRE']), 'lois de rotation : ' + r.pat.join(', '));
     check(r.zone.key === 'zone' && /zone interdite/.test(r.zone.long) && !/manquait/.test(r.zone.long), `milieu d'un arc interdit de ${r.zoneWidthDeg.toFixed(1)}° (niveau ${r.zoneLevel}) : « ${r.zone.long} »`);
     check(r.edge.key === 'pin' && r.edge.deg === r.edgeWant && r.edge.long === `Il manquait ${r.edgeWant}° pour passer.`, `bord d'un arc interdit : « ${r.edge.long} » (attendu ${r.edgeWant}°)`);
     check(r.pin.key === 'pin' && r.pin.long === `Il manquait ${r.pin.deg}° pour passer.` && r.pin.deg >= 3 && r.pin.deg <= 4, `aiguille contre bloqueur à GAP/2 : « ${r.pin.long} »`);

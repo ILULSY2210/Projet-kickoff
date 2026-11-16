@@ -53,8 +53,73 @@ const TEACH = { 1: 'lancer', 2: 'bloqueurs', 3: 'etoiles', 4: 'sens', 6: 'parfai
 const SOLIDS = ['ico', 'saturne', 'cristal', 'tesseract', 'dodeca', 'stella', 'armille', 'cubocta'];
 const ROMAN = ['', ' II', ' III', ' IV', ' V', ' VI', ' VII', ' VIII', ' IX', ' X'];
 
-// noms des lois de rotation, accordés à « ROTATION » (bandeaux et HUD : « ROTATION » + nom)
-const PAT_NAME = ['CONTINUE', 'RESPIRANTE', 'ALTERNÉE', 'PAR À-COUPS', 'PAS À PAS', 'EN RESSAC'];
+// noms des lois de rotation, accordés à « ROTATION » (bandeaux et HUD : « ROTATION » + nom) ; drapeau de chaque loi
+const PAT_NAME = ['CONTINUE', 'RESPIRANTE', 'ALTERNÉE', 'PAR À-COUPS', 'PAS À PAS', 'EN RESSAC', 'IRRÉGULIÈRE'];
+const LAW_FLAG = ['', 'respiration', 'alternee', 'acoups', 'arrets', 'ressac', 'irreg'];
+// bandeau de chaque idée apprise : titre et règle (niveau d'apprentissage, pause, sélection des niveaux)
+const TEACH_TEXT = {
+  lancer: ['UN TAP, UNE AIGUILLE', 'PLANTE TOUTES TES AIGUILLES SANS CONTACT'],
+  bloqueurs: ['AIGUILLES DÉJÀ PLANTÉES', 'ARC ALLUMÉ = ZONE LIBRE'],
+  etoiles: ['ÉTOILES BONUS', 'PLANTE SOUS UNE ÉTOILE POUR LA PRENDRE'],
+  sens: ['L’AUTRE SENS', 'L’ASTRE TOURNE DANS LES DEUX SENS'],
+  accel: ['ACCÉLÉRATION', 'L’ASTRE ACCÉLÈRE À CHAQUE AIGUILLE'],
+  respiration: ['RESPIRATION', 'LA VITESSE VARIE DOUCEMENT'],
+  demitour: ['DEMI-TOUR ANNONCÉ', 'CHEVRONS QUI CLIGNOTENT = DEMI-TOUR'],
+  serre: ['DISPOSITIONS SERRÉES', 'PAIRES ET ÉVENTAILS : VISE LES GRANDS ARCS'],
+  zone: ['ZONE INTERDITE', 'LES ARCS HACHURÉS SONT INTERDITS'],
+  anneau: ['ANNEAU À PORTES', 'PASSE PAR UNE PORTE DE L’ANNEAU'],
+  irreg: ['ROTATION IRRÉGULIÈRE', 'RIEN NE TOURNE DEUX FOIS PAREIL'],
+  acoups: ['À-COUPS', 'LA ROTATION AVANCE PAR À-COUPS'],
+  arrets: ['PAS À PAS', 'L’ASTRE S’ARRÊTE PUIS REPART'],
+  rampe: ['RAMPE', 'L’ASTRE ACCÉLÈRE AVEC LE TEMPS'],
+  anneaux2: ['DEUX ANNEAUX', 'DEUX ANNEAUX À CONTRE-SENS'],
+  fentes: ['FENTES', 'ENFILE LES PASSAGES ENTRE LES ZONES'],
+  pulse: ['ZONE PULSÉE', 'POINTILLÉS = BIENTÔT INTERDITE'],
+  glisse: ['ZONE GLISSANTE', 'LA ZONE GLISSE SUR LE BORD'],
+  alternee: ['ALTERNÉE', 'LA ROTATION S’INVERSE EN DOUCEUR'],
+  rythme: ['DEMI-TOUR EN RYTHME', 'DEMI-TOUR À INTERVALLES FIXES'],
+  invImpact: ['INVERSION À L’IMPACT', 'CHAQUE AIGUILLE INVERSE LA ROTATION'],
+  ressac: ['RESSAC', 'LA ROTATION REVIENT EN ARRIÈRE'],
+  sentinelle: ['SENTINELLE', 'TIRE QUAND ELLE A QUITTÉ L’AXE'],
+  traversantes: ['TRAVERSANTES', 'L’AIGUILLE RESSORT EN FACE'],
+  sentinelles2: ['DEUX SENTINELLES', 'ELLES TOURNENT EN SENS OPPOSÉS'],
+  anneaux3: ['TROIS ANNEAUX', 'TROIS PORTES À ENFILER'],
+  portesPulsees: ['PORTES PULSÉES', 'LES PORTES S’OUVRENT ET SE FERMENT']
+};
+// idées du générateur déjà réalisées (les autres arrivent chacune avec son commit ; d'ici là, leur niveau d'apprentissage
+// est un niveau ordinaire qui n'introduit rien)
+const IMPL = ['lancer', 'bloqueurs', 'etoiles', 'sens', 'respiration', 'serre', 'zone', 'acoups', 'arrets', 'fentes',
+  'alternee', 'ressac', 'sentinelle', 'traversantes'];
+// Difficulté : tirs, obstacles fixes (en « équivalents aiguilles », capacité tirs + obstacles ≤ 14) et vitesse moyenne ω
+// (rad/s) au début et à la fin de chaque monde ; pos = progression dans un bloc de 10 (x1..x10 : respirations en x1-x2,
+// montée, spécial en x7, boss en x10) ; tune = facteurs de vitesse par niveau réglés par tests/sim/report.js.
+const DIFFICULTY = {
+  capacity: 14, floor30: .75, floorLow95: .72,
+  worldTargets70: [[.97, .80], [.80, .65], [.68, .52], [.58, .42], [.45, .32], [.35, .22]], endless70: [.22, .30],
+  breather: .10, cliff: .12, bossCliff: .20, mashEarly: .30, mashLate: 6 / 200, trials: 300, trialsRecheck: 1000, recheckBelow: .85,
+  worlds: [
+    { throws: [4, 8], fixed: [0, 4], speed: [1.1, 2.2] },
+    { throws: [6, 9], fixed: [2, 5], speed: [1.6, 2.8] },
+    { throws: [6, 9], fixed: [3, 5], speed: [1.8, 3.0] },
+    { throws: [7, 10], fixed: [2, 4], speed: [1.9, 3.2] },
+    { throws: [7, 10], fixed: [2, 4], speed: [2.1, 3.5] },
+    { throws: [8, 11], fixed: [2, 3], speed: [2.3, 3.8] }
+  ],
+  pos: [-.55, -.35, .15, .3, .45, .55, .45, .7, .8, .9],
+  tune: {}
+};
+// boss : archétype k au niveau 10·k de chaque monde, palier = monde (I..VI) ; jusqu'à l'étape 4, ils se jouent comme un
+// niveau normal avec la mécanique de leur archétype aux paramètres de leur palier
+const BOSSES = [
+  { id: 'reacteur', name: 'LE RÉACTEUR', flag: 'accel', throws: [10, 11, 11, 12, 12, 12], speed: [1.1, 1.5, 1.7, 1.9, 2.0, 2.2], top: [2.0, 2.6, 3.0, 3.3, 3.5, 3.9] },
+  { id: 'pendule', name: 'LE PENDULE', flag: 'demitour', throws: [8, 9, 10, 11, 12, 13], speed: [1.4, 1.8, 2.1, 2.4, 2.8, 3.2], every: [4, 3, 3, 3, 2, 2], warn: [.9, .8, .7, .6, .5, .45] },
+  { id: 'forteresse', name: 'LA FORTERESSE', flag: 'zone', throws: [8, 8, 9, 9, 9, 9], speed: [1.4, 1.8, 2.1, 2.4, 2.7, 3.0] },
+  { id: 'anneaux', name: 'LES ANNEAUX', flag: 'anneau', throws: [8, 9, 10, 10, 11, 11], speed: [1.2, 1.6, 1.9, 2.2, 2.5, 2.8] },
+  { id: 'chaos', name: 'LE CHAOS', flag: 'irreg', throws: [9, 10, 10, 11, 11, 12], speed: [1.4, 1.8, 2.1, 2.4, 2.7, 3.0] }
+];
+// spéciaux (x7) dans l'ordre PLUIE, CHRONO, PARFAIT ; jusqu'à l'étape 4, joués comme des niveaux normaux sur leur terrain
+const SPECIALS = ['pluie', 'chrono', 'parfait'];
+
 // messages d'échec par cause : short = rappel près du pas de tir (police vectorielle, {d} = degrés manquants),
 // long = phrase de la feuille d'échec, tips = conseils propres à la cause
 const FAIL_TEXT = {
@@ -69,14 +134,3 @@ const FAIL_TEXT = {
   sent: { short: 'INTERCEPTÉE PAR LA SENTINELLE', long: 'Tir intercepté par la sentinelle.',
     tips: ['Tire quand elle a quitté l’axe.', 'Regarde où elle sera dans un instant.'] }
 };
-// [rythme, dosage (0 = dense et lent, 1 = rapide et aéré), disposition, sentinelles, traversantes]
-const SPEC = [
-  [[0, .5, 'none'], [0, .5, 'scatter'], [0, .6, 'scatter'], [1, .4, 'scatter'], [1, .3, 'sym']],
-  [[2, .5, 'scatter'], [0, .9, 'fan'], [2, .3, 'pairs'], [1, .6, 'scatter'], [2, .3, 'sym']],
-  [[3, .5, 'wall'], [0, .7, 'wall+'], [3, .3, 'scatter'], [2, .4, 'pairs'], [3, .3, 'wall2']],
-  [[4, .5, 'scatter'], [1, .8, 'fan'], [4, .3, 'pairs'], [3, .5, 'wall'], [4, .3, 'sym']],
-  [[0, .5, 'scatter', 1], [1, .5, 'pairs', 1], [5, .4, 'fan', 1], [2, .4, 'wall', 1], [5, .3, 'sym', 2]],
-  [[0, .5, 'none', 0, 1], [1, .5, 'scatter', 0, 1], [5, .5, 'scatter', 0, 1], [4, .4, 'scatter', 0, 1], [2, .4, 'sym', 0, 1]],
-  [[5, .5, 'wall'], [3, .5, 'pairs', 1], [4, .4, 'wall+'], [2, .4, 'fan', 2], [3, .3, 'wall2', 2]],
-  [[1, .5, 'none', 1, 1], [2, .2, 'pairs'], [4, .5, 'scatter', 0, 1], [5, .5, 'wall', 2], [2, .4, 'scatter', 1, 1]]
-];

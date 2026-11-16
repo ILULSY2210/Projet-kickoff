@@ -1,20 +1,21 @@
-// Vidage des niveaux et de la mise en page, et comparaison avec la référence ad561a3.
-//   node tests/unit/dump.js <index.html> <sortie.json>          écrit le vidage
-//   node tests/unit/dump.js --check [index.html] [--strict]    compare avec tests/ref/levels-ad561a3.json
-// Le vidage contient JSON.stringify(makeLevel(n)) pour n = 1..200 et la mise en page sur 5 écrans.
-// --check compare les niveaux ; seule exception admise (commit 1.9) : le placement des étoiles sur les niveaux
-// à aiguilles traversantes. --strict exige aussi l'égalité de ces étoiles et de la mise en page (commit 1.1).
+// Vidage des niveaux (générateur v2) et de la mise en page, et contrôles.
+//   node tests/unit/dump.js --check          niveaux 1..400 identiques entre Chromium (vraie page) et Node (vrai code,
+//                                            tests/sim/load.js), et identiques à la référence tests/ref/levels-gen2.json
+//   node tests/unit/dump.js --update         réécrit la référence (à verser dans le même commit que le changement voulu)
+//   node tests/unit/dump.js <index.html> <sortie.json>   écrit le vidage (niveaux et mise en page sur 5 écrans)
+// Un niveau qui change sans mise à jour de la référence fait échouer le contrôle : aucun changement de niveau involontaire.
 const { chromium } = require('playwright');
 const path = require('path'), fs = require('fs');
+const { load } = require('../sim/load');
 const ROOT = path.resolve(__dirname, '..', '..');
-const REF = path.join(ROOT, 'tests', 'ref', 'levels-ad561a3.json');
+const REF = path.join(ROOT, 'tests', 'ref', 'levels-gen2.json');
 const SCREENS = [[320, 568], [360, 640], [390, 664], [390, 844], [430, 932]];
-const NLEV = 200;
+const NLEV = 400;
 
 async function dump(html) {
   const url = 'file://' + path.resolve(html);
   const b = await chromium.launch();
-  const out = { levels: [], layout: {} };
+  const out = { gen: 0, levels: [], layout: {} };
   try {
     for (const [w, h] of SCREENS) {
       const c = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
@@ -23,7 +24,7 @@ async function dump(html) {
       p.on('pageerror', e => errs.push(e.message));
       await p.goto(url);
       await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu', null, { timeout: 10000 });
-      if (!out.levels.length) out.levels = await p.evaluate(N => { const a = []; for (let n = 1; n <= N; n++) a.push(JSON.stringify(makeLevel(n))); return a; }, NLEV);
+      if (!out.levels.length) { out.gen = await p.evaluate(() => GEN_VERSION); out.levels = await p.evaluate(N => { const a = []; for (let n = 1; n <= N; n++) a.push(JSON.stringify(makeLevel(n))); return a; }, NLEV); }
       out.layout[w + 'x' + h] = await p.evaluate(() => JSON.stringify({ W, H, SW, SX, cx, cy, R, PL, HEAD, PW, RS, RD, LAUNCH, FLYV, SENT_PAD }));
       if (errs.length) throw new Error(w + 'x' + h + ' : ' + errs.join(' | '));
       await c.close();
@@ -31,38 +32,31 @@ async function dump(html) {
   } finally { await b.close(); }
   return out;
 }
-
-// étape 2 (structure 6 × 50) : le monde, la position, le statut de boss et la fiche du monde d'un niveau changent ;
-// son contenu (aiguilles, obstacles, vitesse, loi, étoiles…) est comparé sans ces champs
-const META = ['w', 'wi', 'cyc', 'pos', 'boss', 'wd', 'special'];
-const strip = o => { if (o) for (const k of META) delete o[k]; return o; };
-function compare(cur, ref, strict) {
-  const diffs = [];
-  for (let i = 0; i < ref.levels.length; i++) {
-    if (cur.levels[i] === ref.levels[i]) continue;
-    const a = strip(JSON.parse(cur.levels[i] || 'null')), r = strip(JSON.parse(ref.levels[i]));
-    if (JSON.stringify(a) === JSON.stringify(r)) continue;
-    if (!strict && a && r.trav && a.trav) {
-      delete a.orbs; delete r.orbs;
-      if (JSON.stringify(a) === JSON.stringify(r)) continue;
-    }
-    diffs.push('niveau ' + (i + 1));
-  }
-  if (strict) for (const k in ref.layout) if (cur.layout[k] !== ref.layout[k]) diffs.push('mise en page ' + k);
-  return diffs;
-}
+const nodeLevels = () => { const G = load(), a = []; for (let n = 1; n <= NLEV; n++) a.push(JSON.stringify(G.makeLevel(n))); return a; };
 
 (async () => {
-  const args = process.argv.slice(2), check = args.includes('--check'), strict = args.includes('--strict');
-  const pos = args.filter(a => !a.startsWith('--'));
-  if (check) {
-    const html = pos[0] || path.join(ROOT, 'index.html');
-    const cur = await dump(html), ref = JSON.parse(fs.readFileSync(REF, 'utf8'));
-    const diffs = compare(cur, ref, strict);
-    console.log(diffs.length ? 'dump : DIFFÉRENT — ' + diffs.join(', ') : `dump : ${ref.levels.length} niveaux identiques à ad561a3` + (strict ? ' (strict, mise en page comprise)' : ' (hors étoiles des niveaux traversants)'));
+  const args = process.argv.slice(2), pos = args.filter(a => !a.startsWith('--'));
+  if (args.includes('--check') || args.includes('--update')) {
+    const cur = await dump(path.join(ROOT, 'index.html')), node = nodeLevels(), diffs = [];
+    for (let i = 0; i < NLEV; i++) if (cur.levels[i] !== node[i]) diffs.push('Node ≠ Chromium au niveau ' + (i + 1));
+    if (args.includes('--update')) {
+      if (diffs.length) { console.error('dump : ' + diffs.slice(0, 5).join(', ')); process.exit(1); }
+      fs.writeFileSync(REF, JSON.stringify({ gen: cur.gen, levels: cur.levels }));
+      console.log(`dump : référence écrite (GEN_VERSION ${cur.gen}, ${NLEV} niveaux)`);
+      process.exit(0);
+    }
+    if (!fs.existsSync(REF)) diffs.push('référence absente : node tests/unit/dump.js --update');
+    else {
+      const ref = JSON.parse(fs.readFileSync(REF, 'utf8'));
+      if (ref.gen !== cur.gen) diffs.push(`référence pour GEN_VERSION ${ref.gen}, jeu en ${cur.gen}`);
+      const changed = [];
+      for (let i = 0; i < NLEV; i++) if (cur.levels[i] !== ref.levels[i]) changed.push(i + 1);
+      if (changed.length) diffs.push(`${changed.length} niveau(x) différent(s) de la référence (${changed.slice(0, 12).join(', ')}${changed.length > 12 ? '…' : ''}) : changement voulu → node tests/unit/dump.js --update`);
+    }
+    console.log(diffs.length ? 'dump : DIFFÉRENT — ' + diffs.slice(0, 8).join(' ; ') : `dump : ${NLEV} niveaux identiques entre Chromium, Node et la référence (GEN_VERSION ${cur.gen})`);
     process.exit(diffs.length ? 1 : 0);
   }
-  if (pos.length < 2) { console.error('usage: node dump.js <index.html> <sortie.json> | --check [index.html] [--strict]'); process.exit(2); }
+  if (pos.length < 2) { console.error('usage: node dump.js --check | --update | <index.html> <sortie.json>'); process.exit(2); }
   const out = await dump(pos[0]);
   fs.writeFileSync(pos[1], JSON.stringify(out));
   console.log('vidage écrit :', pos[1]);

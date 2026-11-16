@@ -2,12 +2,12 @@
 //   node tests/play.js [--only=doubletap,vol,predicteur] [--out=dossier]
 // Sections :
 //   doubletap  : après un tir sûr, un second tap 8 ms plus tard par tap() (rebond, deux doigts) : 0 mort sur 40
-//                aux niveaux 1, 2, 3, 8 et 21.
+//                aux niveaux 1, 2, 3, 8, 21 et au premier niveau à sentinelle.
 //   vol        : un second tap 60 à 200 ms après le premier part à son instant exact ; jamais plus de deux aiguilles
 //                en vol (rafales de taps, appels directs de throwPin()).
-//   predicteur : le prédicteur honnête (__botSafe) finit les niveaux 1..200, 4 parties chacun, à dt 1/60 et 1/120 :
+//   predicteur : le prédicteur honnête (__botSafe) finit les niveaux 1..300, 4 parties chacun, à dt 1/60 et 1/120 :
 //                0 mort, 0 blocage (niveau fini en moins de 75 s de jeu).
-//   traversantes : niveaux 1..200, au départ puis après 2 et 4 aiguilles du prédicteur : part du bord allumé où un
+//   traversantes : niveaux 1..300, au départ puis après 2 et 4 aiguilles du prédicteur : part du bord allumé où un
 //                atterrissage serait mortel = 0 % (échantillonnage tous les 0,001 rad) ; chaque étoile a un angle de
 //                capture sûr.
 // Les taps passent par la vraie couche d'entrée (tap(ts)) ; la boucle est pilotée par une horloge virtuelle à 60 Hz
@@ -79,7 +79,8 @@ async function doubletap(b) {
   const [c, p] = await page(b);
   const res = await p.evaluate(() => {
     const out = {};
-    for (const n of [1, 2, 3, 8, 21]) {
+    let nSent = 1; while (!makeLevel(nSent).sents.length) nSent++;
+    for (const n of [1, 2, 3, 8, 21, nSent]) {
       let dead = 0, done = 0;
       for (let k = 0; k < 40; k++) {
         startLevel(n); __run(.6 + (k % 10) * .137);
@@ -165,7 +166,7 @@ async function predicteur(b) {
       }
       showMenu();
       return { deaths: out.deaths, blocks: out.blocks, maxT: Math.max(...out.times), meanT: out.times.reduce((a, b) => a + b, 0) / out.times.length };
-    }, { dt, N: 200 });
+    }, { dt, N: 300 });
     const tag = dt === 1 / 60 ? '1/60' : '1/120';
     S.ok(r.deaths.length === 0, `dt ${tag} : ${r.deaths.length} mort(s) sur 800 parties ${r.deaths.slice(0, 8).join(' ')}`);
     S.ok(r.blocks.length === 0, `dt ${tag} : ${r.blocks.length} blocage(s) sur 800 parties ${r.blocks.slice(0, 8).join(' ')}`);
@@ -186,7 +187,7 @@ async function traversantes(b) {
         if (landing(x).d < GAP) { o.deadly.push(n + '/' + when + '@' + x.toFixed(3)); if (o.deadly.length > 50) return; }
       }
     };
-    for (let n = 1; n <= 200; n++) {
+    for (let n = 1; n <= 300; n++) {
       startLevel(n);
       scan(n, 0);
       for (const st of L.orbs) {
