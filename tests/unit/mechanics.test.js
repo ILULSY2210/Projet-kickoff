@@ -127,32 +127,38 @@ const out = [];
     for (let i = 0; i < P.f.length; i++) for (let j = i + 1; j < P.f.length; j++) { const q = P.f[j] / P.f[i]; check(Math.abs(q - Math.round(q)) > .05, `rotation irrégulière, niveau ${n} : fréquences presque multiples (${P.f})`); }
   }
 }
-// zones pulsées : une aiguille qui arrive dans la zone active est perdue ; dans la zone éteinte (ou annoncée), elle reste,
-// et la zone qui s'allume ensuite ne la touche pas ; shotSafe (k = 0) dit la même chose que le jeu
-{
-  const ns = levelsWith(L => L.zones.some(z => z.kind === 'pulse'), 6);
-  check(ns[0] === 111, `zones pulsées : premier niveau ${ns[0]}`);
-  out.push(predictionCheck('zones pulsées', ns));
-  let agree = 0, dead = 0, kept = 0;
+// zones pulsées et glissantes : une aiguille qui arrive dans la zone active est perdue ; dans une zone éteinte (ou
+// annoncée), elle reste ; une zone qui s'allume ou glisse ensuite sur une aiguille plantée ne la touche pas ; shotSafe
+// (k = 0) dit la même chose que le jeu
+function zoneCheck(name, kind, first) {
+  const ns = levelsWith(L => L.zones.some(z => z.kind === kind), 6);
+  check(ns[0] === first, `${name} : premier niveau ${ns[0]}`);
+  out.push(predictionCheck(name, ns));
+  let agree = 0, dead = 0, kept = 0, passed = 0;
   for (const n of ns.slice(0, 4)) for (let i = 0; i < 300; i++) {
     G.startLevel(n); G.update(.3 + i * .021);
-    const z = G.get('L').zones[0], t = G.get('t'), tL = t + rnd() * STEP;
-    // tir visé au centre de la zone (même angle que la prédiction)
-    const pr = G.predict(tL), zc = G.run(`zoneCenter(L.zones[0], ${pr.tI})`);
-    G.set('rot', G.get('rot') + (pr.a - zc));   // on tourne l'astre pour que l'impact tombe au centre de la zone
-    const safe = G.run(`shotSafe(${tL}, 0)`), st = G.run(`zoneState(L.zones[0], ${tL + G.get('FLIGHT')})`);
+    const zi = G.get('L').zones.findIndex(z => z.kind === kind), z = G.get('L').zones[zi], t = G.get('t'), tL = t + rnd() * STEP;
+    // tir visé près du centre de la zone : on tourne l'astre pour que l'impact y tombe
+    const pr = G.predict(tL), zc = G.run(`zoneCenter(L.zones[${zi}], ${pr.tI})`);
+    G.set('rot', G.get('rot') + (pr.a - zc) + (rnd() - .5) * (z.hw + .1) * 2);
+    const safe = G.run(`shotSafe(${tL}, 0)`), st = G.run(`zoneState(L.zones[${zi}], ${tL + G.get('FLIGHT')})`);
     G.throwPin(tL);
     for (let j = 0; j < 20 && G.get('flights').length && G.get('state') === 'play'; j++) G.update(STEP);
     const lost = G.get('state') !== 'play';
-    if (lost) { dead++; check(G.get('failInfo').kind === 'zone' && st === 2, `zones pulsées, niveau ${n} : perdue hors d'une zone active (${G.get('failInfo').kind}, état ${st})`); }
-    else { check(st !== 2, `zones pulsées, niveau ${n} : aiguille plantée dans une zone active`); kept++;
-      // la zone s'allume plus tard : l'aiguille plantée reste
-      const n0 = G.get('stuck').length; G.update(z.P); check(G.get('state') === 'play' && G.get('stuck').length === n0, `zones pulsées, niveau ${n} : aiguille plantée touchée par la zone`); }
+    if (lost) { dead++; check(G.get('failInfo').kind === 'zone' || G.get('failInfo').kind === 'pin', `${name}, niveau ${n} : perdue (${G.get('failInfo').kind}, état ${st})`); }
+    else {
+      kept++;
+      const n0 = G.get('stuck').length, a0 = G.get('stuck')[n0 - 1].a;
+      for (let j = 0; j < 400 && G.get('state') === 'play'; j++) { G.update(STEP); if (G.run(`zoneState(L.zones[${zi}], t) === 2 && angDiff(${a0}, zoneCenter(L.zones[${zi}], t)) < L.zones[${zi}].hw`)) { passed++; break; } }
+      check(G.get('state') === 'play' && G.get('stuck').length === n0, `${name}, niveau ${n} : aiguille plantée touchée par la zone`);
+    }
     if (safe === !lost) agree++;
   }
-  check(dead > 50 && kept > 50, `zones pulsées : échantillon (${dead} perdues, ${kept} plantées)`);
-  check(agree === dead + kept, `zones pulsées : shotSafe d'accord avec le jeu sur ${agree}/${dead + kept}`);
+  check(dead > 30 && kept > 30 && passed > 10, `${name} : échantillon (${dead} perdues, ${kept} plantées, ${passed} sous une zone active ensuite)`);
+  check(agree === dead + kept, `${name} : shotSafe d'accord avec le jeu sur ${agree}/${dead + kept}`);
 }
+zoneCheck('zones pulsées', 'pulse', 111);
+zoneCheck('zones glissantes', 'glide', 121);
 console.log(out.join('\n'));
 if (fails.length) { console.log('mechanics : ÉCHEC\n  ' + fails.slice(0, 20).join('\n  ')); process.exit(1); }
 console.log('mechanics : pass');

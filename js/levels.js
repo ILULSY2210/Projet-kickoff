@@ -138,6 +138,7 @@ function makeLevel(n) {
     if (teach === 'rampe') { R.N = 5; R.ramp = { k: .6, T: 12 }; }
     if (teach === 'irreg') { R.N = 5; R.law = 6; R.irr = 2; }
     if (teach === 'pulse') { R.N = 5; R.pulse = 1; }
+    if (teach === 'glisse') { R.N = 5; R.glide = 1; }
   } else if (boss) {
     const B = BOSSES[bossArch(n)], tier = Math.min(wi, 5);
     R.N = B.throws[tier]; R.omega = B.speed[tier]; R.F = 0; R.orbs = has('etoiles') ? 3 : 0;
@@ -147,7 +148,7 @@ function makeLevel(n) {
     if (arch === 'pendule' && has('demitour')) { R.demi = { every: B.every[tier], warn: B.warn[tier] }; if (tier >= 3 && has('rythme')) R.rhythm = { P: [3, 2.5, 2.2][tier - 3], warn: B.warn[tier] }; }
     if (arch === 'pendule') { if (tier >= 1) R.F = 2; if (tier === 2) R.zones = [.4]; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
     if (arch === 'forteresse' && tier === 1 && has('rampe')) R.ramp = { k: .5, T: 15 };
-    if (arch === 'forteresse') { R.zones = tier === 1 ? [.3, .3, .3] : tier === 0 ? [.45, .45] : [.4, .4]; if (tier === 4 && has('sentinelle')) R.sent = 1; if (has('pulse')) R.pulse = [0, 0, 1, 1, 2, 3][tier]; }
+    if (arch === 'forteresse') { R.zones = tier === 1 ? [.3, .3, .3] : tier === 0 ? [.45, .45] : [.4, .4]; if (tier === 4 && has('sentinelle')) R.sent = 1; if (has('pulse')) R.pulse = [0, 0, 1, 1, 2, 3][tier]; if (tier === 3 && has('glisse')) R.glide = 1; }
     if (arch === 'anneaux') { R.F = 2; if (tier === 2) R.zones = [.4]; if (tier === 3 && has('alternee')) R.law = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
     if (arch === 'chaos') { R.law = has('irreg') ? 6 : has('alternee') ? 2 : has('respiration') ? 1 : 0; R.irr = tier === 0 ? 2 : tier === 5 ? 4 : 3; R.F = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
     R.F += R.zones.length * 2;
@@ -165,6 +166,8 @@ function makeLevel(n) {
     if (has('accel') && r() < (wi === 1 ? .55 : .25)) R.accel = { k: .03 + .04 * d, cap: 1.25 + .3 * d };
     // zones pulsées (111) : cœur de Rubis
     if (has('pulse') && r() < (wi === 2 ? .45 : .15)) R.pulse = d > .6 && r() < .5 ? 2 : 1;
+    // zone glissante (121) : elle passe sur les aiguilles plantées sans effet
+    if (has('glisse') && r() < (wi === 2 ? .35 : .12)) R.glide = 1;
     // rampe (71) : cœur d'Ambre, plutôt sans accélération à l'impact
     if (has('rampe') && !R.accel && r() < (wi === 1 ? .45 : .15)) R.ramp = { k: .35 + .35 * d, T: 10 + 10 * r() };
     // demi-tours annoncés : toutes les k aiguilles (19), au rythme (161) ; cœur de Saphir
@@ -217,6 +220,11 @@ function makeLevel(n) {
   for (let i = 0; i < R.pulse; i++) {
     const c = put(.8), P = Math.round((3.4 - .9 * d) * 1e3) / 1e3, act = Math.round(P * .45 * 1e3) / 1e3;
     if (c != null) zones.push({ kind: 'pulse', c: Math.round(norm(c) * 1e9) / 1e9, hw: Math.round((.2 + .08 * d) * 1e6) / 1e6, P, ann: .6, off: Math.round((P - act - .6) * 1e3) / 1e3, ph: Math.round(r() * P * 1e6) / 1e6 });
+  }
+  // zones glissantes : arc toujours actif qui glisse lentement le long du bord (dans le repère de l'astre)
+  for (let i = 0; i < R.glide; i++) {
+    const c = put(.6), w = (r() < .5 ? -1 : 1) * (.22 + .18 * d);
+    if (c != null) zones.push({ kind: 'glide', c: Math.round(norm(c) * 1e9) / 1e9, hw: Math.round((.18 + .06 * d) * 1e6) / 1e6, w: Math.round(w * 1e6) / 1e6 });
   }
   // --- vitesse : ω moyenne (facteur de réglage par niveau), normalisée par la loi ---
   // loi irrégulière : 2 ou 3 sinusoïdes (3 fortes pour le Chaos VI), fréquences non multiples, phases tirées au hasard ;

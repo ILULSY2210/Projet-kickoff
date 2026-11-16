@@ -424,6 +424,8 @@ function drawGame(c, g) {
   // têtes plantées par-dessus l'aiguille en vol, puis la croix d'alerte
   if (!exploded) {
     drawHeads(c, g, S);
+    // zones glissantes : hachures dessinées par-dessus les aiguilles plantées (elles passent dessus sans effet)
+    if (L.zones.length) for (const z of L.zones) if (z.kind === 'glide') drawZone(c, g, S, z, lw);
     // collision : croix d'alerte
     if (failInfo && (state === 'dying' || state === 'failed' || state === 'pause')) {
       const A = col(PAL.alert, 1); let fx, fy;
