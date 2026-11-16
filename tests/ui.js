@@ -3,9 +3,14 @@
 // Sections :
 //   smoke : chaque bouton visible de chaque écran est cliqué, Espace / Entrée / P / Échap dans chaque état,
 //           son basculé, case de niveau, visibilitychange ; 0 erreur console ou page et état attendu après chaque action.
+//   boot  : démarrage avec les domaines Google bloqués : state défini en < 1 s, aucune requête tierce, polices locales.
+//   offline : second chargement sans réseau (service worker) en < 1 s.
+//   update  : une nouvelle VERSION du service worker ne s'applique qu'au menu, jamais pendant un niveau.
+//   guard   : script invalide ou bloqué → message « touche pour recharger » en ≤ 4 s, jamais d'écran noir muet.
 // Écrit <out>/summary.json ({ pass, sections, errors }) et sort avec le code 1 en cas d'échec.
 const { chromium, devices } = require('playwright');
 const path = require('path'), fs = require('fs');
+const { serve } = require('./lib/serve');
 const ROOT = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
 const opt = k => { const a = args.find(x => x.startsWith('--' + k + '=')); return a ? a.slice(k.length + 3) : null; };
@@ -172,10 +177,140 @@ async function smoke(b) {
   await c.close();
 }
 
+const waitMenu = (p, timeout = 10000) => p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu' && window.__orbitaBooted, null, { timeout, polling: 10 });
+async function poll(fn, timeout = 10000, step = 50) {
+  const t0 = Date.now();
+  for (;;) { const v = await fn(); if (v) return v; if (Date.now() - t0 > timeout) return v; await new Promise(r => setTimeout(r, step)); }
+}
+const swActivated = p => p.evaluate(async () => {
+  const r = await navigator.serviceWorker.ready;
+  if (r.active.state !== 'activated') await new Promise(res => r.active.addEventListener('statechange', () => r.active.state === 'activated' && res()));
+  return r.active.state;
+});
+
+async function boot(b) {
+  const S = section('boot');
+  for (const mode of ['file', 'http']) {
+    const s = mode === 'http' ? await serve(ROOT) : null;
+    const c = await b.newContext({ ...devices['iPhone 13'] });
+    await c.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort());
+    const p = await c.newPage(); hook(p, 'boot-' + mode);
+    const reqs = [];
+    p.on('request', r => reqs.push(r.url()));
+    const t0 = Date.now();
+    await p.goto(s ? s.url : URL, { waitUntil: 'commit' });
+    await waitMenu(p, 5000);
+    const dt = Date.now() - t0;
+    S.ok(dt < 1000, `${mode} : state défini en ${dt} ms (< 1000)`);
+    S.note('demarrage_' + mode + '_ms', dt);
+    const fams = await p.evaluate(() => document.fonts.ready.then(() => [...document.fonts].filter(f => f.status === 'loaded').map(f => f.family.replace(/"/g, '') + ' ' + f.weight)));
+    S.ok(fams.includes('B612 Mono 400') && fams.includes('B612 400'), `${mode} : polices B612 locales chargées (${fams.join(', ')})`);
+    await p.waitForTimeout(300);
+    const third = reqs.filter(u => /googleapis|gstatic/.test(u));
+    S.eq(third.length, 0, `${mode} : requêtes vers Google`);
+    const foreign = reqs.filter(u => !(s ? u.startsWith(s.url) : u.startsWith('file://')) && !u.startsWith('data:'));
+    S.eq(foreign.join(' '), '', `${mode} : requêtes hors du jeu`);
+    await c.close();
+    if (s) await s.close();
+  }
+}
+
+async function offline(b) {
+  const S = section('offline');
+  const s = await serve(ROOT);
+  const c = await b.newContext({ ...devices['iPhone 13'] });
+  const p = await c.newPage(); hook(p, 'offline');
+  await p.goto(s.url); await waitMenu(p);
+  S.eq(await swActivated(p), 'activated', 'service worker activé après la première visite');
+  S.eq((await p.evaluate(() => caches.keys())).join(' '), await p.evaluate(() => 'orbita-v' + [...document.scripts].map(x => x.src).find(x => /\?v=/.test(x)).split('?v=')[1]), 'un seul cache, celui de la version');
+  await s.close();   // plus de serveur : seul le service worker peut répondre
+  const t0 = Date.now();
+  await p.reload({ waitUntil: 'commit' });
+  await waitMenu(p, 5000);
+  const dt = Date.now() - t0;
+  S.ok(dt < 1000, `second chargement hors ligne en ${dt} ms (< 1000)`);
+  S.note('hors_ligne_ms', dt);
+  S.ok(await p.evaluate(() => !!navigator.serviceWorker.controller), 'page contrôlée par le service worker');
+  S.ok(await p.evaluate(() => document.fonts.ready.then(() => document.fonts.check('12px "B612 Mono"'))), 'polices disponibles hors ligne');
+  await p.click('#playBtn'); await p.waitForTimeout(100);
+  S.eq(await st(p), 'play', 'on joue hors ligne');
+  await c.close();
+}
+
+async function update(b) {
+  const S = section('update');
+  const s = await serve(ROOT);
+  const swSrc = fs.readFileSync(path.join(ROOT, 'sw.js'), 'utf8');
+  const ver = /const VERSION = '([^']+)'/.exec(swSrc)[1], ver2 = ver + '-essai';
+  const c = await b.newContext({ ...devices['iPhone 13'] });
+  const p = await c.newPage(); hook(p, 'update');
+  await p.goto(s.url); await waitMenu(p); await swActivated(p);
+  await p.reload(); await waitMenu(p);
+  S.ok(await p.evaluate(() => !!navigator.serviceWorker.controller), 'page contrôlée');
+  await p.evaluate(() => { startLevel(3); window.__marque = 42; });
+  s.override('/sw.js', { body: swSrc.replace(`'${ver}'`, `'${ver2}'`) });
+  await p.evaluate(() => navigator.serviceWorker.getRegistration().then(r => r.update()));
+  const waiting = await poll(() => p.evaluate(() => navigator.serviceWorker.getRegistration().then(r => !!r.waiting)));
+  S.ok(waiting, 'nouvelle version installée et en attente');
+  await p.waitForTimeout(800);
+  S.eq(await p.evaluate(() => window.__marque), 42, 'aucun rechargement pendant le niveau');
+  S.eq(await st(p), 'play', 'toujours en jeu');
+  S.eq((await p.evaluate(() => caches.keys())).sort().join(' '), [ver, ver2].sort().join(' '), 'les deux versions coexistent tant que le joueur est en jeu');
+  await p.evaluate(() => pauseGame());
+  await p.waitForTimeout(500);
+  S.eq(await p.evaluate(() => window.__marque), 42, 'aucun rechargement en pause');
+  const nav = p.waitForEvent('load', { timeout: 10000 }).then(() => true, () => false);
+  await p.click('#pauseMenu');
+  S.ok(await nav, 'rechargement au retour au menu');
+  await waitMenu(p);
+  S.eq(await p.evaluate(() => window.__marque), undefined, 'page rechargée');
+  S.eq((await p.evaluate(() => caches.keys())).join(' '), ver2, 'seul le cache de la nouvelle version reste');
+  await c.close(); await s.close();
+}
+
+async function guard(b) {
+  const S = section('guard');
+  const cases = [
+    ['script invalide', '/js/core.js', { body: 'ceci n\'est pas du ( javascript' }, 4000],
+    ['script bloqué', '/js/render.js', { delay: 6000 }, 4000]
+  ];
+  for (const [name, file, ov, lim] of cases) {
+    const s = await serve(ROOT); s.override(file, ov);
+    const c = await b.newContext({ ...devices['iPhone 13'] });
+    const p = await c.newPage();   // erreurs attendues : pas de hook
+    const t0 = Date.now();
+    await p.goto(s.url, { waitUntil: 'commit' });
+    const el = await p.waitForSelector('#bootFail', { timeout: 6000 }).catch(() => null);
+    const dt = el ? Math.round(await p.evaluate(() => window.__orbitaBootFailAt)) : Date.now() - t0;   // depuis l'ouverture de la page
+    S.ok(!!el && dt <= lim, `${name} : message affiché en ${dt} ms (≤ ${lim})`);
+    if (el) {
+      const txt = (await el.innerText()).toUpperCase();
+      S.ok(/PAS D.MARR/.test(txt) && /TOUCHE POUR RECHARGER/.test(txt), `${name} : texte du message (${txt.replace(/\s+/g, ' ')})`);
+      await p.screenshot({ path: path.join(OUT, 'guard-' + file.replace(/\W/g, '') + '.png') });
+    }
+    if (ov.delay) {
+      await waitMenu(p, 8000).catch(() => {});
+      S.ok(await p.evaluate(() => !document.getElementById('bootFail') && state === 'menu'), `${name} : le message disparaît si le jeu finit par démarrer`);
+    } else {
+      s.clear();
+      const nav = p.waitForEvent('load', { timeout: 5000 }).then(() => true, () => false);
+      await p.click('#bootFail');
+      S.ok(await nav, `${name} : toucher le message recharge la page`);
+      await waitMenu(p).catch(() => {});
+      S.eq(await st(p).catch(() => null), 'menu', `${name} : après correction, le rechargement démarre le jeu`);
+    }
+    await c.close(); await s.close();
+  }
+}
+
 (async () => {
   const b = await chromium.launch();
   try {
     if (want('smoke')) await smoke(b);
+    if (want('boot')) await boot(b);
+    if (want('offline')) await offline(b);
+    if (want('update')) await update(b);
+    if (want('guard')) await guard(b);
   } catch (e) { errors.push('harness: ' + (e && e.stack || e)); }
   await b.close();
   const fails = Object.entries(results).flatMap(([k, r]) => r.fails.map(f => `[${k}] ${f}`));

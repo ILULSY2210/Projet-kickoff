@@ -10,10 +10,12 @@
 <title>Orbita</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=B612:wght@400;700&family=B612+Mono:wght@400;700&display=swap">
 <style>
+/* polices hébergées avec le jeu (fonts/, licence OFL) : aucune ressource tierce au démarrage */
+@font-face{font-family:"B612";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/b612-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"B612";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/b612-latin-700-normal.woff2) format("woff2")}
+@font-face{font-family:"B612 Mono";font-style:normal;font-weight:400;font-display:swap;src:url(fonts/b612-mono-latin-400-normal.woff2) format("woff2")}
+@font-face{font-family:"B612 Mono";font-style:normal;font-weight:700;font-display:swap;src:url(fonts/b612-mono-latin-700-normal.woff2) format("woff2")}
 :root{
   --ink:#04070a;--ink2:#080d12;
   --c:#4dffa6;--rgb:77,255,166;--hi:#e6fff2;--acc:#ffd35c;--alert:#ff3b52;
@@ -140,11 +142,36 @@ svg.vt{display:block;overflow:visible;flex:none}
   .panel{gap:8px;padding-top:26px}
   .btn{height:42px}.btn.pri{height:50px}
 }
+/* ---------- garde-fou de démarrage ---------- */
+#bootFail{position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:24px;
+  background:#04070a;color:#4dffa6;font:12px/1.6 var(--mono);letter-spacing:.16em;text-transform:uppercase;text-align:center;cursor:pointer}
+#bootFail b{font-weight:400;color:#e6fff2;font-size:14px}
+#bootFail small{color:rgba(77,255,166,.6);font-size:10.5px}
+
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.001s!important;animation-delay:0s!important;transition:none!important}
   #logo .rim{animation:none}
 }
 </style>
+<script>
+/* Garde-fou de démarrage : si le jeu n'a pas démarré 4 s après l'ouverture, ou si une erreur survient avant
+   la fin du démarrage (script manquant, invalide ou d'une autre version), on affiche un message au lieu d'un écran noir. */
+(function () {
+  var shown = false;
+  function bootFail() {
+    if (shown || window.__orbitaBooted) return;
+    shown = true; window.__orbitaBootFailAt = performance.now();
+    var d = document.createElement('div');
+    d.id = 'bootFail'; d.setAttribute('role', 'alert');
+    d.innerHTML = '<b>Le jeu n\u2019a pas d\u00e9marr\u00e9</b><span>Touche pour recharger</span><small>Orbita</small>';
+    d.onclick = function () { location.reload(); };
+    (document.body || document.documentElement).appendChild(d);
+  }
+  window.__orbitaBootFail = bootFail;
+  addEventListener('error', function () { if (!window.__orbitaBooted) { window.__orbitaBootErr = true; bootFail(); } }, true);
+  setTimeout(function () { if (!window.__orbitaBooted) bootFail(); }, Math.max(0, 3900 - performance.now()));   // ≤ 4 s après l'ouverture
+})();
+</script>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -232,16 +259,16 @@ svg.vt{display:block;overflow:visible;flex:none}
   </div>
 </div>
 
-<script defer src="js/config.js"></script>
-<script defer src="js/util.js"></script>
-<script defer src="js/vector.js"></script>
-<script defer src="js/levels.js"></script>
-<script defer src="js/store.js"></script>
-<script defer src="js/core.js"></script>
-<script defer src="js/audio.js"></script>
-<script defer src="js/fx.js"></script>
-<script defer src="js/render.js"></script>
-<script defer src="js/ui.js"></script>
-<script defer src="js/main.js"></script>
+<script defer src="js/config.js?v=4"></script>
+<script defer src="js/util.js?v=4"></script>
+<script defer src="js/vector.js?v=4"></script>
+<script defer src="js/levels.js?v=4"></script>
+<script defer src="js/store.js?v=4"></script>
+<script defer src="js/core.js?v=4"></script>
+<script defer src="js/audio.js?v=4"></script>
+<script defer src="js/fx.js?v=4"></script>
+<script defer src="js/render.js?v=4"></script>
+<script defer src="js/ui.js?v=4"></script>
+<script defer src="js/main.js?v=4"></script>
 </body>
 </html>

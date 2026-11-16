@@ -23,6 +23,7 @@ function showMenu() {
   setVT($('mWorld'), PAL.name, 15, 2, SW * .5);
   setVT($('totalStars'), '★ ' + String(totalStars()).padStart(3, '0'), 15, 2);
   show('menu');
+  swApply();
 }
 function showLevels() {
   state = 'levels';
@@ -44,6 +45,7 @@ function showLevels() {
   btn('levelsBack', 'RETOUR', vsvg('<', 10, 1.5));
   show('levels');
   const cur = g.querySelector('.cur'); if (cur) cur.scrollIntoView({ block: 'center' });
+  swApply();
 }
 const winMsgs = ['Sans bavure.', 'Précision d’horloger.', 'Rien à redire.', 'Trajectoire parfaite.', 'Du grand art.'];
 function showWin() {
