@@ -111,6 +111,8 @@ function stick(a, f) {
   if (L.accel) { dyn.hits.push(t); lawVer++; }
   // demi-tour toutes les k aiguilles : programmé warn s après l'impact (annoncé par les chevrons et un tic)
   dyn.planted++;
+  // inversion à chaque aiguille : la rotation s'inverse dès l'impact (en FLIP_T s)
+  if (L.inv && left > 0) { dyn.flips.push(t); lawVer++; }
   if (L.demi && dyn.planted % L.demi.every === 0 && left > 0) { dyn.flips.push(t + L.demi.warn); lawVer++; bus.emit('flip:warn', t + L.demi.warn); }
   bus.emit('hit', s, idx);
   // frôlement : moins de 2 × GAP d'un voisin

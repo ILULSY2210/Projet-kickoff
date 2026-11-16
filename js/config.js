@@ -92,7 +92,7 @@ const TEACH_TEXT = {
 };
 // idées du générateur déjà réalisées (les autres arrivent chacune avec son commit ; d'ici là, leur niveau d'apprentissage
 // est un niveau ordinaire qui n'introduit rien)
-const IMPL = ['lancer', 'bloqueurs', 'etoiles', 'sens', 'accel', 'demitour', 'rythme', 'respiration', 'serre', 'zone', 'acoups', 'arrets', 'fentes',
+const IMPL = ['lancer', 'bloqueurs', 'etoiles', 'sens', 'accel', 'demitour', 'rythme', 'invImpact', 'respiration', 'serre', 'zone', 'acoups', 'arrets', 'fentes',
   'alternee', 'ressac', 'sentinelle', 'traversantes'];
 // Difficulté : tirs, obstacles fixes (en « équivalents aiguilles », capacité tirs + obstacles ≤ 14) et vitesse moyenne ω
 // (rad/s) au début et à la fin de chaque monde ; pos = progression dans un bloc de 10 (x1..x10 : respirations en x1-x2,

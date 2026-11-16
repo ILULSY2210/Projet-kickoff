@@ -54,7 +54,7 @@ function speedAt(t) {
   if (!L) return 0;
   let v = patSpeed(L.pattern, L.speed * L.dir, t);
   if (L.accel) v *= accelMult(t);
-  if (L.demi || L.rhythm) v *= flipSign(t);
+  if (L.demi || L.rhythm || L.inv) v *= flipSign(t);
   return v;
 }
 
@@ -100,7 +100,7 @@ function makeLevel(n) {
   const teach = teachOf(n), known = learnedAt(n), has = f => known.has(f);
   const inf = n > LAST_LEVEL;
   // --- recette : loi, sens, obstacles, intensité ---
-  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null, demi: null, rhythm: null };
+  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null, demi: null, rhythm: null, inv: false };
   R.N = Math.round(lerp(DW.throws[0], DW.throws[1], d)); R.F = lerp(DW.fixed[0], DW.fixed[1], d); R.omega = lerp(DW.speed[0], DW.speed[1], d);
   R.dir = has('sens') ? (r() < .5 ? 1 : -1) : 1;
   R.orbs = has('etoiles') ? (n < 11 ? 2 : 3) : 0;
@@ -128,6 +128,7 @@ function makeLevel(n) {
     if (teach === 'accel') { R.N = 5; R.accel = { k: .1, cap: 1.5 }; }
     if (teach === 'demitour') { R.N = 5; R.demi = { every: 2, warn: .9 }; }
     if (teach === 'rythme') { R.N = 5; R.rhythm = { P: 3, warn: .6 }; }
+    if (teach === 'invImpact') { R.N = 5; R.inv = true; }
   } else if (boss) {
     const B = BOSSES[bossArch(n)], tier = Math.min(wi, 5);
     R.N = B.throws[tier]; R.omega = B.speed[tier]; R.F = 0; R.orbs = has('etoiles') ? 3 : 0;
@@ -153,7 +154,8 @@ function makeLevel(n) {
     if (has('accel') && r() < (wi === 1 ? .55 : .25)) R.accel = { k: .03 + .04 * d, cap: 1.25 + .3 * d };
     // demi-tours annoncés : toutes les k aiguilles (19), au rythme (161) ; cœur de Saphir
     const pd = wi === 3 ? .4 : .2;
-    if (has('rythme') && r() < pd) R.rhythm = { P: 3.2 - .8 * d, warn: Math.max(.45, .7 - .2 * d) };
+    if (has('invImpact') && r() < (wi === 3 ? .3 : .12)) R.inv = true;
+    else if (has('rythme') && r() < pd) R.rhythm = { P: 3.2 - .8 * d, warn: Math.max(.45, .7 - .2 * d) };
     else if (has('demitour') && r() < pd) R.demi = { every: d < .5 ? 3 : 2, warn: Math.max(.45, .9 - .4 * d - .1 * wi) };
     if (has('traversantes') && r() < (wi >= 4 ? .3 : .15)) R.trav = true;
     // anti-salve (à partir du monde 2) : au moins deux moyens parmi zones larges, loi à arrêts ou inversions,
@@ -239,7 +241,7 @@ function makeLevel(n) {
   const blockers = pre.map(a => ({ a: norm(a), pre: true, k: 1 }));
   for (const wl of walls) for (const p of wallPoints(wl.a0, wl.a1 - wl.a0)) blockers.push({ a: norm(p), pre: true, wall: true, k: 1 });
   const lv = { n, w, boss, special, sp, teach, throws, pre, walls, orbs, sents, speed, omega, pattern: R.law, dir, phase, rot0, trav, vmax, d,
-    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, blockers };
+    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, blockers };
   lv.flags = levelFlags(lv);
   return lv;
 }
@@ -258,6 +260,7 @@ function levelFlags(lv) {
   if (lv.accel) f.push('accel');
   if (lv.demi) f.push('demitour');
   if (lv.rhythm) f.push('rythme');
+  if (lv.inv) f.push('invImpact');
   return f;
 }
 // arcs libres du bord : complément des zones interdites (±GAP autour de chaque bloqueur)

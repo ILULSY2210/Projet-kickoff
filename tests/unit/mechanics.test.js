@@ -90,6 +90,23 @@ const out = [];
     }
   }
 }
+// inversion à chaque aiguille
+{
+  const ns = levelsWith(L => L.inv, 6);
+  check(ns[0] === 171, `inversion à l'impact : premier niveau ${ns[0]}`);
+  out.push(predictionCheck('inversion à l\'impact', ns));
+  for (const n of ns.slice(0, 3)) {
+    G.startLevel(n); G.update(.6);
+    for (let k = 0; k < 3 && G.get('left') > 1; k++) {
+      while (!G.safe()) G.update(STEP);
+      G.throwPin(); const p0 = G.get('dyn').planted;
+      while (G.get('dyn').planted === p0 && G.get('state') === 'play') G.update(STEP);
+      const te = G.get('dyn').flips[G.get('dyn').flips.length - 1];
+      check(Math.sign(G.speedAt(te - .001)) === -Math.sign(G.speedAt(te + .081)) || Math.abs(G.speedAt(te - .001)) < .05, `inversion à l'impact, niveau ${n} : la rotation s'inverse à l'aiguille ${k + 1}`);
+      G.update(.2);
+    }
+  }
+}
 console.log(out.join('\n'));
 if (fails.length) { console.log('mechanics : ÉCHEC\n  ' + fails.slice(0, 20).join('\n  ')); process.exit(1); }
 console.log('mechanics : pass');
