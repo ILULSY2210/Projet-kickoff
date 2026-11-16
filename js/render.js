@@ -130,10 +130,10 @@ function syncMenu() {
 }
 const NONE = [];
 
-// compte-tours de l'accélération : les graduations du cadran s'allument (depuis le haut, dans le sens horaire) à mesure
+// compte-tours de l'accélération (à chaque aiguille, ou rampe avec le temps) : les graduations du cadran s'allument (depuis le haut, dans le sens horaire) à mesure
 // que l'astre accélère, jusqu'au plafond
 function drawTach(c, g) {
-  const A = L.accel, fr = clamp((accelMult(RV.t) - 1) / Math.max(1e-6, A.cap - 1), 0, 1), n = Math.round(fr * 72);
+  const A = L.accel, fr = A ? clamp((accelMult(RV.t) - 1) / Math.max(1e-6, A.cap - 1), 0, 1) : clamp((rampMult(RV.t) - 1) / L.ramp.k, 0, 1), n = Math.round(fr * 72);
   if (!n) return;
   c.globalAlpha = g ? .5 : .95; c.strokeStyle = col(PAL.acc, 1); c.lineWidth = g ? 3 : 1.6; c.lineCap = 'round'; c.beginPath();
   for (let i = 0; i < n; i++) {
@@ -363,7 +363,7 @@ function drawGame(c, g) {
   const S = GSC, rgb = PAL.rgb, hi = PAL.hi, lw = Math.max(1.3, R * .022);
   const sheet = state === 'won' || state === 'failed', moved = state === 'failed' && FV.k > 0;
   if (moved) { c.save(); failView(c); }
-  if (L.accel) drawTach(c, g);
+  if (L.accel || L.ramp) drawTach(c, g);
   if (!g) {
     drawDial(c, cx, cy, RD, rgb, 1);
     c.setLineDash([2, 6]); c.globalAlpha = .28; c.strokeStyle = col(rgb, 1); c.lineWidth = 1;

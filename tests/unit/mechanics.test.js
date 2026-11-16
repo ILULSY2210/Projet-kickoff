@@ -107,6 +107,16 @@ const out = [];
     }
   }
 }
+// rampe : × (1 + k) en T secondes, sans saut
+{
+  const ns = levelsWith(L => L.ramp, 6);
+  check(ns[0] === 71, `rampe : premier niveau ${ns[0]}`);
+  out.push(predictionCheck('rampe', ns));
+  for (const n of ns.slice(0, 3)) {
+    G.startLevel(n); const L = G.get('L'), m = x => G.run(`rampMult(${x})`);
+    check(m(L.phase) === 1 && Math.abs(m(L.phase + L.ramp.T) - (1 + L.ramp.k)) < 1e-12 && m(L.phase + L.ramp.T / 2) > 1, `rampe, niveau ${n} : de × 1 à × ${1 + L.ramp.k} en ${L.ramp.T} s`);
+  }
+}
 console.log(out.join('\n'));
 if (fails.length) { console.log('mechanics : ÉCHEC\n  ' + fails.slice(0, 20).join('\n  ')); process.exit(1); }
 console.log('mechanics : pass');
