@@ -130,6 +130,7 @@ function makeLevel(n) {
     if (teach === 'zone') { R.zones = [.45]; R.F = 2.2; }
     if (teach === 'fentes') { R.fentes = true; R.F = 4; }
     if (teach === 'sentinelle') R.sent = 1;
+    if (teach === 'sentinelles2') { R.sent = 2; R.N = 4; }
     if (teach === 'traversantes') { R.trav = true; R.N = 3; R.F = 1; }
     if (teach === 'accel') { R.N = 5; R.accel = { k: .1, cap: 1.5 }; }
     if (teach === 'demitour') { R.N = 5; R.demi = { every: 2, warn: .9 }; }
@@ -150,7 +151,7 @@ function makeLevel(n) {
     if (arch === 'forteresse' && tier === 1 && has('rampe')) R.ramp = { k: .5, T: 15 };
     if (arch === 'forteresse') { R.zones = tier === 1 ? [.3, .3, .3] : tier === 0 ? [.45, .45] : [.4, .4]; if (tier === 4 && has('sentinelle')) R.sent = 1; if (has('pulse')) R.pulse = [0, 0, 1, 1, 2, 3][tier]; if (tier === 3 && has('glisse')) R.glide = 1; }
     if (arch === 'anneaux') { R.F = 2; if (tier === 2) R.zones = [.4]; if (tier === 3 && has('alternee')) R.law = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
-    if (arch === 'chaos') { R.law = has('irreg') ? 6 : has('alternee') ? 2 : has('respiration') ? 1 : 0; R.irr = tier === 0 ? 2 : tier === 5 ? 4 : 3; R.F = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
+    if (arch === 'chaos') { R.law = has('irreg') ? 6 : has('alternee') ? 2 : has('respiration') ? 1 : 0; R.irr = tier === 0 ? 2 : tier === 5 ? 4 : 3; R.F = 2; if (tier >= 4 && has('sentinelle')) R.sent = has('sentinelles2') ? 2 : 1; }
     R.F += R.zones.length * 2;
   } else {
     R.law = pick(laws, lw);
@@ -161,7 +162,7 @@ function makeLevel(n) {
     const zp = !has('zone') ? 0 : wi === 0 ? .35 : wi === 2 ? .75 : .45;
     if (has('fentes') && r() < (wi === 2 ? .4 : .2)) R.fentes = true;
     else if (r() < zp) R.zones = r() < .3 && wi >= 1 ? [.35, .3] : [.35 + .2 * r()];
-    if (has('sentinelle') && r() < (wi >= 4 ? .55 : .2)) R.sent = 1;
+    if (has('sentinelle') && r() < (wi >= 4 ? .55 : .2)) R.sent = has('sentinelles2') && r() < (wi >= 4 ? .4 : .2) ? 2 : 1;
     // accélération à chaque aiguille : idée d'Émeraude (9), cœur d'Ambre
     if (has('accel') && r() < (wi === 1 ? .55 : .25)) R.accel = { k: .03 + .04 * d, cap: 1.25 + .3 * d };
     // zones pulsées (111) : cœur de Rubis
@@ -261,7 +262,8 @@ function makeLevel(n) {
   }
   // --- sentinelles : arcs en orbite extérieure, à contre-sens de l'astre ---
   const sents = [];
-  if (R.sent) { const a0 = r() * TAU, ws = -dir * (.65 + .3 * r()) * (1 + .25 * d), hw = .2 + .08 * d; for (let i = 0; i < R.sent; i++) sents.push({ a0: a0 + i * Math.PI, w: ws, hw }); }
+  // deux sentinelles (221) : en sens opposés, la seconde un peu plus lente
+  if (R.sent) { const a0 = r() * TAU, ws = -dir * (.65 + .3 * r()) * (1 + .25 * d), hw = .2 + .08 * d; for (let i = 0; i < R.sent; i++) sents.push({ a0: a0 + i * Math.PI, w: i ? Math.round(-ws * (.75 + .2 * r()) * 1e6) / 1e6 : ws, hw }); }
   // --- orientation de départ (anti-salve) : le plus gros obstacle passe sous le pas de tir 0,2 à 1,5 s après le départ ---
   let rot0 = 0;
   if (occ.length) {
@@ -295,6 +297,7 @@ function levelFlags(lv) {
   if (lv.walls.length) f.push('zone');
   if (lv.fentes) f.push('fentes');
   if (lv.sents.length) f.push('sentinelle');
+  if (lv.sents.length > 1) f.push('sentinelles2');
   if (lv.trav) f.push('traversantes');
   if (lv.accel) f.push('accel');
   if (lv.demi) f.push('demitour');

@@ -159,6 +159,13 @@ function zoneCheck(name, kind, first) {
 }
 zoneCheck('zones pulsées', 'pulse', 111);
 zoneCheck('zones glissantes', 'glide', 121);
+// deux sentinelles en sens opposés
+{
+  const ns = levelsWith(L => L.sents.length > 1, 6);
+  check(ns[0] === 221, `deux sentinelles : premier niveau ${ns[0]}`);
+  for (const n of ns) { const q = mk(n).sents; check(Math.sign(q[0].w) === -Math.sign(q[1].w), `deux sentinelles, niveau ${n} : sens opposés`); }
+  out.push(predictionCheck('deux sentinelles', ns));
+}
 console.log(out.join('\n'));
 if (fails.length) { console.log('mechanics : ÉCHEC\n  ' + fails.slice(0, 20).join('\n  ')); process.exit(1); }
 console.log('mechanics : pass');
