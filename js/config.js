@@ -19,19 +19,37 @@ const HEAD_REF = .04833, SENT_PAD_HEAD = .08078;
 const COUNTDOWN = .6;
 // échec : feuille à 0,45 s (taps ignorés avant) ; après une relance par tap, tirs ignorés 0,25 s ; cause rappelée 1,2 s
 const FAIL_SHEET = .45, RETRY_LOCK = .25, RECALL = 1.2;
-const ALERT = [255, 59, 82], INK = '#04070a';
+const INK = '#04070a', INK_RGB = [4, 7, 10];
 
-/* ---------- mondes ---------- */
+/* ---------- structure : 6 mondes de 50 niveaux (1..300), puis COSMOS ∞ (301 et suivants) ---------- */
+const GEN_VERSION = 2, SAVE_VERSION = 2, LEVELS_PER_WORLD = 50, BOSS_EVERY = 10, LAST_LEVEL = 300, MAX_UNLOCK = 100000;
+// Chaque monde fixe 4 couleurs : trait principal (rgb), blanc chaud (hi : aiguilles, chiffres), accent (acc : étoiles,
+// FRÔLÉ) et alerte (collision) ; son solide, sa gamme, et son ambiance (amb : lueur du fond, trame, rémanence du phosphore).
+// Obsidienne : #b48cff, ou #9a6bff au choix du porteur du projet (planche docs/reference/obsidienne-violets.png).
 const WORLDS = [
-  { name: 'ÉMERAUDE', rgb: [77, 255, 166], hi: [230, 255, 242], acc: [255, 211, 92], root: 62, scale: [0, 2, 4, 7, 9], rule: 'UN TIR, UNE AIGUILLE' },
-  { name: 'AMBRE', rgb: [255, 178, 62], hi: [255, 244, 222], acc: [159, 232, 255], root: 57, scale: [0, 3, 5, 7, 10], rule: 'LA ROTATION S’INVERSE' },
-  { name: 'GIVRE', rgb: [127, 212, 255], hi: [236, 249, 255], acc: [255, 207, 122], root: 60, scale: [0, 2, 4, 6, 7, 9, 11], rule: 'ARC PLEIN = ZONE INTERDITE' },
-  { name: 'BRAISE', rgb: [255, 122, 80], hi: [255, 238, 228], acc: [255, 233, 163], root: 52, scale: [0, 1, 4, 5, 7, 8, 10], rule: 'ROTATION PAS À PAS' },
-  { name: 'IRIS', rgb: [180, 155, 255], hi: [241, 236, 255], acc: [157, 255, 208], root: 55, scale: [0, 2, 3, 5, 7, 9, 10], rule: 'SENTINELLE EN ORBITE' },
-  { name: 'SOUFRE', rgb: [226, 248, 74], hi: [250, 255, 224], acc: [217, 204, 255], root: 58, scale: [0, 2, 4, 6, 8, 10], rule: 'AIGUILLES TRAVERSANTES' },
-  { name: 'OPALE', rgb: [222, 240, 232], hi: [255, 255, 255], acc: [255, 200, 97], root: 65, scale: [0, 2, 4, 7, 9], rule: 'ARCS ET SENTINELLES' },
-  { name: 'COBALT', rgb: [104, 148, 255], hi: [230, 237, 255], acc: [255, 217, 138], root: 57, scale: [0, 2, 3, 7, 8], rule: 'TOUT À LA FOIS' }
+  { id: 'emeraude', name: 'ÉMERAUDE', theme: 'DÉCOUVERTE', rgb: [77, 255, 166], hi: [230, 255, 242], acc: [255, 211, 92], alert: [255, 59, 82],
+    solid: 'ico', root: 62, scale: [0, 2, 4, 7, 9], amb: { glow: .1, grid: .2, decay: .042 } },
+  { id: 'ambre', name: 'AMBRE', theme: 'ACCÉLÉRATION', rgb: [255, 178, 62], hi: [255, 244, 222], acc: [159, 232, 255], alert: [255, 59, 82],
+    solid: 'saturne', root: 57, scale: [0, 3, 5, 7, 10], amb: { glow: .1, grid: .2, decay: .042 } },
+  { id: 'rubis', name: 'RUBIS', theme: 'PRÉCISION', rgb: [255, 79, 106], hi: [255, 238, 241], acc: [255, 211, 92], alert: [95, 243, 255],
+    solid: 'cristal', root: 60, scale: [0, 2, 3, 5, 7, 8, 10], amb: { glow: .09, grid: .2, decay: .042 } },
+  { id: 'saphir', name: 'SAPHIR', theme: 'ROTATIONS INVERSÉES', rgb: [74, 168, 255], hi: [234, 245, 255], acc: [255, 207, 122], alert: [255, 59, 82],
+    solid: 'dodeca', root: 55, scale: [0, 2, 4, 6, 7, 9, 11], amb: { glow: .1, grid: .2, decay: .042 } },
+  { id: 'obsidienne', name: 'OBSIDIENNE', theme: 'DIFFICULTÉ ÉLEVÉE', rgb: [180, 140, 255], hi: [241, 236, 255], acc: [157, 255, 208], alert: [255, 59, 82],
+    solid: 'tesseract', root: 52, scale: [0, 1, 3, 5, 7, 8, 10], amb: { glow: .05, grid: .12, decay: .032 } },
+  { id: 'cosmos', name: 'COSMOS', theme: 'DÉFIS EXTRÊMES', rgb: [223, 243, 255], hi: [255, 255, 255], acc: [255, 92, 207], alert: [255, 59, 82],
+    solid: 'armille', root: 58, scale: [0, 2, 4, 6, 8, 10], amb: { glow: .08, grid: .16, decay: .042 } }
 ];
+// variante d'Obsidienne soumise au choix du porteur (même ambiance, violet plus sombre)
+const OBSIDIENNE_ALT = [154, 107, 255];
+// COSMOS ∞ : palette de Cosmos, sans fin
+const ENDLESS = { name: 'COSMOS ∞', theme: 'SANS FIN' };
+// niveaux d'apprentissage : chacun introduit une seule idée nouvelle (plan, 5.3) ; leur bandeau reste relisible
+const TEACH = { 1: 'lancer', 2: 'bloqueurs', 3: 'etoiles', 4: 'sens', 6: 'parfait', 7: 'pluie', 8: 'combo', 9: 'accel',
+  11: 'respiration', 17: 'chrono', 19: 'demitour', 21: 'serre', 27: 'parfaitSp', 29: 'zone', 39: 'anneau', 49: 'irreg',
+  51: 'acoups', 61: 'arrets', 71: 'rampe', 81: 'anneaux2', 101: 'fentes', 111: 'pulse', 121: 'glisse',
+  151: 'alternee', 161: 'rythme', 171: 'invImpact', 181: 'ressac', 201: 'sentinelle', 211: 'traversantes', 221: 'sentinelles2',
+  251: 'anneaux3', 261: 'portesPulsees' };
 const SOLIDS = ['ico', 'saturne', 'cristal', 'tesseract', 'dodeca', 'stella', 'armille', 'cubocta'];
 const ROMAN = ['', ' II', ' III', ' IV', ' V', ' VI', ' VII', ' VIII', ' IX', ' X'];
 

@@ -3,6 +3,8 @@
 // Sections :
 //   smoke : chaque bouton visible de chaque écran est cliqué, Espace / Entrée / P / Échap dans chaque état,
 //           son basculé, case de niveau, visibilitychange ; 0 erreur console ou page et état attendu après chaque action.
+//   migration : vraies clés de la version 1 posées avant le chargement : unlocked 150 → 150, aucune étoile, legacyStars =
+//           ancien total, CONTINUER → niveau 1 ; valeurs corrompues (v1 et v2) sans erreur.
 //   boot  : démarrage avec les domaines Google bloqués : state défini en < 1 s, aucune requête tierce, polices locales.
 //   offline : second chargement sans réseau (service worker) en < 1 s.
 //   update  : une nouvelle VERSION du service worker ne s'applique qu'au menu, jamais pendant un niveau.
@@ -102,11 +104,23 @@ async function smoke(b) {
   const snd0 = await p.evaluate(() => soundOn);
   await click('#soundBtn', 'menu', 'SON (1)');
   S.eq(await p.evaluate(() => soundOn), !snd0, 'SON basculé');
-  S.eq(await p.evaluate(() => JSON.parse(localStorage.getItem('orbita_sound'))), !snd0, 'SON sauvegardé');
+  S.eq(await p.evaluate(() => JSON.parse(localStorage.getItem('orbita_save')).settings.sfx), !snd0, 'SON sauvegardé');
   await click('#soundBtn', 'menu', 'SON (2)');
   S.eq(await p.evaluate(() => soundOn), snd0, 'SON rebasculé');
   await click('#levelsBtn', 'levels', 'NIVEAUX');
   await look('levels');
+  // sections repliables : un clic sur l'en-tête d'un monde le déplie (et replie l'autre), un second clic le replie
+  const sec = () => p.evaluate(() => [...document.querySelectorAll('.ws')].map(x => x.classList.contains('open') ? 1 : 0).join(''));
+  S.eq(await sec(), '100000', 'NIVEAUX : seule la section du monde en cours est dépliée');
+  tested.add('wsh');
+  await p.click('.wsh[data-w="1"]'); await p.waitForTimeout(60);
+  S.eq(await sec(), '010000', 'en-tête AMBRE → section dépliée, ÉMERAUDE repliée');
+  S.eq(await p.evaluate(() => document.querySelectorAll('.ws.open .lv').length), 50, 'section dépliée : 50 cases');
+  await p.click('.wsh[data-w="1"]'); await p.waitForTimeout(60);
+  S.eq(await sec(), '000000', 'second clic → section repliée');
+  await p.click('.wsh[data-w="0"]'); await p.waitForTimeout(60);
+  S.eq(await sec(), '100000', 'en-tête ÉMERAUDE → section dépliée');
+  S.eq(await st(p), 'levels', 'en-têtes de section : on reste sur NIVEAUX');
   await click('#levelsBack', 'menu', 'RETOUR');
   await click('#levelsBtn', 'levels', 'NIVEAUX (2)');
   await click('.lv[data-n="1"]', 'play', 'case niveau 1');
@@ -200,6 +214,41 @@ const swActivated = p => p.evaluate(async () => {
   if (r.active.state !== 'activated') await new Promise(res => r.active.addEventListener('statechange', () => r.active.state === 'activated' && res()));
   return r.active.state;
 });
+
+// vraies clés de la version 1 posées avant le chargement : migration, CONTINUER, valeurs corrompues
+async function migration(b) {
+  const S = section('migration');
+  const cases = [
+    ['v1 à 150', { orbita_unlocked: '150', orbita_stars: JSON.stringify({ 1: 3, 2: 2, 3: 3, 10: 1, 149: 2 }), orbita_sound: 'true' }],
+    ['v1 corrompue', { orbita_unlocked: '"abc"', orbita_stars: '{', orbita_sound: '"oui"' }],
+    ['v2 corrompue', { orbita_save: '{"v":2,"progress":{"unlocked":1e9},"levels":[1,2],"settings":5}' }]
+  ];
+  for (const [name, init] of cases) {
+    const c = await b.newContext({ ...devices['iPhone 13'] });
+    await c.addInitScript(kv => { if (!sessionStorage.getItem('__init')) { sessionStorage.setItem('__init', 1); for (const k in kv) localStorage.setItem(k, kv[k]); } }, init);
+    const p = await c.newPage(); hook(p, 'migration-' + name);
+    await p.goto(URL);
+    await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+    const r = await p.evaluate(() => ({ unlocked, stars: Object.keys(bestStars).length, legacy: SAVE.legacyStars, go: continueLevel(), saved: JSON.parse(localStorage.getItem('orbita_save') || 'null') }));
+    if (name === 'v1 à 150') {
+      S.eq(r.unlocked, 150, `${name} : unlocked`);
+      S.eq(r.stars, 0, `${name} : aucune étoile attribuée`);
+      S.eq(r.legacy, 11, `${name} : legacyStars = ancien total`);
+      S.ok(r.saved && r.saved.v === 2 && r.saved.progress.unlocked === 150, `${name} : sauvegarde v2 écrite`);
+      await p.click('#playBtn'); await p.waitForTimeout(80);
+      S.eq(await p.evaluate(() => state + '/' + L.n), 'play/1', `${name} : CONTINUER → niveau 1 (premier niveau d'apprentissage non fini)`);
+      await p.evaluate(() => showLevels()); await p.waitForTimeout(80);
+      S.eq(await p.evaluate(() => document.querySelectorAll('.lv:not([disabled])').length), 50, `${name} : grille ouverte (section Émeraude : 50 cases jouables)`);
+      S.ok(/★ 11/.test(await p.evaluate(() => $('legacy').textContent)), `${name} : ancien total affiché sur NIVEAUX`);
+      await p.screenshot({ path: path.join(OUT, 'migration-niveaux.png') });
+    } else {
+      S.ok(r.unlocked >= 1 && r.unlocked <= 100000 && Number.isInteger(r.unlocked), `${name} : unlocked valide (${r.unlocked})`);
+      await p.click('#playBtn'); await p.waitForTimeout(80);
+      S.eq(await st(p), 'play', `${name} : on joue`);
+    }
+    await c.close();
+  }
+}
 
 async function boot(b) {
   const S = section('boot');
@@ -484,7 +533,7 @@ async function reprendre(b) {
   const p2 = await c2.newPage(); hook(p2, 'reprendre-320');
   await p2.goto(URL);
   await p2.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
-  for (const [n, wait] of [[11, 1500], [15, 700], [36, 1500]]) {
+  for (const [n, wait] of [[51, 1500], [15, 700], [101, 1500]]) {
     await p2.evaluate(n => { soundOn = false; showMenu(); startLevel(n); }, n);
     await p2.waitForTimeout(wait);
     await p2.evaluate(() => {
@@ -621,6 +670,7 @@ async function echec(b) {
   const b = await chromium.launch();
   try {
     if (want('smoke')) await smoke(b);
+    if (want('migration')) await migration(b);
     if (want('boot')) await boot(b);
     if (want('offline')) await offline(b);
     if (want('update')) await update(b);

@@ -1,8 +1,14 @@
 // ORBITA · levels.js — mondes, lois de rotation, générateur de niveaux et arcs libres.
+// monde d'un niveau : 0..5 pour les niveaux 1..300 (50 par monde), 6 = COSMOS ∞ (301 et suivants)
+function worldOf(n) { n = Math.max(1, n | 0); return n > LAST_LEVEL ? WORLDS.length : Math.floor((n - 1) / LEVELS_PER_WORLD); }
+const isBoss = n => n % BOSS_EVERY === 0;
+const isSpecial = n => n % 10 === 7;
+const firstOfWorld = w => w * LEVELS_PER_WORLD + 1;
+// palette, nom et thème d'un monde (COSMOS ∞ reprend la palette de Cosmos) ; lab = opacité des libellés secondaires
 function worldInfo(w) {
-  const wi = w % WORLDS.length, cyc = Math.floor(w / WORLDS.length), b = WORLDS[wi];
-  return { w, wi, cyc, name: b.name + (ROMAN[cyc] !== undefined ? ROMAN[cyc] : ' ' + (cyc + 1)), solid: SOLIDS[(wi + cyc * 3) % SOLIDS.length],
-    rgb: b.rgb, hi: b.hi, acc: b.acc, root: b.root, scale: b.scale, rule: cyc ? 'TOUT SE MÉLANGE' : b.rule };
+  const inf = w >= WORLDS.length, b = WORLDS[inf ? WORLDS.length - 1 : Math.max(0, w)];
+  return { w, id: inf ? 'infini' : b.id, name: inf ? ENDLESS.name : b.name, theme: inf ? ENDLESS.theme : b.theme, solid: b.solid,
+    rgb: b.rgb, hi: b.hi, acc: b.acc, alert: b.alert, root: b.root, scale: b.scale, amb: b.amb, lab: labelAlpha(b.rgb, b.amb.glow, .65) };
 }
 
 /* ---------- niveaux ---------- */
@@ -28,7 +34,8 @@ function unionMeasure(angles, half) {
 function makeLevel(n) {
   n = Math.max(1, n | 0);
   const r = rng(n * 7919 + 17);
-  const w = Math.floor((n - 1) / 5), pos = (n - 1) % 5, boss = pos === 4, wd = worldInfo(w);
+  // recette de la version 1 (5 niveaux par ancien monde, 8 anciens mondes puis cycles) ; le monde affiché est le nouveau
+  const ow = Math.floor((n - 1) / 5), pos = (n - 1) % 5, boss = pos === 4, wd = { wi: ow % 8, cyc: Math.floor(ow / 8) };
   // difficulté : monte en douceur, plafonne, respire après chaque boss
   const d = clamp(1 - Math.exp(-(n - 1) / 26) + [-.12, -.04, .01, .05, .1][pos], 0, 1);
   let pat, mix, lay, sentN, trav;
@@ -99,7 +106,7 @@ function makeLevel(n) {
   const sents = [];
   if (sentN) { const a0 = r() * TAU, ws = -dir * (.65 + .3 * r()), hw = .2 + .08 * d; for (let i = 0; i < sentN; i++) sents.push({ a0: a0 + i * Math.PI, w: ws, hw }); }
   let vmax = .1; for (let i = 0; i < 160; i++) vmax = Math.max(vmax, Math.abs(patSpeed(pat, speed, i * .1)));
-  return { n, w, wi: wd.wi, cyc: wd.cyc, pos, boss, wd, throws, pre, walls, orbs, sents, speed, pattern: pat, dir, phase, trav: !!trav, vmax, d, tau,
+  return { n, w: worldOf(n), boss: isBoss(n), special: isSpecial(n), throws, pre, walls, orbs, sents, speed, pattern: pat, dir, phase, trav: !!trav, vmax, d, tau,
     blockers: (() => { const b = pre.map(a => ({ a: norm(a), pre: true, k: 1 })); for (const wl of walls) { const A = wl.a1 - wl.a0, k = Math.ceil(A / (GAP * 1.9)); for (let i = 0; i <= k; i++) b.push({ a: norm(wl.a0 + A * i / k), pre: true, wall: true, k: 1 }); } return b; })() };
 }
 function speedAt(t) { return L ? patSpeed(L.pattern, L.speed * L.dir, t) : 0; }

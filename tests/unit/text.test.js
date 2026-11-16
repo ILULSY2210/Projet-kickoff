@@ -57,7 +57,7 @@ check(/Espace : tirer · P : pause/.test(fs.readFileSync(path.join(ROOT, 'inde
       startLevel(n);
       o.sent = failCause({ kind: 'sent', a: 0, d: 0, who: L.sents[0] }, L);
       // tous les textes du canevas : glyphes de la police vectorielle
-      const canvas = [...o.pat, ...WORLDS.map(w => w.name), ...WORLDS.map(w => w.rule), 'TOUT SE MÉLANGE',
+      const canvas = [...o.pat, ...WORLDS.map(w => w.name), ...WORLDS.map(w => w.theme), ENDLESS.name, ENDLESS.theme, 'MONDE ∞',
         ...Object.values(FAIL_TEXT).map(x => x.short.replace('{d}', '12')),
         'TOUCHE L’ÉCRAN POUR TIRER', 'CLIC OU ESPACE POUR TIRER', 'ARC ALLUMÉ = ZONE LIBRE',
         'NIVEAU', 'BOSS', 'AIGUILLES', 'ROTATION', 'BONUS', 'MONDE 01', 'FRÔLÉ · 3°', '★ 2/3', 'NIVEAU 10 · ROTATION ALTERNÉE'];

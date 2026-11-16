@@ -25,6 +25,7 @@ node tests/play.js               # gameplay accéléré dans la vraie page (~20 
 node tests/perf.js               # régularité, charge, latence (~20 s)
 node tests/lib/serve.js 8080     # sert le jeu en http (le service worker y fonctionne sur localhost)
 node tests/sim/agree.js          # accord du simulateur Node avec la vraie page (~30 s)
+node tests/palettes.js           # planche des 6 palettes et des deux violets d'Obsidienne (docs/reference/)
 ```
 
 ## Simulateur (`tests/sim/`)
@@ -48,8 +49,11 @@ mêmes que `__botSafe`.
 | `tests/unit/timing.test.js` | — | intégration par trapèzes à 0,002 rad d'une référence après 30 s, pour chaque loi de rotation ; même journal de tirs (au début d'un pas ou au milieu, par `throwPin(tSim)`) → mêmes issues et angles à 1e-9 près à 30, 60, 90, 120 et 144 Hz ; interception par la tête d'une sentinelle au même instant (1e-9) quel que soit le découpage en pas |
 | `tests/unit/input.test.js` | — | horodatage des taps (`tapInstant`) : bornes, garde « depuis 1970 », événement en retard |
 | `tests/unit/geometry.test.js` | — | collision = dessin sur 5 écrans : rayon des têtes = GAP × (R + PL) / 2, règle et dessin d'accord à GAP ± 0,002 rad, sentinelles (tige, et tête en vol : aucun recouvrement dessiné sans interception, ≤ 0,1 px en 390×844 et ≤ 2 px ailleurs) ; captures dans `tests/out/geometry/` |
+| `tests/unit/config.test.js` | — | structure 6 × 50 + COSMOS ∞, boss et spéciaux, palettes (trait, libellés ≥ 4,5:1, blanc chaud, alerte), positions u, `TEACH` (Node) |
+| `tests/unit/save.test.js` | — | sauvegarde v2 et migration de la version 1 (unlocked 150 → 150, aucune étoile, `legacyStars`, CONTINUER → niveau 1), valeurs corrompues sans exception (Node, localStorage simulé) |
 | `tests/unit/text.test.js` | — | messages d'échec par cause (zone interdite, degrés exacts au bord d'un arc), accords, glyphes de la police vectorielle |
 | `tests/ui.js` | `smoke` | chaque bouton visible de chaque écran, Espace/Entrée/P/Échap dans chaque état, son, case de niveau, `visibilitychange` |
+| | `migration` | vraies clés v1 posées avant le chargement : migration, CONTINUER → niveau 1, grille ouverte, valeurs corrompues sans erreur |
 | | `boot`, `offline`, `update`, `guard` | démarrage sans réseau tiers, hors ligne, mise à jour au menu seulement, garde-fou de démarrage |
 | | `ecrans` | 5 écrans : vol 60 ± 1 ms, même journal → mêmes angles à 1e-9, croisements dessinés à ± 1 ms (pointe, tête, centre de la tête) |
 | | `tir` | taps à phase aléatoire : départ à l'instant du tap, jamais dans le passé |

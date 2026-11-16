@@ -32,11 +32,16 @@ async function dump(html) {
   return out;
 }
 
+// étape 2 (structure 6 × 50) : le monde, la position, le statut de boss et la fiche du monde d'un niveau changent ;
+// son contenu (aiguilles, obstacles, vitesse, loi, étoiles…) est comparé sans ces champs
+const META = ['w', 'wi', 'cyc', 'pos', 'boss', 'wd', 'special'];
+const strip = o => { if (o) for (const k of META) delete o[k]; return o; };
 function compare(cur, ref, strict) {
   const diffs = [];
   for (let i = 0; i < ref.levels.length; i++) {
     if (cur.levels[i] === ref.levels[i]) continue;
-    const a = JSON.parse(cur.levels[i] || 'null'), r = JSON.parse(ref.levels[i]);
+    const a = strip(JSON.parse(cur.levels[i] || 'null')), r = strip(JSON.parse(ref.levels[i]));
+    if (JSON.stringify(a) === JSON.stringify(r)) continue;
     if (!strict && a && r.trav && a.trav) {
       delete a.orbs; delete r.orbs;
       if (JSON.stringify(a) === JSON.stringify(r)) continue;

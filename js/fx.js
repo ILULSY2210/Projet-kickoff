@@ -60,7 +60,7 @@ function bindFx() {
     seg(cx, yT + PL * .25, HPI, PL * .5, -s1 * (80 + Math.random() * 80), 190, -s1 * 9, .7, PAL.hi);
     const fa = info.a + rot, fr = R + PL;
     const fx = kind === 'sent' ? cx : cx + Math.cos(fa) * fr, fy = kind === 'sent' ? cy + RS : cy + Math.sin(fa) * fr;
-    spark(fx, fy, 16, ALERT, 240); ringFx(fx, fy, HEAD, 150, .45, ALERT, 2);
+    spark(fx, fy, 16, PAL.alert, 240); ringFx(fx, fy, HEAD, 150, .45, PAL.alert, 2);
     shake = rm() ? 0 : 9;
     vib([30, 40, 90]);
   });

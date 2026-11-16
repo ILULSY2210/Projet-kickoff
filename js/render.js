@@ -16,6 +16,7 @@ function setTheme(w) {
   PAL = worldInfo(w);
   const s = document.documentElement.style;
   s.setProperty('--c', `rgb(${PAL.rgb})`); s.setProperty('--rgb', PAL.rgb.join(',')); s.setProperty('--hi', `rgb(${PAL.hi})`); s.setProperty('--acc', `rgb(${PAL.acc})`);
+  s.setProperty('--alert', `rgb(${PAL.alert})`); s.setProperty('--alert-rgb', PAL.alert.join(',')); s.setProperty('--lab', PAL.lab);
 }
 
 function layout() {
@@ -70,10 +71,11 @@ function buildBg(fx, fy) {
   const b = bg.getContext('2d'), rgb = PAL.rgb; b.setTransform(DPR, 0, 0, DPR, 0, 0);
   b.fillStyle = INK; b.fillRect(0, 0, W, H);
   let g = b.createRadialGradient(fx, fy, 0, fx, fy, Math.max(W, H) * .62);
-  g.addColorStop(0, col(rgb, .1)); g.addColorStop(.4, col(rgb, .035)); g.addColorStop(1, col(rgb, 0));
+  const am = PAL.amb;
+  g.addColorStop(0, col(rgb, am.glow)); g.addColorStop(.4, col(rgb, am.glow * .35)); g.addColorStop(1, col(rgb, 0));
   b.fillStyle = g; b.fillRect(0, 0, W, H);
   // trame de points, alignée sur le centre de visée
-  const P = 22; b.fillStyle = col(rgb, .2);
+  const P = 22; b.fillStyle = col(rgb, am.grid);
   for (let y = fy % P; y < H; y += P) for (let x = fx % P; x < W; x += P) {
     const inS = x > SX - 1 && x < SX + SW + 1; b.globalAlpha = inS ? 1 : .45; b.fillRect(x - .5, y - .5, 1, 1);
   }
@@ -233,10 +235,10 @@ function drawBody(c, g, S) {
     for (const q of S.sents) {
       const sa = q.a0 + q.w * S.st, hot = failInfo && failInfo.sent === q;
       c.beginPath(); c.arc(x, y, S.rs, sa - q.hw, sa + q.hw);
-      c.strokeStyle = hot ? col(ALERT, 1) : HI; c.lineWidth = SENT_HW * 2;
+      c.strokeStyle = hot ? col(PAL.alert, 1) : HI; c.lineWidth = SENT_HW * 2;
       if (g) { c.globalAlpha = .4 * B; c.stroke(); continue; }
       c.globalAlpha = B; c.stroke(); c.strokeStyle = INK; c.lineWidth = SENT_HW * 2 - lw * 2.2; c.stroke();
-      c.globalAlpha = .28 * B; c.strokeStyle = hot ? col(ALERT, 1) : HI; c.stroke();
+      c.globalAlpha = .28 * B; c.strokeStyle = hot ? col(PAL.alert, 1) : HI; c.stroke();
     }
   }
   c.globalAlpha = 1;
@@ -379,7 +381,7 @@ function drawGame(c, g) {
     drawHeads(c, g, S);
     // collision : croix d'alerte
     if (failInfo && (state === 'dying' || state === 'failed' || state === 'pause')) {
-      const A = col(ALERT, 1); let fx, fy;
+      const A = col(PAL.alert, 1); let fx, fy;
       if (failInfo.kind === 'sent') { fx = cx; fy = cy + RS; }
       else { const fa = failInfo.a + S.rot; fx = S.x + Math.cos(fa) * (R + PL); fy = S.y + Math.sin(fa) * (R + PL); }
       const who = failInfo.who, q = HEAD * 1.9, bl = rm() ? 1 : .65 + .35 * Math.sin(time * 14);
@@ -428,13 +430,13 @@ function drawHud(c, g, sheet) {
   if (!g) {
     c.globalAlpha = 1;
     if (L.boss) { c.fillStyle = col(hi, 1); c.fillRect(x0 - 1, top + 4, vwidth('BOSS', 7) + 8, 11); vtext(c, 'BOSS', x0 + 3, top + 6, 7, 0, INK, 1.3); }
-    else vtext(c, 'NIVEAU', x0, top + 6, 7, 0, col(rgb, .65), 1.1);
+    else vtext(c, 'NIVEAU', x0, top + 6, 7, 0, col(rgb, PAL.lab), 1.1);
     vtext(c, PAL.name, x0 + nw + 12, top + 20, 8, 0, col(rgb, .95), 1.25);
-    vtext(c, 'ROTATION ' + PAT_NAME[L.pattern], x0 + nw + 12, top + 34, 6, 0, col(rgb, .55), 1);
+    vtext(c, 'ROTATION ' + PAT_NAME[L.pattern], x0 + nw + 12, top + 34, 6, 0, col(rgb, PAL.lab), 1);
   }
   // --- étoiles bonus ---
   const on = L.orbs.length;
-  if (!g) vtext(c, 'BONUS', xr, top + 6, 7, 1, col(rgb, .65), 1.1);
+  if (!g) vtext(c, 'BONUS', xr, top + 6, 7, 1, col(rgb, PAL.lab), 1.1);
   for (let i = 0; i < on; i++) {
     const sx = xr - 9 - (on - 1 - i) * 24, sy = top + 30, got = i < orbHits, fl = got && i === orbHits - 1 ? starFlash : 0, rr = 9 * (1 + fl * .5);
     c.beginPath(); starPath(c, sx, sy, rr, rr * .42, -HPI, 5); c.closePath();
@@ -446,7 +448,7 @@ function drawHud(c, g, sheet) {
   if (sheet) return;
   // --- bas gauche : aiguilles restantes ---
   const py = LAUNCH + 4, xl = SX + 18;
-  if (!g) vtext(c, 'AIGUILLES', xl, py, 7, 0, col(rgb, .65), 1.1);
+  if (!g) vtext(c, 'AIGUILLES', xl, py, 7, 0, col(rgb, PAL.lab), 1.1);
   c.globalAlpha = g ? .4 : 1; vtext(c, pad2(left), xl, py + 14, 22, 0, col(g ? rgb : hi, 1), g ? 5 : 2.4); c.globalAlpha = 1;
   if (!g) {
     const n = L.throws, stp = Math.min(9, (cx - 30 - xl) / n);
@@ -462,14 +464,14 @@ function drawHud(c, g, sheet) {
   // --- bas droite : jauge ROTATION, la vitesse de rotation passée et À VENIR ---
   const sw = Math.min(136, SW / 2 - 46), sx = xr - sw, sy = py + 14, sh = 38, mid = sy + sh / 2, T0 = -.45, T1 = 1.75, xn = sx + sw * (-T0) / (T1 - T0);
   if (!g) {
-    vtext(c, 'ROTATION', sx, py, 7, 0, col(rgb, .65), 1.1);
+    vtext(c, 'ROTATION', sx, py, 7, 0, col(rgb, PAL.lab), 1.1);
     c.strokeStyle = col(rgb, 1); c.lineWidth = 1;
     c.globalAlpha = .5; c.beginPath();
     c.moveTo(sx, sy + 5); c.lineTo(sx, sy); c.lineTo(sx + 5, sy); c.moveTo(sx + sw - 5, sy); c.lineTo(sx + sw, sy); c.lineTo(sx + sw, sy + 5);
     c.moveTo(sx + sw, sy + sh - 5); c.lineTo(sx + sw, sy + sh); c.lineTo(sx + sw - 5, sy + sh); c.moveTo(sx + 5, sy + sh); c.lineTo(sx, sy + sh); c.lineTo(sx, sy + sh - 5); c.stroke();
     c.globalAlpha = .3; c.setLineDash([1.5, 4]); c.beginPath(); c.moveTo(sx + 2, mid); c.lineTo(sx + sw - 2, mid); c.stroke(); c.setLineDash([]);
     c.globalAlpha = .7; c.beginPath(); c.moveTo(xn, sy + 2); c.lineTo(xn, sy + sh - 2); c.stroke();
-    vtext(c, '+', sx + sw + 3.5, sy + 1, 5, 0, col(rgb, .55), 1); vtext(c, '-', sx + sw + 3.5, sy + sh - 6, 5, 0, col(rgb, .55), 1);
+    vtext(c, '+', sx + sw + 3.5, sy + 1, 5, 0, col(rgb, PAL.lab), 1); vtext(c, '-', sx + sw + 3.5, sy + sh - 6, 5, 0, col(rgb, PAL.lab), 1);
   }
   const N = 46, amp = (sh / 2 - 4) * .66 / L.vmax, frozen = state === 'dying' ? spinK : 1;
   const ty = k => mid - speedAt(RV.t + (T0 + (T1 - T0) * k / N)) * amp * frozen, tx = k => sx + sw * k / N;
@@ -497,8 +499,8 @@ function drawIntro(c, g) {
     vtext(c, typed(nm, el / .42), xl, y0, hN, 0, col(g ? rgb : hi, 1), g ? hN * .15 : Math.max(2, hN * .085));
     if (!g) {
       c.globalAlpha = a; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, yk); c.lineTo(xl - 9, y0 + hN + 17); c.stroke();
-      vtext(c, 'MONDE ' + pad2(L.w + 1), xl, yk, 7, 0, col(rgb, .8), 1.15);
-      if (el > .35) vtext(c, typed(PAL.rule, (el - .35) / .5), xl, y0 + hN + 10, 7, 0, col(rgb, .95), 1.15);
+      vtext(c, L.w < WORLDS.length ? 'MONDE ' + pad2(L.w + 1) : 'MONDE ∞', xl, yk, 7, 0, col(rgb, Math.max(.8, PAL.lab)), 1.15);
+      if (el > .35) vtext(c, typed(PAL.theme, (el - .35) / .5), xl, y0 + hN + 10, 7, 0, col(rgb, .95), 1.15);
     }
     c.globalAlpha = 1; return;
   }
@@ -516,8 +518,8 @@ function drawIntro(c, g) {
   if (recall) {
     const msg = recall.txt, h = fitH(msg, 9, maxW - 40), y = LAUNCH - 34;
     c.globalAlpha = clamp(recall.life / .3, 0, 1) * (g ? .45 : 1);
-    vtext(c, msg, xl, y, h, 0, col(ALERT, 1), g ? 3 : 1.4);
-    if (!g) { c.strokeStyle = col(ALERT, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y - 4); c.lineTo(xl - 9, y + h + 4); c.stroke(); }
+    vtext(c, msg, xl, y, h, 0, col(PAL.alert, 1), g ? 3 : 1.4);
+    if (!g) { c.strokeStyle = col(PAL.alert, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y - 4); c.lineTo(xl - 9, y + h + 4); c.stroke(); }
     c.globalAlpha = 1; return;
   }
   if (!thrownAny && L.n <= 2 && !g) {
@@ -570,7 +572,7 @@ function draw(dt) {
   ctx.drawImage(bg, 0, 0, W, H);
   // couche phosphore : on efface un peu (rémanence), on redessine les traits vifs en gras et en basse résolution
   gctx.globalCompositeOperation = 'destination-out'; gctx.globalAlpha = 1;
-  gctx.fillStyle = `rgba(0,0,0,${rm() ? .6 : clamp(1 - Math.exp(-dt / .042), .12, 1)})`; gctx.fillRect(0, 0, W, H);
+  gctx.fillStyle = `rgba(0,0,0,${rm() ? .6 : clamp(1 - Math.exp(-dt / PAL.amb.decay), .12, 1)})`; gctx.fillRect(0, 0, W, H);
   gctx.globalCompositeOperation = 'source-over';
   if (inGame) drawGame(gctx, true); else if (state === 'menu') drawMenuScene(gctx, true);
   ctx.save();

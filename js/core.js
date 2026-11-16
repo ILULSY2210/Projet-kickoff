@@ -24,7 +24,7 @@ function startLevel(n, quick) {
   left = L.throws; flying = null; flights = [];
   orbHits = 0; winT = 0; wonT = 0; dieT = 0; exploded = false;
   failInfo = null; nearMark = null; nearCount = 0; levelTime = 0; pulse = 0; readyK = 0; thrownAny = false; starFlash = 0;
-  const newWorld = !retry && (L.pos === 0 || L.w !== lastWorldSeen);
+  const newWorld = !retry && (L.n === firstOfWorld(L.w) || L.w !== lastWorldSeen);
   lastWorldSeen = L.w;
   intro = retry ? 0 : 1.3; wIntro = newWorld ? 2.5 : 0; build = retry ? .7 : 0;
   state = 'play'; playPhase = 'jeu'; countT = 0;
