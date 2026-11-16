@@ -420,7 +420,7 @@ async function tir(b) {
     tap(Date.now()); let x = window.__tirs.pop();
     o.epoch = x ? Math.abs(x.tL - exp) * 1000 : -1;
     startLevel(21); update(.5);
-    tap(performance.now() - 300); x = window.__tirs.pop();
+    lastTap = -1e9; tap(performance.now() - 300); x = window.__tirs.pop();
     o.late = x ? (x.tL - x.t) * 1000 : -1;
     showMenu();
     return o;

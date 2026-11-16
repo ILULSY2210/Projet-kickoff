@@ -8,7 +8,7 @@ const QUICK = flag === '--quick';
 const url = 'file://' + path.resolve(html);
 fs.mkdirSync(out, { recursive: true });
 const errors = [], wins = {}, notes = [];
-let sim = [];
+let sim = [], failOk = false;
 
 function hook(p, tag) {
   p.on('pageerror', e => errors.push(`[${tag}] pageerror: ${e.message}`));
@@ -66,14 +66,27 @@ const start = (p, n) => p.evaluate(n => startLevel(n), n);
 
     await start(p, 10); await p.waitForTimeout(300);
     await bot(p, { stopLeft: 5 }); await shot(p, '04-boss10');
-    // échec volontaire
-    for (let i = 0; i < 80; i++) {
-      const st = await p.evaluate(() => { if (state === 'play') throwPin(); return state; });
-      if (st !== 'play') break; await p.waitForTimeout(35);
+    // échec volontaire, déterministe : tirer quand le point d'impact prévu tombe sur une aiguille déjà plantée
+    for (let i = 0; i < 1500; i++) {
+      const st = await p.evaluate(() => {
+        if (state === 'play' && !flying && left > 0) {
+          let a;
+          if (typeof predict === 'function') a = predict(t).a;
+          else {
+            const travel = (LAUNCH - (cy + R)) / FLYV; let r2 = rot, t2 = t; const n = 20;
+            for (let k = 0; k < n; k++) { t2 += travel / n; r2 += speedAt(t2) * travel / n; }
+            a = norm(Math.PI / 2 - r2);
+          }
+          if (stuck.some(s => angDiff(s.a, a) < GAP * .4)) throwPin();
+        }
+        return state;
+      });
+      if (st !== 'play') break; await p.waitForTimeout(10);
     }
     for (let i = 0; i < 100; i++) { if (await p.evaluate(() => state) === 'failed') break; await p.waitForTimeout(50); }
     await p.waitForTimeout(600); await shot(p, '07-fail');
-    if (await p.evaluate(() => state) !== 'failed') notes.push('échec volontaire non obtenu au niveau 10');
+    failOk = await p.evaluate(() => state) === 'failed';
+    if (!failOk) notes.push('échec volontaire non obtenu au niveau 10');
 
     await start(p, 23); await p.waitForTimeout(300);
     await bot(p, { stopLeft: 6 }); await shot(p, '08-play23');
@@ -134,7 +147,7 @@ const start = (p, n) => p.evaluate(n => startLevel(n), n);
   const lost = Object.entries(wins).filter(([, v]) => v !== 'won').map(([k, v]) => `${k}:${v}`);
   const simLost = sim.filter(x => x.state !== 'won').map(x => `${x.n}:${x.state}`);
   const simTimes = sim.map(x => `${x.n}:${x.T}s`).join(' ');
-  const summary = { pass: errors.length === 0 && lost.length === 0 && simLost.length === 0 && sim.length > 0, errors, wins, lost, simLost, simTimes, notes };
+  const summary = { pass: errors.length === 0 && lost.length === 0 && simLost.length === 0 && sim.length > 0 && failOk, errors, wins, lost, simLost, simTimes, failOk, notes };
   fs.writeFileSync(path.join(out, 'summary.json'), JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary, null, 2));
   process.exit(summary.pass ? 0 : 1);

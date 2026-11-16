@@ -11,7 +11,7 @@ const ARROW = vsvg('→', 13, 2);
 
 function soundLabel() { btn('soundBtn', 'SON', vsvg(soundOn ? 'OUI' : 'NON', 9, 1.4)); }
 function showMenu() {
-  state = 'menu'; L = null; sparks = []; segs = []; rings = []; texts = []; failInfo = null; shake = 0; flying = null;
+  state = 'menu'; L = null; sparks = []; segs = []; rings = []; texts = []; failInfo = null; shake = 0; flying = null; flights = [];
   $('hudBtn').style.display = 'none';
   const w = Math.floor((Math.max(1, unlocked) - 1) / 5);
   if (PAL.w !== w) { demo.stuck = []; demo.arcs = [[0, TAU]]; demo.fly = null; demo.gone = 0; demo.born = 0; }
@@ -99,10 +99,17 @@ function tapInstant(ts, now, tSim, wall) {
   if (!(ts >= 0) || Math.abs(ts - now) > 1000) ts = now;
   return tSim + clamp((ts - wall) / 1000, 0, clamp((now - wall) / 1000, 0, .1));
 }
-// un seul geste : lancer, ou relancer aussitôt après un échec ; ts = horodatage de l'événement
+// un seul geste : lancer, ou relancer aussitôt après un échec ; ts = horodatage de l'événement.
+// Anti-rebond : un tap à moins de 40 ms du dernier tap retenu est ignoré (rebond du doigt, deux doigts).
+const DEBOUNCE = 40;
+let lastTap = -1e9;
 function tap(ts) {
+  const now = performance.now();
+  if (!(ts >= 0) || Math.abs(ts - now) > 1000) ts = now;
+  if (ts - lastTap < DEBOUNCE) return;
+  lastTap = ts;
   ac();
-  if (state === 'play') throwPin(tapInstant(ts, performance.now(), t, simWall));
+  if (state === 'play') throwPin(tapInstant(ts, now, t, simWall));
   else if (state === 'failed' || (state === 'dying' && dieT > .28)) startLevel(L.n, true);
 }
 

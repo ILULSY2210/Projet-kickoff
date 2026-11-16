@@ -98,7 +98,7 @@ function syncScene() {
   project(S.solid, ro, TILT, ro * .6 + .4);
   if (S.boss) project(SOL.octa, -ro * 1.3, .8, ro * .9);
   // aiguille en vol : pointe à l'instant présent, et position de l'image précédente pour la traînée du phosphore
-  if (flying) { const f = flying, ys = pinYs(flyU(f), f.ys || (f.ys = [0, 0])); f.pEnd = f.yEnd === undefined ? ys[1] : f.yEnd; f.yTip = ys[0]; f.yEnd = ys[1]; }
+  for (const f of flights) { const ys = pinYs(flyU(f), f.ys || (f.ys = [0, 0])); f.pEnd = f.yEnd === undefined ? ys[1] : f.yEnd; f.yTip = ys[0]; f.yEnd = ys[1]; }
 }
 function heroRect() {
   if (!hero || --heroTick <= 0) { const q = $('spacer').getBoundingClientRect(); hero = { x: q.left + q.width / 2, y: q.top + q.height / 2, h: q.height }; heroTick = 30; }
@@ -315,11 +315,14 @@ function drawGame(c, g) {
     }
   }
   // --- aiguille en vol / sur le pas de tir ---
-  if (flying && g) {
-    c.globalAlpha = .5; c.strokeStyle = col(hi, 1); c.lineWidth = lw * 3; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(cx, flying.yTip); c.lineTo(cx, Math.min(LAUNCH + PL, flying.pEnd - HEAD)); c.stroke(); c.globalAlpha = 1;
-  } else if (flying) drawPin(c, g, cx, flying.yTip, flying.yEnd, hi, 1);
-  else if (state === 'play' && left > 0) { const y = LAUNCH + (1 - easeOut(readyK)) * 26; drawPin(c, g, cx, y, y + PL + HEAD, hi, easeOut(readyK)); }
+  for (const f of flights) {
+    if (f.yTip === undefined) continue;
+    if (g) {
+      c.globalAlpha = .5; c.strokeStyle = col(hi, 1); c.lineWidth = lw * 3; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(cx, f.yTip); c.lineTo(cx, Math.min(LAUNCH + PL, f.pEnd - HEAD)); c.stroke(); c.globalAlpha = 1;
+    } else drawPin(c, g, cx, f.yTip, f.yEnd, hi, 1);
+  }
+  if (state === 'play' && left > 0 && (!flying || flyU(flying) > U.len)) { const y = LAUNCH + (1 - easeOut(readyK)) * 26; drawPin(c, g, cx, y, y + PL + HEAD, hi, easeOut(readyK)); }
   if (!g && !sheet) {
     // berceau du pas de tir
     const by = LAUNCH + PL, q = HEAD + 5;
