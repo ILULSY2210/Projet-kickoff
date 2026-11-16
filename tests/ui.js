@@ -17,7 +17,8 @@
 //   echec   : sur 5 écrans : feuille d'échec à 0,45 s ; tap (et Espace) à 0,3 s ignoré, tap à 0,5 s → relance ;
 //             tirs ignorés 250 ms après une relance par tap ; cause rappelée près du pas de tir après la relance ;
 //             point de collision (aiguille, niveau 3) et sentinelle fautive (niveau 21) ≥ 4 px au-dessus du filet du
-//             panneau ; MENU à droite ; HUD aligné sur la colonne de texte de la feuille. Captures echec-*.png.
+//             panneau ; MENU à droite ; HUD aligné sur la colonne de texte de la feuille ; aiguilles restantes annoncées =
+//             aiguilles non plantées, avec une ou deux aiguilles en vol. Captures echec-*.png.
 // Écrit <out>/summary.json ({ pass, sections, errors }) et sort avec le code 1 en cas d'échec.
 const { chromium, devices } = require('playwright');
 const path = require('path'), fs = require('fs');
@@ -544,13 +545,37 @@ async function echec(b) {
       const g = await p.evaluate(() => {
         const box = failMarkScreen(), pr = $('failPanel').getBoundingClientRect(), mr = $('failMenu').getBoundingClientRect(),
           hr = $('failHint').getBoundingClientRect(), kr = $('failKick').getBoundingClientRect();
-        return { y1: box && box.y1, filet: pr.top + 18, menuL: mr.left, hintL: hr.left, mid: pr.left + pr.width / 2, hud: hudLeft(true), kick: kr.left, s: FV.s, dy: FV.dy };
+        return { y1: box && box.y1, filet: pr.top + 18, menuL: mr.left, hintL: hr.left, mid: pr.left + pr.width / 2, hud: hudLeft(true), kick: kr.left, s: FV.s, dy: FV.dy,
+          kickN: parseInt($('failKick').textContent.split('·')[1], 10), notPlanted: L.throws - stuck.filter(s => !s.pre).length };
       });
+      S.eq(g.kickN, g.notPlanted, `${tag} : niveau ${n}, aiguilles restantes annoncées = aiguilles non plantées`);
       await p.screenshot({ path: path.join(OUT, `echec-${tag}-${kind}.png`) });
       S.ok(g.y1 !== null && g.y1 <= g.filet - 4, `${tag} : ${kind === 'pin' ? 'point de collision' : 'sentinelle fautive'} ${(g.filet - g.y1).toFixed(1)} px au-dessus du filet (≥ 4 ; scène remontée de ${g.dy.toFixed(1)} px, échelle ${g.s.toFixed(2)})`);
       S.ok(g.menuL > g.mid && g.hintL < g.menuL, `${tag} : MENU à droite de la feuille d'échec (MENU à ${g.menuL}, milieu ${g.mid})`);
       S.ok(Math.abs(g.hud - g.kick) <= 1, `${tag} : HUD aligné sur la feuille (${g.hud} contre ${g.kick})`);
       await p.evaluate(() => showMenu());
+    }
+    // deux aiguilles en vol : la première échoue, la seconde est perdue avec elle ; la feuille les compte toutes les deux
+    if (tag === SCREENS[0].join('x')) {
+      const k = await p.evaluate(() => {
+        const o = [];
+        for (const n of [3, 8]) {
+          startLevel(n); update(.5);
+          for (let i = 0; i < 2000 && !window.__botSafe(); i++) update(STEP);
+          throwPin(); update(.2);
+          for (let i = 0; i < 4000 && !stuck.some(s => !s.pre && angDiff(s.a, predict(t).a) < GAP * .3); i++) update(STEP);
+          throwPin(); update(.041); throwPin();
+          const fl = flights.length;
+          for (let i = 0; i < 200 && state !== 'failed'; i++) update(STEP);
+          o.push({ n, fl, st: state, kickN: parseInt($('failKick').textContent.split('·')[1], 10), notPlanted: L.throws - stuck.filter(s => !s.pre).length });
+          showMenu();
+        }
+        return o;
+      });
+      for (const x of k) {
+        S.eq(x.fl + '/' + x.st, '2/failed', `niveau ${x.n} : échec avec deux aiguilles en vol`);
+        S.eq(x.kickN, x.notPlanted, `niveau ${x.n}, deux en vol : aiguilles restantes annoncées = aiguilles non plantées`);
+      }
     }
     await c.close();
   }

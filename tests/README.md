@@ -39,7 +39,7 @@ node tests/lib/serve.js 8080     # sert le jeu en http (le service worker y fonc
 | | `ecrans` | 5 écrans : vol 60 ± 1 ms, même journal → mêmes angles à 1e-9, croisements dessinés à ± 1 ms |
 | | `tir` | taps à phase aléatoire : départ à l'instant du tap, jamais dans le passé |
 | | `reprendre` | compte à rebours de 0,6 s, rotation figée, taps et `throwPin()` ignorés |
-| | `echec` | 5 écrans : feuille à 0,45 s, tap à 0,3 s ignoré, à 0,5 s relance, verrou de 250 ms, cause rappelée, collision et sentinelle ≥ 4 px au-dessus du filet, MENU à droite, HUD aligné |
+| | `echec` | 5 écrans : feuille à 0,45 s, tap à 0,3 s ignoré, à 0,5 s relance, verrou de 250 ms, cause rappelée, collision et sentinelle ≥ 4 px au-dessus du filet, MENU à droite, HUD aligné, aiguilles restantes justes avec une ou deux aiguilles en vol |
 | `tests/play.js` | `doubletap` | double tap à 8 ms : 0 mort sur 40 aux niveaux 1, 2, 3, 8, 21 |
 | | `vol` | second tap 60-200 ms après le premier : part à son instant exact ; jamais plus de deux aiguilles en vol |
 | | `predicteur` | `__botSafe` : 0 mort, 0 blocage sur 1..200 × 4 parties, à dt 1/60 et 1/120 |

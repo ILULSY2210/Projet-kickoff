@@ -69,7 +69,9 @@ function showWin() {
 function showFail() {
   state = 'failed';
   $('hudBtn').style.display = 'none';
-  $('failKick').textContent = `Niveau ${pad2(L.n)} · ${left + 1} aiguille${left ? 's' : ''} restante${left ? 's' : ''}`;
+  // aiguilles non plantées : celles qui restaient au pas de tir et celles perdues en vol avec l'échec
+  const n = left + (failInfo ? failInfo.lost : 1), pl = n > 1 ? 's' : '';
+  $('failKick').textContent = `Niveau ${pad2(L.n)} · ${n} aiguille${pl} restante${pl}`;
   setVT($('failTitle'), 'CONTACT !', 26, 3.2, SW - 44);
   const fc = failInfo ? failCause(failInfo, L) : null;
   $('failMsg').textContent = fc ? fc.long + ' ' + fc.tip : 'Attends l’ouverture, puis tire.';

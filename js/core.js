@@ -52,7 +52,8 @@ function launch(tL) {
 function fail(kind, a, d, who) {
   state = 'dying'; dieT = 0; spinK = 1;
   const yT = kind === 'sent' ? cy + RS : cy + R + PL * .5;
-  failInfo = { kind, a: kind === 'twin' ? norm(a + Math.PI) : a, d, who, sent: kind === 'sent' ? who : null };
+  // lost : aiguilles perdues avec l'échec (celle qui échoue et celle qui vole encore derrière elle)
+  failInfo = { kind, a: kind === 'twin' ? norm(a + Math.PI) : a, d, who, sent: kind === 'sent' ? who : null, lost: Math.max(1, flights.length) };
   // l'aiguille se brise en deux traits
   const s1 = Math.random() < .5 ? -1 : 1;
   seg(cx, yT - PL * .25, HPI, PL * .5, s1 * (60 + Math.random() * 80), 120, s1 * 7, .7, PAL.hi);
