@@ -9,6 +9,12 @@ const FLIGHT = .060;
 const U = { len: .24, head: .76, sentIn: .73, sent: .71, sentOut: .69, dial: .66 };
 // marge angulaire des sentinelles (rad) : bout arrondi de leur trait + demi-épaisseur de la tige, mesurée en 390×844
 const SENT_PAD = .038;
+// tête de l'aiguille en vol (disque) contre une sentinelle. UREF : rayons dessinés de la mise en page de référence 390×844
+// aux positions u de la carte, rapportés au rayon RS de l'orbite des sentinelles ; HEAD_REF : rayon de la tête / RS ;
+// SENT_PAD_HEAD : demi-épaisseur des sentinelles + rayon de la tête, / RS (rad). Le centre de la tête en vol suit UREF
+// (extrémité de la tête en u − U.len, centre HEAD_REF plus près de l'astre) : contact dessiné ⇔ interception en 390×844.
+const UREF = [[0, 2.37475], [U.dial, 1.11350], [U.sentOut, 1.03245], [U.sent, 1], [U.sentIn, .96755], [U.head, .88884], [1, .42026]];
+const HEAD_REF = .04833, SENT_PAD_HEAD = .08078;
 // compte à rebours de REPRENDRE (s) : rotation figée, tirs ignorés
 const COUNTDOWN = .6;
 // échec : feuille à 0,45 s (taps ignorés avant) ; après une relance par tap, tirs ignorés 0,25 s ; cause rappelée 1,2 s

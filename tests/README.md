@@ -30,13 +30,13 @@ node tests/lib/serve.js 8080     # sert le jeu en http (le service worker y fonc
 |---|---|---|
 | `tests/unit/dump.js --check` | — | `makeLevel(1..200)` identique à la référence `tests/ref/levels-ad561a3.json` (hors étoiles des niveaux à traversantes, déplacées au commit 1.9) |
 | `tests/unit/sw.test.js` | — | précache du service worker cohérent (`VERSION`, `FILES`, `?v=`, empreintes) |
-| `tests/unit/timing.test.js` | — | intégration par trapèzes à 0,002 rad d'une référence après 30 s, pour chaque loi de rotation ; même journal de tirs (au début d'un pas ou au milieu, par `throwPin(tSim)`) → mêmes issues et angles à 1e-9 près à 30, 60, 90, 120 et 144 Hz |
+| `tests/unit/timing.test.js` | — | intégration par trapèzes à 0,002 rad d'une référence après 30 s, pour chaque loi de rotation ; même journal de tirs (au début d'un pas ou au milieu, par `throwPin(tSim)`) → mêmes issues et angles à 1e-9 près à 30, 60, 90, 120 et 144 Hz ; interception par la tête d'une sentinelle au même instant (1e-9) quel que soit le découpage en pas |
 | `tests/unit/input.test.js` | — | horodatage des taps (`tapInstant`) : bornes, garde « depuis 1970 », événement en retard |
-| `tests/unit/geometry.test.js` | — | collision = dessin sur 5 écrans : rayon des têtes = GAP × (R + PL) / 2, règle et dessin d'accord à GAP ± 0,002 rad, sentinelles ; captures dans `tests/out/geometry/` |
+| `tests/unit/geometry.test.js` | — | collision = dessin sur 5 écrans : rayon des têtes = GAP × (R + PL) / 2, règle et dessin d'accord à GAP ± 0,002 rad, sentinelles (tige, et tête en vol : aucun recouvrement dessiné sans interception, ≤ 0,1 px en 390×844 et ≤ 2 px ailleurs) ; captures dans `tests/out/geometry/` |
 | `tests/unit/text.test.js` | — | messages d'échec par cause (zone interdite, degrés exacts au bord d'un arc), accords, glyphes de la police vectorielle |
 | `tests/ui.js` | `smoke` | chaque bouton visible de chaque écran, Espace/Entrée/P/Échap dans chaque état, son, case de niveau, `visibilitychange` |
 | | `boot`, `offline`, `update`, `guard` | démarrage sans réseau tiers, hors ligne, mise à jour au menu seulement, garde-fou de démarrage |
-| | `ecrans` | 5 écrans : vol 60 ± 1 ms, même journal → mêmes angles à 1e-9, croisements dessinés à ± 1 ms |
+| | `ecrans` | 5 écrans : vol 60 ± 1 ms, même journal → mêmes angles à 1e-9, croisements dessinés à ± 1 ms (pointe, tête, centre de la tête) |
 | | `tir` | taps à phase aléatoire : départ à l'instant du tap, jamais dans le passé |
 | | `reprendre` | compte à rebours de 0,6 s, rotation figée, taps et `throwPin()` ignorés, aucun bandeau d’intro sous l’anneau 3-2-1 en 320×568 |
 | | `echec` | 5 écrans : feuille à 0,45 s, tap à 0,3 s ignoré, à 0,5 s relance, verrou de 250 ms, cause rappelée, collision et sentinelle ≥ 4 px au-dessus du filet, MENU à droite, HUD aligné, aiguilles restantes justes avec une ou deux aiguilles en vol |

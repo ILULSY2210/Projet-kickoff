@@ -9,7 +9,7 @@
 //   guard   : script invalide ou bloqué → message « touche pour recharger » en ≤ 4 s, jamais d'écran noir muet.
 //   ecrans  : sur 320×568, 360×640, 390×664, 390×844 et 430×932 : vol de 60 ± 1 ms ; un même journal de tirs donne les mêmes
 //             issues et les mêmes angles à 1e-9 près ; pointe et tête dessinées croisent l'orbite des sentinelles et le
-//             cercle des têtes à ± 1 ms de l'instant physique.
+//             cercle des têtes à ± 1 ms de l'instant physique, centre de la tête compris (règle tête contre sentinelle).
 //   tir     : lancer horodaté ; vrais taps à des phases aléatoires de l'image : départ à l'instant du tap à 1 ms près,
 //             jamais avant le dernier instant simulé ; horodatage « depuis 1970 » et événement en retard bien traités.
 //   reprendre : REPRENDRE → compte à rebours de 0,6 s (rotation figée, taps ignorés, throwPin() et __botSafe() inertes,
@@ -334,11 +334,14 @@ async function ecrans(b) {
       while (stuck.length === n0 && state === 'play') update(1e-4);
       o.vol = (t - t0) * 1000;
       // instants où la pointe et la tête dessinées croisent l'orbite des sentinelles et le cercle des têtes
-      const ys = [0, 0], cross = (k, y) => { for (let i = 0; i <= 61000; i++) { const tau = i * 1e-6; pinYs(tau / FLIGHT, ys); if (ys[k] <= y + 1e-6) return tau * 1000; } return -1; };
+      const ys = [0, 0], cross = (k, y, dy = 0) => { for (let i = 0; i <= 61000; i++) { const tau = i * 1e-6; pinYs(tau / FLIGHT, ys); if (ys[k] - dy <= y + 1e-6) return tau * 1000; } return -1; };
+      // règle de la tête contre les sentinelles : instant où le centre de la tête passe sur l'orbite (ρ = 0)
+      const pc = HEAD_PIECES.find(x => x.r0 >= 0 && x.r0 + x.k * (x.t1 - x.t0) <= 0), tC = pc ? (pc.t0 - pc.r0 / pc.k) * 1000 : -99;
       o.croise = {
         pointe_sentinelle: [cross(0, cy + RS), U.sent * FLIGHT * 1000],
         pointe_tetes: [cross(0, cy + R + PL + HEAD), U.head * FLIGHT * 1000],
         tete_sentinelle: [cross(1, cy + RS), (U.sent + U.len) * FLIGHT * 1000],
+        centre_tete_sentinelle: [cross(1, cy + RS, HEAD), tC],
         tete_tetes: [cross(1, cy + R + PL + HEAD), (U.head + U.len) * FLIGHT * 1000],
         pointe_contact: [cross(0, cy + R), FLIGHT * 1000]
       };

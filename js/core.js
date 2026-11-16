@@ -148,6 +148,50 @@ function sentHit(q, s0, s1, H) {
   const dt = ((d0 > 0 ? H : -H) - d0) / q.w;
   return dt >= 0 && s0 + dt <= s1 ? s0 + dt : -1;
 }
+// Tête de l'aiguille en vol : disque dont le centre s'écarte de l'orbite des sentinelles de ρ (en rayons d'orbite, > 0 côté
+// pas de tir), affine par morceaux en τ (temps depuis le lancer) d'après UREF. Morceaux { t0, t1, r0, k } : ρ = r0 + k (τ − t0),
+// limités à la fenêtre |ρ| ≤ SENT_PAD_HEAD où la tête peut toucher une sentinelle (HEAD_WIN = [début, fin]).
+const HEAD_PIECES = (() => {
+  const P = SENT_PAD_HEAD, out = [];
+  for (let i = 1; i < UREF.length; i++) {
+    let ta = (UREF[i - 1][0] + U.len) * FLIGHT, tb = Math.min(FLIGHT, (UREF[i][0] + U.len) * FLIGHT);
+    if (!(tb > ta)) continue;
+    const ra = UREF[i - 1][1] - HEAD_REF - 1, k = (UREF[i][1] - UREF[i - 1][1]) / ((UREF[i][0] - UREF[i - 1][0]) * FLIGHT);
+    let r0 = ra;
+    if (r0 > P) { const d = (P - r0) / k; ta += d; r0 = P; }
+    const rb = r0 + k * (tb - ta);
+    if (rb < -P) tb = ta + (-P - r0) / k;
+    if (tb > ta && r0 >= -P && r0 + k * (tb - ta) <= P) out.push({ t0: ta, t1: tb, r0, k });
+  }
+  return out;
+})();
+const HEAD_WIN = [HEAD_PIECES[0].t0, HEAD_PIECES[HEAD_PIECES.length - 1].t1];
+// premier instant de [s0, s1] où la tête de l'aiguille lancée à tL touche la sentinelle q, ou −1. Contact : distance du
+// centre de la tête à l'arc de la sentinelle (corps ou bout arrondi) < SENT_PAD_HEAD, en rayons d'orbite ; mouvement
+// uniforme de la sentinelle, ρ affine sur chaque morceau : intervalles et racines exacts, indépendants du découpage en pas.
+function sentHeadHit(q, tL, s0, s1) {
+  const P = SENT_PAD_HEAD, hw = q.hw, w = q.w;
+  for (const pc of HEAD_PIECES) {
+    const a = tL + pc.t0, lo = Math.max(a, s0), hi = Math.min(tL + pc.t1, s1);
+    if (lo > hi) continue;
+    // à l'instant a + s : ρ = r0 + k s ; écart signé du milieu de la sentinelle à l'axe de tir : d = d0 + w s
+    const d0 = angSigned(HPI, q.a0 + w * a), r0 = pc.r0, k = pc.k;
+    let best = Infinity;
+    const take = (x0, x1) => { const e = Math.max(a + x0, lo); if (e <= hi && e < a + x1 && e < best) best = e; };
+    // corps de l'arc : |d| ≤ hw et |ρ| < P (k ≠ 0 : la tête avance toujours)
+    let b0 = Math.min((P - r0) / k, (-P - r0) / k), b1 = Math.max((P - r0) / k, (-P - r0) / k);
+    if (w) { b0 = Math.max(b0, Math.min((hw - d0) / w, (-hw - d0) / w)); b1 = Math.min(b1, Math.max((hw - d0) / w, (-hw - d0) / w)); }
+    else if (Math.abs(d0) > hw) b1 = -Infinity;
+    if (b0 < b1) take(b0, b1);
+    // bouts arrondis (milieu ± hw) : ρ² + (d ∓ hw)² < P²
+    for (const c of [hw, -hw]) {
+      const e0 = d0 - c, A = k * k + w * w, B = 2 * (r0 * k + e0 * w), C = r0 * r0 + e0 * e0 - P * P, D = B * B - 4 * A * C;
+      if (D > 0) { const sq = Math.sqrt(D); take((-B - sq) / (2 * A), (-B + sq) / (2 * A)); }
+    }
+    if (best < Infinity) return best;
+  }
+  return -1;
+}
 // écart minimal entre la sentinelle q et l'axe de tir sur [s0, s1]
 function sentMin(q, s0, s1) {
   const d0 = angSigned(HPI, q.a0 + q.w * s0), d1 = d0 + q.w * (s1 - s0);
@@ -171,8 +215,12 @@ window.__botSafe = function (tSim) {
   for (const s of stuck) if (angDiff(s.a, a) <= M) return false;
   if (L.trav) { const b = a + Math.PI; for (const s of stuck) if (angDiff(s.a, b) <= M) return false; }
   if (L.sents.length) {
-    const w = sentWindow(), s0 = tL + w[0] - .02, s1 = tL + w[1] + .02;
-    for (const q of L.sents) if (sentMin(q, s0, s1) <= q.hw + SENT_PAD + GAP * .7) return false;
+    // tige (marge SENT_PAD) sur toute la traversée, tête (marge SENT_PAD_HEAD) sur sa fenêtre, plus 0,7 × GAP et 20 ms
+    const w = sentWindow(), s0 = tL + w[0] - .02, s1 = tL + w[1] + .02, h0 = tL + HEAD_WIN[0] - .02, h1 = tL + HEAD_WIN[1] + .02;
+    for (const q of L.sents) {
+      if (sentMin(q, s0, s1) <= q.hw + SENT_PAD + GAP * .7) return false;
+      if (sentMin(q, h0, h1) <= q.hw + SENT_PAD_HEAD + GAP * .7) return false;
+    }
   }
   return true;
 };
@@ -209,7 +257,11 @@ function step(h) {
         let tS = -1, who = null;
         if (L.sents.length) {
           const w = sentWindow(), s0 = Math.max(t0, f.tL + w[0]), s1 = Math.min(t1, f.tL + w[1], tI);
-          for (const q of L.sents) { const x = sentHit(q, s0, s1, q.hw + SENT_PAD); if (x >= 0 && (tS < 0 || x < tS)) { tS = x; who = q; } }
+          for (const q of L.sents) {
+            // tige et tête (disque) : premier contact dessiné
+            const x = sentHit(q, s0, s1, q.hw + SENT_PAD), y = sentHeadHit(q, f.tL, s0, s1), z = x < 0 ? y : y < 0 ? x : Math.min(x, y);
+            if (z >= 0 && (tS < 0 || z < tS)) { tS = z; who = q; }
+          }
         }
         if (tS >= 0) ev.push({ te: tS, f, who });
         else if (tI <= t1) ev.push({ te: tI, f, who: null });
