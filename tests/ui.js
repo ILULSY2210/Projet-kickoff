@@ -12,7 +12,8 @@
 //             cercle des têtes à ± 1 ms de l'instant physique.
 //   tir     : lancer horodaté ; vrais taps à des phases aléatoires de l'image : départ à l'instant du tap à 1 ms près,
 //             jamais avant le dernier instant simulé ; horodatage « depuis 1970 » et événement en retard bien traités.
-//   reprendre : REPRENDRE → compte à rebours de 0,6 s (rotation figée, taps ignorés, throwPin() et __botSafe() inertes),
+//   reprendre : REPRENDRE → compte à rebours de 0,6 s (rotation figée, taps ignorés, throwPin() et __botSafe() inertes,
+//               en 320×568 aucun bandeau d’intro sous l’anneau 3-2-1),
 //               puis le jeu reprend.
 //   echec   : sur 5 écrans : feuille d'échec à 0,45 s ; tap (et Espace) à 0,3 s ignoré, tap à 0,5 s → relance ;
 //             tirs ignorés 250 ms après une relance par tap ; cause rappelée près du pas de tir après la relance ;
@@ -474,6 +475,38 @@ async function reprendre(b) {
     S.eq(after, 1, `${via} : throwPin() relance après le compte à rebours`);
   }
   await c.close();
+  // pause pendant un bandeau d'intro (monde, niveau, boss) en 320×568 : pendant le compte à rebours, aucun texte dessiné
+  // ne chevauche l'anneau 3-2-1 ; le bandeau reprend ensuite là où il s'était arrêté
+  const c2 = await b.newContext({ viewport: { width: 320, height: 568 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const p2 = await c2.newPage(); hook(p2, 'reprendre-320');
+  await p2.goto(URL);
+  await p2.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+  for (const [n, wait] of [[11, 1500], [15, 700], [36, 1500]]) {
+    await p2.evaluate(n => { soundOn = false; showMenu(); startLevel(n); }, n);
+    await p2.waitForTimeout(wait);
+    await p2.evaluate(() => {
+      pauseGame(); resumeGame();
+      window.__ov = { boxes: [], frames: 0, pending: wIntro > 0 || intro > 0 };
+      const ov = window.vtext;
+      window.vtext = function (c, str, x, y, h, al) {
+        const x0 = x - (al ? vwidth(str, h) * al : 0);
+        if (state === 'play' && playPhase === 'compte' && c === ctx) window.__ov.boxes.push({ str, x0, y0: y, x1: x0 + vwidth(str, h), y1: y + h });
+        return ov.apply(this, arguments);
+      };
+      window.__ovRestore = () => { window.vtext = ov; };
+    });
+    await p2.waitForTimeout(300);
+    const o = await p2.evaluate(() => {
+      const w = window.__ov; window.__ovRestore();
+      const rr = 15, yc = LAUNCH - rr - 12, ring = { x0: cx - rr - 3, y0: yc - rr - 3, x1: cx + rr + 3, y1: yc + rr + 3 };
+      const hit = w.boxes.filter(b => !/^[123]$/.test(b.str) && b.x0 < ring.x1 && b.x1 > ring.x0 && b.y0 < ring.y1 && b.y1 > ring.y0);
+      return { pending: w.pending, n: w.boxes.length, hit: [...new Set(hit.map(b => b.str))], ph: playPhase, still: wIntro > 0 || intro > 0 };
+    });
+    S.ok(o.pending, `320×568, niveau ${n} : bandeau en cours au moment de la pause`);
+    S.ok(o.n > 0 && !o.hit.length, `320×568, niveau ${n} : aucun texte sous l'anneau du compte à rebours (${o.hit.join(' | ') || 'aucun'})`);
+    S.ok(o.ph === 'compte' && o.still, `320×568, niveau ${n} : bandeau gardé pour après le compte à rebours`);
+  }
+  await c2.close();
 }
 
 async function echec(b) {

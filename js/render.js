@@ -476,7 +476,9 @@ function drawHud(c, g, sheet) {
 function typed(str, k) { const n = [...str]; return k >= 1 ? str : n.slice(0, Math.ceil(n.length * k)).join(''); }
 function drawIntro(c, g) {
   const rgb = PAL.rgb, hi = PAL.hi, yT = cy + RD + 13, yB = LAUNCH - 14, hC = yB - yT, xl = SX + 24, maxW = SW - 48;
-  if (state !== 'play' || hC < 30) return;
+  // pendant le compte à rebours de REPRENDRE, le couloir est laissé à l'anneau 3-2-1 ; bandeaux et rappel, dont les minuteries
+  // sont figées, reprennent ensuite là où ils s'étaient arrêtés
+  if (state !== 'play' || playPhase === 'compte' || hC < 30) return;
   if (wIntro > 0) {
     const el = 2.5 - wIntro, a = clamp(wIntro / .35, 0, 1), nm = PAL.name;
     let hN = clamp(hC * .4, 16, 42); hN = fitH(nm, hN, maxW);
