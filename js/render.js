@@ -577,7 +577,10 @@ function drawHud(c, g, sheet) {
     if (L.boss) { c.fillStyle = col(hi, 1); c.fillRect(x0 - 1, top + 4, vwidth('BOSS', 7) + 8, 11); vtext(c, 'BOSS', x0 + 3, top + 6, 7, 0, INK, 1.3); }
     else vtext(c, 'NIVEAU', x0, top + 6, 7, 0, col(rgb, PAL.lab), 1.1);
     vtext(c, PAL.name, x0 + nw + 12, top + 20, 8, 0, col(rgb, .95), 1.25);
-    vtext(c, 'ROTATION ' + PAT_NAME[L.pattern], x0 + nw + 12, top + 34, 6, 0, col(rgb, PAL.lab), 1);
+    // règle de rotation (idée dynamique dominante), réduite si elle déborderait sur les étoiles bonus
+    const no = L.orbs.length, so = no > 3 ? Math.min(24, 64 / (no - 1)) : 24, rl = rotLabel(L), rx = x0 + nw + 12;
+    const rmax = (no ? xr - 9 - (no - 1) * so - (no > 3 ? 6.5 : 9) - 8 : xr) - rx;
+    vtext(c, rl, rx, top + 34, fitH(rl, 6, Math.max(40, rmax)), 0, col(rgb, PAL.lab), 1);
   }
   // --- étoiles bonus ---
   const on = L.orbs.length;
@@ -673,7 +676,7 @@ function drawIntro(c, g) {
     vtext(c, typed(big, el / .3), xl, y0, hN, 0, col(g ? rgb : hi, 1), g ? hN * .16 : Math.max(1.8, hN * .09));
     if (!g) {
       c.globalAlpha = a; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y0 - 2); c.lineTo(xl - 9, y0 + hN + 16); c.stroke();
-      const sub = L.teach && TEACH_TEXT[L.teach] ? 'NOUVEAU · ' + TEACH_TEXT[L.teach][0] : (L.boss ? 'NIVEAU ' + pad2(L.n) + ' · ROTATION ' : 'ROTATION ') + PAT_NAME[L.pattern];
+      const sub = L.teach && TEACH_TEXT[L.teach] ? 'NOUVEAU · ' + TEACH_TEXT[L.teach][0] : (L.boss ? 'NIVEAU ' + pad2(L.n) + ' · ' : '') + rotLabel(L);
       vtext(c, sub, xl, y0 + hN + 9, 7, 0, col(L.teach ? PAL.acc : rgb, .95), 1.15);
     }
     c.globalAlpha = 1; return;

@@ -2,7 +2,7 @@
 //   node tests/unit/text.test.js
 // - aiguille au milieu d'un arc interdit : « zone interdite », et non « il manquait 4° » (UX-3) ; juste au bord de l'arc :
 //   les degrés, exacts ; aiguille contre aiguille, sortie opposée, sentinelle : message et conseil propres à la cause ;
-// - lois de rotation accordées à « ROTATION » ; plus de « l'oscillo », de « ROTATION CONTINU », de « SON OUI/NON » (UX-6) ;
+// - lois de rotation accordées à « ROTATION » ; HUD : idée dynamique dominante (accélération, demi-tour, rampe…) ; plus de « l'oscillo », de « ROTATION CONTINU », de « SON OUI/NON » (UX-6) ;
 // - chaque texte dessiné sur le canevas n'utilise que des glyphes de la police « Trace ».
 const { chromium } = require('playwright');
 const path = require('path'), fs = require('fs');
@@ -64,6 +64,8 @@ check(/Espace : tirer · P : pause/.test(fs.readFileSync(path.join(ROOT, 'inde
       o.missing = [];
       for (const str of canvas) for (const ch of str) if (!FONT[ch]) o.missing.push(`${ch} dans « ${str} »`);
       o.tips = FAIL_TEXT;
+      // règle de rotation du HUD : l'idée dynamique dominante (accélération, demi-tour, rampe, inversion), pas « CONTINUE »
+      o.rot = [9, 19, 71, 171, 161, 10].map(n => [n, rotLabel(makeLevel(n))]);
       showMenu();
       return o;
     });
@@ -75,6 +77,8 @@ check(/Espace : tirer · P : pause/.test(fs.readFileSync(path.join(ROOT, 'inde
     check(r.sent.key === 'sent' && /sentinelle/.test(r.sent.long), `sentinelle : « ${r.sent.long} »`);
     check(r.tips.sent.tips.includes(r.sent.tip) && !/arc allumé/.test(r.sent.tip), `conseil de la sentinelle propre à la cause : « ${r.sent.tip} »`);
     check(r.tips.twin.tips.includes(r.twin.tip), `conseil de la sortie opposée : « ${r.twin.tip} »`);
+    const wantRot = { 9: 'ACCÉLÉRATION', 19: 'DEMI-TOUR ANNONCÉ', 71: 'RAMPE', 171: 'INVERSION À L’IMPACT', 161: 'DEMI-TOUR EN RYTHME', 10: 'ACCÉLÉRATION' };
+    for (const [n, lb] of r.rot) check(lb === wantRot[n], `HUD du niveau ${n} : « ${lb} » (attendu « ${wantRot[n]} »)`);
     check(r.missing.length === 0, 'glyphes absents de la police vectorielle : ' + r.missing.join(' ; '));
     console.log(`exemples : « ${r.zone.long} » / « ${r.edge.long} » / « ${r.twin.long} ${r.twin.tip} » / « ${r.sent.long} ${r.sent.tip} »`);
   } catch (e) { fails.push('harness: ' + (e && e.stack || e)); }

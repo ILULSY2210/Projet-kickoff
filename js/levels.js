@@ -356,6 +356,12 @@ function makeLevel(n) {
   lv.flags = levelFlags(lv);
   return lv;
 }
+// règle de rotation d'un niveau en clair (HUD, bandeau du niveau) : l'idée dynamique dominante (inversion à l'impact,
+// demi-tours, accélération, rampe) si le niveau en a une, sinon le nom de sa loi
+function rotLabel(lv) {
+  const f = lv.inv ? 'invImpact' : lv.rhythm ? 'rythme' : lv.demi ? 'demitour' : lv.accel ? 'accel' : lv.ramp ? 'rampe' : null;
+  return f ? TEACH_TEXT[f][0] : 'ROTATION ' + PAT_NAME[lv.pattern];
+}
 // idées présentes dans un niveau (test « une idée à la fois », bandeaux de règle)
 function levelFlags(lv) {
   const f = ['lancer'];
