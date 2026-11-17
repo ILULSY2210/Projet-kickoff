@@ -16,9 +16,11 @@ Ce qui change pour le joueur à l'étape 2 « Structure 6 × 50 et difficulté p
    scène arrive à l'étape 4).
 6. Le jeu est nettement plus dur à la fin : chaque niveau est réglé par un joueur simulé qui joue le vrai code du jeu.
    Un joueur précis (30 ms) gagne au moins 75 % de ses parties sur chaque niveau mesuré ; COSMOS ∞ rejoue, en miroir un
-   cycle sur deux, une réserve de 100 niveaux tous mesurés. Exception connue : un joueur qui tire sans anticiper perd
-   nettement plus qu'ailleurs sur 27 niveaux à arrêts, inversions ou vitesse très variable (annexe D) : à toi de dire
-   s'il faut adoucir ces lois ou garder cette prime à l'anticipation.
+   cycle sur deux, une réserve de 100 niveaux tous mesurés. Rotations lisibles, pour qu'un joueur qui tire sans anticiper
+   (il lit les chevrons, les zones et les losanges des anneaux) ne décroche pas sur les niveaux à arrêts, inversions ou
+   vitesse variable (mesures en cours, annexe D) : à-coups et rotation irrégulière ne dépassent plus 1,8 fois leur vitesse moyenne (ni 7 rad/s),
+   le ressac avance par paliers puis recule brièvement, et un demi-tour au rythme laisse l'astre faire plus d'un tour
+   entre deux annonces. Chaque niveau propre tient dans la durée prévue pour son monde (boss : repris à l'étape 4).
 7. Taper à l'aveugle ne fait plus passer de niveau après le premier monde.
 8. La progression de l'ancienne version est gardée (niveau atteint, son), sans étoiles offertes sur les nouveaux
    niveaux ; CONTINUER propose d'abord les niveaux d'apprentissage pas encore joués.
