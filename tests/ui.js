@@ -5,9 +5,8 @@
 //           son basculé, case de niveau, visibilitychange ; 0 erreur console ou page et état attendu après chaque action.
 //   migration : vraies clés de la version 1 posées avant le chargement : unlocked 150 → 150, aucune étoile, legacyStars =
 //           ancien total, CONTINUER → niveau 1 ; valeurs corrompues (v1 et v2) sans erreur.
-//   regles : bandeau de règle d'un niveau d'apprentissage à ≥ 10 px pendant ≥ 2 s (même après un tir), depuis le menu
-//           (bandeau du monde) et en progression normale (niveau précédent du même monde : bandeau du niveau), relisible
-//           dans la pause et dans la sélection des niveaux (320×568).
+//   regles : bandeau de règle d'un niveau d'apprentissage à ≥ 10 px pendant ≥ 2 s (même après un tir), relisible dans
+//           la pause et dans la sélection des niveaux (320×568).
 //   anneaux : géométrie des anneaux à portes en 320×568 et 360×640 (écarts, portes ≥ 3 têtes, losanges, bandeaux dessous).
 //   boot  : démarrage avec les domaines Google bloqués : state défini en < 1 s, aucune requête tierce, polices locales.
 //   offline : second chargement sans réseau (service worker) en < 1 s.
@@ -28,6 +27,8 @@
 //             la croiser) ≥ 4 px au-dessus du filet du
 //             panneau ; MENU à droite ; HUD aligné sur la colonne de texte de la feuille ; aiguilles restantes annoncées =
 //             aiguilles non plantées, avec une ou deux aiguilles en vol. Captures echec-*.png.
+//   feuilles : niveaux à anneaux sur les 5 écrans et en 1280×800 : aucun anneau derrière la feuille de victoire ; sur la
+//             feuille d'échec, seul l'anneau fautif, coupé au-dessus du filet ; pause sans HUD du bas.
 // Écrit <out>/summary.json ({ pass, sections, errors }) et sort avec le code 1 en cas d'échec.
 const { chromium, devices } = require('playwright');
 const path = require('path'), fs = require('fs');
@@ -721,7 +722,7 @@ async function echec(b) {
       }
       showMenu(); return bn;
     });
-    for (const [n, kind] of [[3, 'pin'], [nSent, 'sent']]) {
+    for (const [n, kind] of [[3, 'pin'], [nSent, 'sent'], [81, 'ring']]) {
       const ok = await p.evaluate(async ([n, kind]) => {
         const frame = () => new Promise(res => requestAnimationFrame(() => res()));
         startLevel(n);
@@ -730,7 +731,7 @@ async function echec(b) {
             const a = predict(t).a, w = sentWindow();
             // sentinelle : seulement quand les anneaux laissent passer l'aiguille (sinon c'est l'anneau qui l'intercepte)
             const rp = L.rings.every(q => { const rw = ringWindow(q, t); return ringHit(q, rw[0], rw[1], RING_PAD[q.k]) < 0; });
-            if (kind === 'pin' ? stuck.some(s => angDiff(s.a, a) < GAP * .4) && rp : L.sents.some(q => sentMin(q, t + w[0], t + w[1]) < q.hw * .5) && rp) throwPin();
+            if (kind === 'ring' ? !rp : kind === 'pin' ? stuck.some(s => angDiff(s.a, a) < GAP * .4) && rp : L.sents.some(q => sentMin(q, t + w[0], t + w[1]) < q.hw * .5) && rp) throwPin();
           }
           await frame();
         }
@@ -747,7 +748,7 @@ async function echec(b) {
       });
       S.eq(g.kickN, g.notPlanted, `${tag} : niveau ${n}, aiguilles restantes annoncées = aiguilles non plantées`);
       await p.screenshot({ path: path.join(OUT, `echec-${tag}-${kind}.png`) });
-      S.ok(g.y1 !== null && g.y1 <= g.filet - 4, `${tag} : ${kind === 'pin' ? 'point de collision' : 'sentinelle fautive'} ${(g.filet - g.y1).toFixed(1)} px au-dessus du filet (≥ 4 ; scène remontée de ${g.dy.toFixed(1)} px, échelle ${g.s.toFixed(2)})`);
+      S.ok(g.y1 !== null && g.y1 <= g.filet - 4, `${tag} : ${kind === 'pin' ? 'point de collision' : kind === 'ring' ? 'interception par l’anneau' : 'sentinelle fautive'} ${(g.filet - g.y1).toFixed(1)} px au-dessus du filet (≥ 4 ; scène remontée de ${g.dy.toFixed(1)} px, échelle ${g.s.toFixed(2)})`);
       S.ok(g.menuL > g.mid && g.hintL < g.menuL, `${tag} : MENU à droite de la feuille d'échec (MENU à ${g.menuL}, milieu ${g.mid})`);
       S.ok(Math.abs(g.hud - g.kick) <= 1, `${tag} : HUD aligné sur la feuille (${g.hud} contre ${g.kick})`);
       await p.evaluate(() => showMenu());
@@ -778,6 +779,81 @@ async function echec(b) {
   }
 }
 
+// feuilles de victoire, d'échec et de pause sur les niveaux à anneaux, sur les 5 écrans et sur ordinateur (1280×800) :
+// arcs des anneaux dessinés (boîte englobante à l'écran, coupe comprise) jamais sous le haut du panneau ; aucun anneau
+// derrière la feuille de victoire ; sur la feuille d'échec, seul l'anneau fautif ; pas de HUD du bas sous la pause
+async function feuilles(b) {
+  const S = section('feuilles');
+  for (const [w, h] of SCREENS.concat([[1280, 800]])) {
+    const tag = w + 'x' + h;
+    const c = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: w < 1000, hasTouch: w < 1000 });
+    const p = await c.newPage(); hook(p, 'feuilles-' + tag);
+    await p.goto(URL);
+    await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+    // instrumentation : arcs tracés par drawRings sur le canevas principal, en pixels CSS, et ordonnée de coupe
+    await p.evaluate(() => {
+      window.__ringBox = null;
+      const ov = window.drawRings, arc = ctx.arc;
+      window.drawRings = function (c_, g, only, clipY) {
+        if (c_ !== ctx) return ov.apply(this, arguments);
+        const box = window.__ringBox = window.__ringBox || { y0: 1e9, y1: -1e9, n: 0, rings: new Set(), clip: 1e9 };
+        if (clipY) box.clip = Math.min(box.clip, clipY);
+        for (const q of L.rings) if (!only || q === only) box.rings.add(q.k);
+        ctx.arc = function (x, y, r, a0, a1) {
+          const m = ctx.getTransform(), d = window.devicePixelRatio > 1 ? Math.min(window.devicePixelRatio, 2) : 1;
+          for (let i = 0; i <= 24; i++) { const a = a0 + (a1 - a0) * i / 24, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r, Y = (m.b * px + m.d * py + m.f) / d; box.y0 = Math.min(box.y0, Y); box.y1 = Math.max(box.y1, Y); }
+          box.n++; return arc.apply(this, arguments);
+        };
+        try { return ov.apply(this, arguments); } finally { ctx.arc = arc; }
+      };
+    });
+    const frames = n => p.evaluate(n => new Promise(res => { let k = 0; const f = () => (++k >= n ? res() : requestAnimationFrame(f)); requestAnimationFrame(f); }), n);
+    // victoire au niveau 81 (deux anneaux)
+    await p.evaluate(() => { soundOn = false; showMenu(); startLevel(81); });
+    S.eq(await fastWin(p), 'won', `${tag} : niveau 81 gagné`);
+    await p.waitForTimeout(400); await p.evaluate(() => { window.__ringBox = null; }); await frames(3);
+    const wv = await p.evaluate(() => ({ box: window.__ringBox && { n: window.__ringBox.n }, top: $('win').querySelector('.panel').getBoundingClientRect().top }));
+    S.ok(!wv.box || !wv.box.n, `${tag} : aucun anneau dessiné derrière la feuille de victoire (${wv.box ? wv.box.n : 0} arc(s))`);
+    if (tag === '320x568' || tag === '1280x800') await p.screenshot({ path: path.join(OUT, `feuille-victoire-${tag}.png`) });
+    // échec contre une aiguille (niveau 251, trois anneaux) puis interception par un anneau (niveau 81)
+    for (const [n, kind] of [[251, 'pin'], [81, 'ring']]) {
+      const k = await p.evaluate(async ([n, kind]) => {
+        const frame = () => new Promise(res => requestAnimationFrame(() => res()));
+        showMenu(); startLevel(n);
+        for (let i = 0; i < 3600 && state === 'play'; i++) {
+          if (!flying && left > 0) {
+            const a = predict(t).a, rp = L.rings.every(q => { const rw = ringWindow(q, t); return ringHit(q, rw[0], rw[1], RING_PAD[q.k]) < 0; });
+            if (kind === 'ring' ? !rp : rp && stuck.some(s => angDiff(s.a, a) < GAP * .4)) throwPin();
+          }
+          await frame();
+        }
+        return failInfo && failInfo.kind;
+      }, [n, kind]);
+      S.eq(k, kind, `${tag} : échec provoqué au niveau ${n}`);
+      await p.waitForFunction(() => state === 'failed');
+      await p.waitForTimeout(450); await p.evaluate(() => { window.__ringBox = null; }); await frames(3);
+      const fv = await p.evaluate(() => { const b = window.__ringBox; return { box: b && { y1: b.y1, clip: b.clip, n: b.n, rings: [...b.rings] }, filet: $('failPanel').getBoundingClientRect().top + 18, ring: failInfo.ring ? failInfo.ring.k : -1 }; });
+      if (kind === 'pin') S.ok(!fv.box || !fv.box.n, `${tag}, niveau ${n} : collision contre une aiguille, aucun anneau sur la feuille d'échec (${fv.box ? fv.box.n : 0} arc(s))`);
+      else {
+        const vis = fv.box ? Math.min(fv.box.y1, fv.box.clip) : -1;
+        S.ok(fv.box && fv.box.n > 0 && fv.box.rings.join() === String(fv.ring), `${tag}, niveau ${n} : seul l'anneau fautif est dessiné (anneaux ${fv.box ? fv.box.rings.join(',') : '-'}, fautif ${fv.ring})`);
+        S.ok(fv.box && vis <= fv.filet, `${tag}, niveau ${n} : anneau fautif coupé au-dessus du filet (${vis.toFixed(1)} ≤ ${fv.filet.toFixed(1)})`);
+      }
+      if (tag === '320x568' || tag === '1280x800') await p.screenshot({ path: path.join(OUT, `feuille-echec-${kind}-${tag}.png`) });
+    }
+    // pause : ni HUD du bas ni berceau sous les boutons de la feuille
+    const pz = await p.evaluate(() => new Promise(res => {
+      showMenu(); startLevel(252); update(3); pauseGame();
+      const seen = [], ov = window.vtext;
+      window.vtext = function (c_, str) { if (c_ === ctx && state === 'pause') seen.push(str); return ov.apply(this, arguments); };
+      requestAnimationFrame(() => requestAnimationFrame(() => { window.vtext = ov; res(seen); }));
+    }));
+    S.ok(!pz.includes('AIGUILLES') && !pz.includes('ROTATION'), `${tag} : pause sans HUD du bas (${pz.filter(x => x === 'AIGUILLES' || x === 'ROTATION').join(', ') || 'ok'})`);
+    if (tag === '320x568') await p.screenshot({ path: path.join(OUT, `feuille-pause-${tag}.png`) });
+    await c.close();
+  }
+}
+
 (async () => {
   const b = await chromium.launch();
   try {
@@ -793,6 +869,7 @@ async function echec(b) {
     if (want('tir')) await tir(b);
     if (want('reprendre')) await reprendre(b);
     if (want('echec')) await echec(b);
+    if (want('feuilles')) await feuilles(b);
   } catch (e) { errors.push('harness: ' + (e && e.stack || e)); }
   await b.close();
   const fails = Object.entries(results).flatMap(([k, r]) => r.fails.map(f => `[${k}] ${f}`));

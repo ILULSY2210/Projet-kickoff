@@ -271,10 +271,17 @@ function drawBody(c, g, S) {
 // porte de cet anneau sera alignée pour un tir lancé maintenant.
 function ringBar() { return Math.max(2.4, HEAD * .38); }
 const RING_VIS = .95, RING_FADE = 1.35;
-function drawRings(c, g) {
+// only : un seul anneau (feuille d'échec) ; clipY : ordonnée à l'écran sous laquelle rien n'est dessiné (filet du panneau)
+function drawRings(c, g, only, clipY) {
   const bw = ringBar(), now = RV.t;
+  if (clipY) {
+    // coupe exprimée dans le repère de la scène, déplacée et réduite par failView
+    const e = easeOut(FV.k), s = 1 + (FV.s - 1) * e, dy = FV.dy * e, ys = FV.A + (clipY - (FV.A - dy)) / s;
+    c.save(); c.beginPath(); c.rect(-1e4, -1e4, 2e4 + W, ys + 1e4); c.clip();
+  }
   c.lineCap = 'butt';
   for (const q of L.rings) {
+    if (only && q !== only) continue;
     const rr = RRAD[q.k], th = q.a0 + q.w * now, hot = failInfo && failInfo.ring === q, gs = gateState(q, now), n = q.gates.length;
     const colr = col(hot ? PAL.alert : PAL.rgb, 1), cut = q.gates.map(gt => [th + gt.c - gt.h, th + gt.c + gt.h]);
     // seule la partie basse compte (le couloir de tir) : arc plein sur ±RING_VIS, estompé au-delà, rien en haut de l'écran
@@ -310,6 +317,7 @@ function drawRings(c, g) {
     }
   }
   c.lineCap = 'round'; c.globalAlpha = 1;
+  if (clipY) c.restore();
 }
 
 // bande d'une zone dynamique sur le cercle des têtes : [centre ± hw] (la tête d'une aiguille qui la touche est perdue)
@@ -401,7 +409,8 @@ function failMarkBox() {
   const S = GSC, ro = S.rot === undefined ? rot : S.rot, q = HEAD * 1.9 + 2.4, b = { x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9 };
   const add = (x, y, r) => { b.x0 = Math.min(b.x0, x - r); b.x1 = Math.max(b.x1, x + r); b.y0 = Math.min(b.y0, y - r); b.y1 = Math.max(b.y1, y + r); };
   const y = cy - pulse * 3;
-  if (failInfo.kind === 'sent') {
+  if (failInfo.kind === 'ring') add(cx, cy + RRAD[failInfo.ring.k], q);   // interception par un anneau : sur l'axe de tir
+  else if (failInfo.kind === 'sent') {
     add(cx, cy + RS, q);
     const qs = failInfo.sent, sa = qs.a0 + qs.w * RV.t;
     for (let i = 0; i <= 16; i++) { const an = sa - qs.hw + 2 * qs.hw * i / 16; add(cx + Math.cos(an) * RS, y + Math.sin(an) * RS, SENT_HW + 1); }
@@ -461,7 +470,12 @@ function drawGame(c, g) {
       c.beginPath(); c.arc(S.x, S.y, R + PL + HEAD + 5, Math.min(a1, a1 + dlt), Math.max(a1, a1 + dlt)); c.stroke(); c.globalAlpha = 1;
     }
   }
-  if (L.rings.length) drawRings(c, g);
+  // anneaux : aucun derrière la feuille de victoire ; sur la feuille d'échec, seul l'anneau fautif, coupé au-dessus du filet
+  // du panneau (les autres traverseraient les textes de la feuille)
+  if (L.rings.length && state !== 'won') {
+    if (state !== 'failed') drawRings(c, g);
+    else if (failInfo && failInfo.ring) drawRings(c, g, failInfo.ring, sheetTop - 2);
+  }
   // --- aiguille en vol / sur le pas de tir ---
   for (const f of flights) {
     if (f.yTip === undefined) continue;
@@ -479,6 +493,7 @@ function drawGame(c, g) {
     if (failInfo && (state === 'dying' || state === 'failed' || state === 'pause')) {
       const A = col(PAL.alert, 1); let fx, fy;
       if (failInfo.kind === 'sent') { fx = cx; fy = cy + RS; }
+      else if (failInfo.kind === 'ring') { fx = cx; fy = cy + RRAD[failInfo.ring.k]; }
       else { const fa = failInfo.a + S.rot; fx = S.x + Math.cos(fa) * (R + PL); fy = S.y + Math.sin(fa) * (R + PL); }
       const who = failInfo.who, q = HEAD * 1.9, bl = rm() ? 1 : .65 + .35 * Math.sin(time * 14);
       c.strokeStyle = A; c.lineCap = 'round';
@@ -505,7 +520,7 @@ function drawGame(c, g) {
     c.globalAlpha = g ? .5 : 1; vtext(c, d, cx - vwidth(d, h) / 2, yc - h / 2, h, 0, col(hi, 1), g ? 4 : 2);
     c.globalAlpha = 1;
   }
-  if (!g && !sheet) {
+  if (!g && !sheet && state !== 'pause') {
     // berceau du pas de tir
     const by = LAUNCH + PL, q = HEAD + 5;
     c.globalAlpha = .6; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.2;
@@ -576,7 +591,8 @@ function drawHud(c, g, sheet) {
     c.globalAlpha = g ? .5 : got ? 1 : .45; c.strokeStyle = col(got ? acc : rgb, 1); c.lineWidth = g ? 3.5 : 1.4; c.stroke();
   }
   c.globalAlpha = 1;
-  if (sheet) return;
+  // feuilles (victoire, échec) et pause : pas de HUD du bas, que les boutons de la feuille recouvrent
+  if (sheet || state === 'pause') return;
   // --- bas gauche : aiguilles restantes ---
   const py = LAUNCH + 4, xl = SX + 18;
   if (!g) vtext(c, 'AIGUILLES', xl, py, 7, 0, col(rgb, PAL.lab), 1.1);
