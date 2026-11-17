@@ -105,7 +105,7 @@ function makeLevel(n) {
   const teach = teachOf(n), known = learnedAt(n), has = f => known.has(f);
   const inf = n > LAST_LEVEL;
   // --- recette : loi, sens, obstacles, intensité ---
-  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null, demi: null, rhythm: null, inv: false, ramp: null, irr: null, pulse: 0, glide: 0 };
+  const R = { law: 0, dir: 1, layout: 'scatter', zones: [], fentes: false, sent: 0, trav: false, orbs: 0, N: 4, F: 0, omega: 1, accel: null, demi: null, rhythm: null, inv: false, ramp: null, irr: null, pulse: 0, glide: 0, rings: 0, gateW: .9, gates: 3, ringV: .6, gatePulse: false };
   R.N = Math.round(lerp(DW.throws[0], DW.throws[1], d)); R.F = lerp(DW.fixed[0], DW.fixed[1], d); R.omega = lerp(DW.speed[0], DW.speed[1], d);
   R.dir = has('sens') ? (r() < .5 ? 1 : -1) : 1;
   R.orbs = has('etoiles') ? (n < 11 ? 2 : 3) : 0;
@@ -140,6 +140,10 @@ function makeLevel(n) {
     if (teach === 'irreg') { R.N = 5; R.law = 6; R.irr = 2; }
     if (teach === 'pulse') { R.N = 5; R.pulse = 1; }
     if (teach === 'glisse') { R.N = 5; R.glide = 1; }
+    if (teach === 'anneau') { R.N = 5; R.rings = 1; R.gateW = .9; R.ringV = .55; }
+    if (teach === 'anneaux2') { R.N = 5; R.rings = 2; R.gateW = .85; R.ringV = .6; }
+    if (teach === 'anneaux3') { R.N = 5; R.rings = 3; R.gateW = .8; R.ringV = .6; }
+    if (teach === 'portesPulsees') { R.N = 5; R.rings = 1; R.gateW = .85; R.ringV = .55; R.gatePulse = true; }
   } else if (boss) {
     const B = BOSSES[bossArch(n)], tier = Math.min(wi, 5);
     R.N = B.throws[tier]; R.omega = B.speed[tier]; R.F = 0; R.orbs = has('etoiles') ? 3 : 0;
@@ -151,6 +155,11 @@ function makeLevel(n) {
     if (arch === 'forteresse' && tier === 1 && has('rampe')) R.ramp = { k: .5, T: 15 };
     if (arch === 'forteresse') { R.zones = tier === 1 ? [.3, .3, .3] : tier === 0 ? [.45, .45] : [.4, .4]; if (tier === 4 && has('sentinelle')) R.sent = 1; if (has('pulse')) R.pulse = [0, 0, 1, 1, 2, 3][tier]; if (tier === 3 && has('glisse')) R.glide = 1; }
     if (arch === 'anneaux') { R.F = 2; if (tier === 2) R.zones = [.4]; if (tier === 3 && has('alternee')) R.law = 2; if (tier >= 4 && has('sentinelle')) R.sent = 1; }
+    if (arch === 'anneaux' && has('anneau')) {
+      R.rings = tier === 0 ? 1 : tier === 5 && has('anneaux3') ? 3 : has('anneaux2') ? 2 : 1;
+      R.gateW = [.9, .8, .7, .7, .65, .6][tier]; R.gates = tier === 5 ? 2 : 3; R.ringV = .5 + .12 * tier; R.gatePulse = tier === 5 && has('portesPulsees');
+    }
+    if (arch === 'chaos' && has('anneau') && tier >= 1 && tier !== 4) { R.rings = tier >= 3 && has('anneaux2') ? 2 : 1; R.gateW = .8 - .04 * tier; R.ringV = .45 + .1 * tier; }
     if (arch === 'chaos') { R.law = has('irreg') ? 6 : has('alternee') ? 2 : has('respiration') ? 1 : 0; R.irr = tier === 0 ? 2 : tier === 5 ? 4 : 3; R.F = 2; if (tier >= 4 && has('sentinelle')) R.sent = has('sentinelles2') ? 2 : 1; }
     R.F += R.zones.length * 2;
   } else {
@@ -165,6 +174,12 @@ function makeLevel(n) {
     if (has('sentinelle') && r() < (wi >= 4 ? .55 : .2)) R.sent = has('sentinelles2') && r() < (wi >= 4 ? .4 : .2) ? 2 : 1;
     // accélération à chaque aiguille : idée d'Émeraude (9), cœur d'Ambre
     if (has('accel') && r() < (wi === 1 ? .55 : .25)) R.accel = { k: .03 + .04 * d, cap: 1.25 + .3 * d };
+    // anneaux à portes (39), deux à contre-sens (81), trois (251), portes pulsées (261) : cœur de Cosmos
+    if (has('anneau') && r() < [.25, .35, .2, .25, .25, .6][wi]) {
+      R.rings = has('anneaux3') && r() < .3 ? 3 : has('anneaux2') && r() < .45 ? 2 : 1;
+      R.gateW = lerp(.95, .6, d) - .04 * (R.rings - 1); R.gates = R.gateW < .7 && r() < .4 ? 2 : 3; R.ringV = .45 + .6 * d;
+      R.gatePulse = has('portesPulsees') && r() < .35;
+    }
     // zones pulsées (111) : cœur de Rubis
     if (has('pulse') && r() < (wi === 2 ? .45 : .15)) R.pulse = d > .6 && r() < .5 ? 2 : 1;
     // zone glissante (121) : elle passe sur les aiguilles plantées sans effet
@@ -180,7 +195,7 @@ function makeLevel(n) {
     // anti-salve (à partir du monde 2) : au moins deux moyens parmi zones larges, loi à arrêts ou inversions,
     // obstacles mobiles ; à défaut, on ajoute ceux qui sont appris
     if (wi >= 1) {
-      const A = () => (R.zones.length || R.fentes ? 1 : 0), Bm = () => ([2, 4, 5].includes(R.law) ? 1 : 0), C = () => (R.sent ? 1 : 0);
+      const A = () => (R.zones.length || R.fentes ? 1 : 0), Bm = () => ([2, 4, 5].includes(R.law) ? 1 : 0), C = () => (R.sent || R.rings ? 1 : 0);
       if (A() + Bm() + C() < 2 && has('zone') && !A()) R.zones = [.35 + .15 * r()];
       if (A() + Bm() + C() < 2) { const stops = laws.filter(x => [2, 4, 5].includes(x)); if (stops.length) { R.law = stops[Math.floor(r() * stops.length)]; R.irr = null; } }
     }
@@ -239,6 +254,34 @@ function makeLevel(n) {
   const lawMean = R.law === 6 ? (() => { let a = 0; for (let i = 0; i < 20000; i++) a += Math.abs(patSpeed(6, 1, i * .01, irr)); return Math.round(a / 20000 * 1e9) / 1e9; })() : LAW_MEAN[R.law];
   const omega = R.omega * (DIFFICULTY.tune[n] || 1), speed = omega / lawMean;
   const dir = R.dir, phase = r() * 10;
+  // --- anneaux à portes. Portes régulièrement espacées, anneaux voisins à contre-sens ; tous les anneaux d'un niveau ont la
+  // même période de passage Tp = 2π / (portes × |ω|) (un anneau à 2 portes tourne 1,5 fois plus vite) et leurs portes se
+  // rejoignent sur l'axe de tir à t* + j·Tp : une fenêtre de passage commune revient à chaque période. Portes pulsées :
+  // période 1,5·Tp, ouvertes la moitié du temps puis annoncées (0,6 s) et fermées : un passage sur trois environ est fermé.
+  const rings = [];
+  if (R.rings) {
+    // vitesse des anneaux choisie (±20 %) pour que l'astre ne fasse pas un nombre presque entier de tours par période de
+    // passage, à sa vitesse moyenne comme à ses vitesses accélérées : sinon chaque fenêtre de passage présenterait les
+    // mêmes angles d'impact, et le bord pourrait ne plus jamais offrir de place au bon moment
+    const oms = [omega]; if (R.accel) oms.push(omega * R.accel.cap, omega * Math.sqrt(R.accel.cap)); if (R.ramp) oms.push(omega * (1 + R.ramp.k), omega * (1 + R.ramp.k / 2));
+    let bv = R.ringV, bs = -1;
+    // (fraction de tour par période loin de 0, 1/4, 1/3, 1/2, 2/3, 3/4 : les fenêtres successives balaient tout le bord)
+    const RAT = [0, .25, 1 / 3, .5, 2 / 3, .75, 1];
+    for (let f = .8; f <= 1.2001; f += .01) { const v = R.ringV * f, T = TAU / (R.gates * v); let m = 1; for (const o of oms) { const x = (o * T / TAU) % 1; for (const q of RAT) m = Math.min(m, Math.abs(x - q)); } if (m > bs + 1e-9) { bs = m; bv = v; } }
+    // fenêtre de passage commune d'au moins RING_WIN s (porte moins la marge de l'aiguille, à la vitesse de l'anneau le
+    // plus rapide) : sinon le bord n'offrirait presque jamais de place au moment où les portes s'alignent
+    for (let k = 0; k < R.rings; k++) { const nk = R.gates === 3 && k === 2 ? 2 : R.gates; bv = Math.min(bv, (R.gateW - 2 * RING_PAD[k]) * nk / (R.gates * RING_WIN)); }
+    R.ringV = Math.round(bv * 1e6) / 1e6;
+    const Tp = TAU / (R.gates * R.ringV), tStar = phase + .8 + r() * Tp, s0 = r() < .5 ? 1 : -1;
+    for (let k = 0; k < R.rings; k++) {
+      const nk = R.gates === 3 && k === 2 ? 2 : R.gates, wk = (k % 2 ? -s0 : s0) * R.gates * R.ringV / nk, h = R.gateW / 2;
+      const c0 = r() * TAU, gates = [];
+      for (let i = 0; i < nk; i++) gates.push({ c: Math.round(norm(c0 + i * TAU / nk) * 1e9) / 1e9, h: Math.round(h * 1e6) / 1e6 });
+      const w = Math.round(wk * 1e6) / 1e6, q = { k, a0: Math.round(norm(HPI - c0 - w * tStar) * 1e9) / 1e9, w, gates, pulse: null };
+      if (R.gatePulse) { const P = Math.round(1.5 * Tp * 1e6) / 1e6; q.pulse = { P, open: Math.round(P / 2 * 1e6) / 1e6, ann: .6, ph: Math.round((tStar - P / 4) * 1e6) / 1e6 }; }
+      rings.push(q);
+    }
+  }
   // --- étoiles bonus : loin des obstacles ; pour les traversantes, seulement là où une capture sûre existe ---
   const orbs = [];
   for (let pass = 0; pass < 2 && orbs.length < R.orbs; pass++) {
@@ -282,7 +325,7 @@ function makeLevel(n) {
   const blockers = pre.map(a => ({ a: norm(a), pre: true, k: 1 }));
   for (const wl of walls) for (const p of wallPoints(wl.a0, wl.a1 - wl.a0)) blockers.push({ a: norm(p), pre: true, wall: true, k: 1 });
   const lv = { n, w, boss, special, sp, teach, throws, pre, walls, orbs, sents, speed, omega, pattern: R.law, dir, phase, rot0, trav, vmax, d,
-    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, irr, zones, blockers };
+    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, irr, zones, rings, blockers };
   lv.flags = levelFlags(lv);
   return lv;
 }
@@ -298,6 +341,10 @@ function levelFlags(lv) {
   if (lv.fentes) f.push('fentes');
   if (lv.sents.length) f.push('sentinelle');
   if (lv.sents.length > 1) f.push('sentinelles2');
+  if (lv.rings.length) f.push('anneau');
+  if (lv.rings.length > 1) f.push('anneaux2');
+  if (lv.rings.length > 2) f.push('anneaux3');
+  if (lv.rings.some(q => q.pulse)) f.push('portesPulsees');
   if (lv.trav) f.push('traversantes');
   if (lv.accel) f.push('accel');
   if (lv.demi) f.push('demitour');

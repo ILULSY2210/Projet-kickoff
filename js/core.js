@@ -54,7 +54,7 @@ function launch(tL) {
 function fail(kind, a, d, who) {
   state = 'dying'; dieT = 0; spinK = 1;
   // lost : aiguilles perdues avec l'échec (celle qui échoue et celle qui vole encore derrière elle)
-  failInfo = { kind, a: kind === 'twin' ? norm(a + Math.PI) : a, d, who, sent: kind === 'sent' ? who : null, lost: Math.max(1, flights.length) };
+  failInfo = { kind, a: kind === 'twin' ? norm(a + Math.PI) : a, d, who: kind === 'ring' ? null : who, sent: kind === 'sent' ? who : null, ring: kind === 'ring' ? who : null, lost: Math.max(1, flights.length) };
   flights = []; flying = null; nearMark = null;
   bus.emit('fail', failInfo);
 }
@@ -73,8 +73,8 @@ function win() {
 // telle : la distance au bloqueur invisible le plus proche de l'arc n'aurait aucun sens (« il manquait 4° » pour 20°).
 function inZone(a, lv) { return lv.walls.some(wl => angDiff(a, (wl.a0 + wl.a1) / 2) <= (wl.a1 - wl.a0) / 2); }
 function failCause(info, lv) {
-  const deg = info.kind === 'sent' || info.kind === 'zone' ? 0 : Math.max(1, Math.ceil((GAP - info.d) * 180 / Math.PI));
-  const key = info.kind === 'sent' ? 'sent' : info.kind === 'zone' ? (info.twin ? 'twinZone' : 'zone') : inZone(info.a, lv) ? (info.kind === 'twin' ? 'twinZone' : 'zone') : info.kind === 'twin' ? 'twin' : 'pin';
+  const deg = info.kind === 'sent' || info.kind === 'zone' || info.kind === 'ring' ? 0 : Math.max(1, Math.ceil((GAP - info.d) * 180 / Math.PI));
+  const key = info.kind === 'sent' ? 'sent' : info.kind === 'ring' ? 'ring' : info.kind === 'zone' ? (info.twin ? 'twinZone' : 'zone') : inZone(info.a, lv) ? (info.kind === 'twin' ? 'twinZone' : 'zone') : info.kind === 'twin' ? 'twin' : 'pin';
   const T = FAIL_TEXT[key], f = x => x.replace('{d}', deg);
   return { key, deg, short: f(T.short), long: f(T.long), tip: T.tips[(lv.n + lv.throws) % T.tips.length] };
 }
@@ -220,6 +220,32 @@ function sentMin(q, s0, s1) {
   return (d0 > 0) !== (d1 > 0) ? 0 : Math.min(Math.abs(d0), Math.abs(d1));
 }
 
+/* ---------- anneaux à portes ---------- */
+// Anneau q (k = 0, 1, 2 du cadran vers le pas de tir), en rotation uniforme : angle q.a0 + q.w·t ; portes { c, h } dans son
+// repère. L'aiguille le traverse pendant [tL + U.rings[k]·FLIGHT, tL + (U.rings[k] + U.len)·FLIGHT] : pendant tout ce temps,
+// l'axe de tir doit rester dans une porte ouverte, à RING_PAD[k] près. Portes pulsées : ouvertes, annoncées (0,6 s),
+// fermées, à la période P.
+function ringWindow(q, tL) { const u = U.rings[q.k]; return [tL + u * FLIGHT, tL + (u + U.len) * FLIGHT]; }
+// état des portes à t : 0 ouvertes, 1 annoncées (encore ouvertes), 2 fermées
+function gateState(q, t) { const p = q.pulse; if (!p) return 0; const x = ((t - p.ph) % p.P + p.P) % p.P; return x < p.open ? 0 : x < p.open + p.ann ? 1 : 2; }
+// porte qui contient l'axe à t avec la marge pad (rad), ou −1
+function ringGate(q, t, pad) {
+  if (gateState(q, t) === 2) return -1;
+  const phi = HPI - (q.a0 + q.w * t);
+  for (let i = 0; i < q.gates.length; i++) if (Math.abs(angSigned(q.gates[i].c, phi)) <= q.gates[i].h - pad) return i;
+  return -1;
+}
+// premier instant de [s0, s1] où l'anneau q intercepte l'aiguille (axe hors d'une porte ouverte), ou −1 ; exact
+function ringHit(q, s0, s1, pad) {
+  if (s1 < s0) return -1;
+  const i = ringGate(q, s0, pad);
+  if (i < 0) return s0;
+  let te = Infinity;
+  if (q.w) { const g = q.gates[i], d = angSigned(g.c, HPI - (q.a0 + q.w * s0)), lim = g.h - pad; te = s0 + (q.w > 0 ? d + lim : lim - d) / Math.abs(q.w); }
+  if (q.pulse) { const p = q.pulse, x = ((s0 - p.ph) % p.P + p.P) % p.P; te = Math.min(te, s0 + (p.open + p.ann - x)); }
+  return te <= s1 ? te : -1;
+}
+
 /* ---------- prédiction : même intégrateur et même grille de pas que le jeu ---------- */
 // Pour une aiguille lancée à l'instant tL (≥ t), rotation et angle d'impact ; exact au bit près si le jeu avance en pas de
 // STEP. Les rotations aux instants t + k·STEP sont gardées en cache tant que l'état (t, rot, niveau, loi : lawVer) ne
@@ -249,6 +275,12 @@ function shotSafe(tL, k) {
   const a = norm(HPI - predictRot(tL)), G = GAP * (1 + k), M = GAP * k;
   for (const s of stuck) if (angDiff(s.a, a) <= G) return false;
   if (L.trav) { const b = a + Math.PI; for (const s of stuck) if (angDiff(s.a, b) <= G) return false; }
+  if (L.rings.length) {
+    // anneaux : l'axe dans une porte ouverte pendant toute la traversée ; marge du prédicteur exprimée en temps (k × 50 ms
+    // de part et d'autre : 35 ms pour k = 0,7), les portes étant étroites à l'échelle de GAP
+    const e = k * .05;
+    for (const q of L.rings) { const w = ringWindow(q, tL); if (ringHit(q, w[0] - e, w[1] + e, RING_PAD[q.k]) >= 0) return false; }
+  }
   if (L.zones.length) {
     // zones dynamiques à l'impact (marge : k × GAP en angle, et ±0,1 s si k > 0, déplacement d'une zone glissante compris)
     const tI = tL + FLIGHT, e = k > 0 ? .1 : 0, b = a + Math.PI;
@@ -351,6 +383,10 @@ function step(h) {
             if (z >= 0 && (tS < 0 || z < tS)) { tS = z; who = q; }
           }
         }
+        if (L.rings.length) for (const q of L.rings) {
+          const w = ringWindow(q, f.tL), x = ringHit(q, Math.max(t0, w[0]), Math.min(t1, w[1]), RING_PAD[q.k]);
+          if (x >= 0 && (tS < 0 || x < tS)) { tS = x; who = q; }
+        }
         if (tS >= 0) ev.push({ te: tS, f, who });
         else if (tI <= t1) ev.push({ te: tI, f, who: null });
       }
@@ -361,7 +397,7 @@ function step(h) {
         // du même pas a changé la loi de vitesse)
         t = e.te; rot = lc ? rp + (e.te - tp) * (vp + speedAt(e.te)) / 2 : r0 + (e.te - t0) * (v0 + speedAt(e.te)) / 2;
         const lv = lawVer;
-        if (e.who) fail('sent', 0, 0, e.who); else stick(norm(HPI - rot), e.f);
+        if (e.who) fail(e.who.gates ? 'ring' : 'sent', 0, 0, e.who); else stick(norm(HPI - rot), e.f);
         if (lawVer !== lv) { lc = true; tp = e.te; rp = rot; vp = speedAt(e.te); }
       }
     }

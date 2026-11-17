@@ -7,6 +7,7 @@
 //           ancien total, CONTINUER → niveau 1 ; valeurs corrompues (v1 et v2) sans erreur.
 //   regles : bandeau de règle d'un niveau d'apprentissage à ≥ 10 px pendant ≥ 2 s (même après un tir), relisible dans
 //           la pause et dans la sélection des niveaux (320×568).
+//   anneaux : géométrie des anneaux à portes en 320×568 et 360×640 (écarts, portes ≥ 3 têtes, losanges, bandeaux dessous).
 //   boot  : démarrage avec les domaines Google bloqués : state défini en < 1 s, aucune requête tierce, polices locales.
 //   offline : second chargement sans réseau (service worker) en < 1 s.
 //   update  : une nouvelle VERSION du service worker ne s'applique qu'au menu, jamais pendant un niveau.
@@ -293,6 +294,44 @@ async function regles(b) {
   await c.close();
 }
 
+// anneaux à portes (géométrie du plan, 4.4) en 320×568 et 360×640 : écart entre anneaux ≥ 12 px (≥ 14 en 320×568),
+// portes ≥ 3 × HEAD (la plus étroite des niveaux 1..400), losanges ≥ 8 px, bandeaux et messages sous les anneaux, anneaux
+// au-dessus du HUD du bas ; captures anneaux-*.png
+async function anneaux(b) {
+  const S = section('anneaux');
+  for (const [w, h] of [[320, 568], [360, 640]]) {
+    const tag = w + 'x' + h;
+    const c = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const p = await c.newPage(); hook(p, 'anneaux-' + tag);
+    await p.goto(URL);
+    await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+    const g = await p.evaluate(() => {
+      let gate = 1e9, gn = 0; const lv = [];
+      for (let n = 1; n <= 400; n++) { const l = makeLevel(n); for (const q of l.rings) for (const gt of q.gates) { const px = 2 * gt.h * RRAD[q.k]; if (px < gate) { gate = px; gn = n; } } if (l.rings.length && lv.length < 6 && (l.teach || l.rings.length === 3 || lv.length < 2)) lv.push(n); }
+      return { gaps: [RRAD[1] - RRAD[0], RRAD[2] - RRAD[1]], gate, gn, head3: 3 * HEAD, diamond: 10, ringBottom: cy + RRAD[2] + ringBar() / 2, hudTop: LAUNCH + 4, lv };
+    });
+    const minGap = w === 320 ? 14 : 12;
+    S.ok(Math.min(...g.gaps) >= minGap, `${tag} : écart entre anneaux ${Math.min(...g.gaps).toFixed(1)} px (≥ ${minGap})`);
+    S.ok(g.gate >= g.head3, `${tag} : porte la plus étroite ${g.gate.toFixed(1)} px (niveau ${g.gn}) ≥ 3 × HEAD = ${g.head3.toFixed(1)}`);
+    S.ok(g.diamond >= 8, `${tag} : losanges de ${g.diamond} px (≥ 8)`);
+    S.ok(g.ringBottom < g.hudTop - 6, `${tag} : anneaux au-dessus du HUD du bas (${g.ringBottom.toFixed(0)} < ${g.hudTop.toFixed(0)})`);
+    // bandeaux (monde, niveau, règle) des niveaux à anneaux : textes du canevas sous les anneaux
+    for (const n of g.lv) {
+      const r = await p.evaluate(n => new Promise(res => {
+        soundOn = false; showMenu(); const boxes = [], ov = window.vtext;
+        window.vtext = function (cx_, str, x, y, hh) { if (cx_ === ctx && state === 'play' && (wIntro > 0 || intro > 0 || teachT > 0) && y > cy) boxes.push({ str, y0: y }); return ov.apply(this, arguments); };
+        startLevel(n);
+        setTimeout(() => { window.vtext = ov; const rb = ringsBottom(); res({ bad: [...new Set(boxes.filter(b => b.y0 < rb - 6).map(b => b.str))], n: boxes.length }); }, 4800);
+      }), n);
+      S.ok(r.n > 0 && !r.bad.length, `${tag}, niveau ${n} : bandeaux sous les anneaux (${r.bad.join(' | ') || 'ok'})`);
+    }
+    await p.evaluate(n => { showMenu(); startLevel(n); update(5); }, g.lv[g.lv.length - 1]);
+    await p.waitForTimeout(200);
+    await p.screenshot({ path: path.join(OUT, `anneaux-${tag}.png`) });
+    await c.close();
+  }
+}
+
 async function boot(b) {
   const S = section('boot');
   for (const mode of ['file', 'http']) {
@@ -435,12 +474,16 @@ async function ecrans(b) {
         tete_sentinelle: [cross(1, cy + RS), (U.sent + U.len) * FLIGHT * 1000],
         centre_tete_sentinelle: [cross(1, cy + RS, HEAD), tC],
         tete_tetes: [cross(1, cy + R + PL + HEAD), (U.head + U.len) * FLIGHT * 1000],
+        pointe_anneau0: [cross(0, cy + RRAD[0]), U.rings[0] * FLIGHT * 1000],
+        pointe_anneau1: [cross(0, cy + RRAD[1]), U.rings[1] * FLIGHT * 1000],
+        pointe_anneau2: [cross(0, cy + RRAD[2]), U.rings[2] * FLIGHT * 1000],
+        tete_anneau2: [cross(1, cy + RRAD[2]), (U.rings[2] + U.len) * FLIGHT * 1000],
         pointe_contact: [cross(0, cy + R), FLIGHT * 1000]
       };
       // même journal de tirs (numéros de pas depuis le début du niveau) sur plusieurs niveaux
       // continue, à-coups, sentinelle, traversantes
       const fst = (f, from) => { for (let n = from || 1; n < 400; n++) if (f(makeLevel(n))) return n; return 0; };
-      o.jeux = [8, fst(l => l.pattern === 3), fst(l => l.sents.length > 0), fst(l => l.trav)].map(n => {
+      o.jeux = [8, fst(l => l.pattern === 3), fst(l => l.sents.length > 0), fst(l => l.trav), fst(l => l.rings.length > 1)].map(n => {
         startLevel(n);
         const journal = [70, 150, 230, 320, 400, 470, 560, 650, 720, 810, 900, 980];
         let j = 0;
@@ -721,6 +764,7 @@ async function echec(b) {
     if (want('smoke')) await smoke(b);
     if (want('migration')) await migration(b);
     if (want('regles')) await regles(b);
+    if (want('anneaux')) await anneaux(b);
     if (want('boot')) await boot(b);
     if (want('offline')) await offline(b);
     if (want('update')) await update(b);

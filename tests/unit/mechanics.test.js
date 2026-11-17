@@ -145,7 +145,7 @@ function zoneCheck(name, kind, first) {
     G.throwPin(tL);
     for (let j = 0; j < 20 && G.get('flights').length && G.get('state') === 'play'; j++) G.update(STEP);
     const lost = G.get('state') !== 'play';
-    if (lost) { dead++; check(G.get('failInfo').kind === 'zone' || G.get('failInfo').kind === 'pin', `${name}, niveau ${n} : perdue (${G.get('failInfo').kind}, état ${st})`); }
+    if (lost) { dead++; check(['zone', 'pin', 'ring', 'sent', 'twin'].includes(G.get('failInfo').kind), `${name}, niveau ${n} : perdue (${G.get('failInfo').kind}, état ${st})`); }
     else {
       kept++;
       const n0 = G.get('stuck').length, a0 = G.get('stuck')[n0 - 1].a;
@@ -166,6 +166,32 @@ zoneCheck('zones glissantes', 'glide', 121);
   for (const n of ns) { const q = mk(n).sents; check(Math.sign(q[0].w) === -Math.sign(q[1].w), `deux sentinelles, niveau ${n} : sens opposés`); }
   out.push(predictionCheck('deux sentinelles', ns));
 }
+// anneaux à portes (1, 2, 3 anneaux, portes pulsées) : l'aiguille est interceptée si et seulement si l'axe sort d'une
+// porte ouverte pendant sa traversée (ringHit, la même règle que le jeu) ; anneaux voisins à contre-sens
+function ringCheck(name, pred, first) {
+  const ns = levelsWith(pred, 6);
+  check(ns[0] === first, `${name} : premier niveau ${ns[0]}`);
+  out.push(predictionCheck(name, ns));
+  let hit = 0, pass = 0;
+  for (const n of ns.slice(0, 4)) {
+    const R = mk(n).rings; for (let k = 1; k < R.length; k++) check(Math.sign(R[k].w) === -Math.sign(R[k - 1].w), `${name}, niveau ${n} : anneaux voisins à contre-sens`);
+    for (let i = 0; i < 250; i++) {
+      G.startLevel(n); G.update(.3 + i * .017);
+      const tL = G.get('t') + rnd() * STEP;
+      const fatal = G.run(`L.rings.some(q => { const w = ringWindow(q, ${tL}); return ringHit(q, w[0], w[1], RING_PAD[q.k]) >= 0; })`);
+      G.throwPin(tL);
+      for (let j = 0; j < 20 && G.get('flights').length && G.get('state') === 'play'; j++) G.update(STEP);
+      const kind = G.get('state') !== 'play' && G.get('failInfo') ? G.get('failInfo').kind : null;
+      check((kind === 'ring') === fatal, `${name}, niveau ${n} : tir à ${tL.toFixed(4)} : règle ${fatal ? 'interception' : 'passage'}, jeu ${kind || 'planté'}`);
+      if (fatal) hit++; else pass++;
+    }
+  }
+  check(hit > 100 && pass > 100, `${name} : échantillon (${hit} interceptions, ${pass} passages)`);
+}
+ringCheck('anneau', L => L.rings.length > 0, 39);
+ringCheck('deux anneaux', L => L.rings.length > 1, 81);
+ringCheck('trois anneaux', L => L.rings.length > 2, 251);
+ringCheck('portes pulsées', L => L.rings.some(q => q.pulse), 261);
 console.log(out.join('\n'));
 if (fails.length) { console.log('mechanics : ÉCHEC\n  ' + fails.slice(0, 20).join('\n  ')); process.exit(1); }
 console.log('mechanics : pass');

@@ -6,14 +6,19 @@ const STEP = 1 / 120;
 // vol : durée constante et positions physiques u (0 = pas de tir, 1 = contact avec l'astre), les mêmes sur tous les écrans,
 // relevées sur la mise en page de référence 390×844. L'aiguille mesure U.len (pointe en u, extrémité de la tête en u − U.len).
 const FLIGHT = .060;
-const U = { len: .24, head: .76, sentIn: .73, sent: .71, sentOut: .69, dial: .66 };
+const U = { len: .24, head: .76, sentIn: .73, sent: .71, sentOut: .69, dial: .66, rings: [.62, .57, .52] };
+// anneaux à portes : demi-largeur angulaire de l'aiguille (tête + demi-épaisseur de l'anneau) au rayon de chaque anneau,
+// relevée sur la mise en page de référence 390×844 (une porte doit contenir l'axe de tir ± RING_PAD pendant la traversée)
+const RING_PAD = [.048, .044, .041];
+// fenêtre de passage commune minimale des anneaux (s)
+const RING_WIN = .42;
 // marge angulaire des sentinelles (rad) : bout arrondi de leur trait + demi-épaisseur de la tige, mesurée en 390×844
 const SENT_PAD = .038;
 // tête de l'aiguille en vol (disque) contre une sentinelle. UREF : rayons dessinés de la mise en page de référence 390×844
 // aux positions u de la carte, rapportés au rayon RS de l'orbite des sentinelles ; HEAD_REF : rayon de la tête / RS ;
 // SENT_PAD_HEAD : demi-épaisseur des sentinelles + rayon de la tête, / RS (rad). Le centre de la tête en vol suit UREF
 // (extrémité de la tête en u − U.len, centre HEAD_REF plus près de l'astre) : contact dessiné ⇔ interception en 390×844.
-const UREF = [[0, 2.37475], [U.dial, 1.11350], [U.sentOut, 1.03245], [U.sent, 1], [U.sentIn, .96755], [U.head, .88884], [1, .42026]];
+const UREF = [[0, 2.37475], [U.rings[2], 1.39799], [U.rings[1], 1.29166], [U.rings[0], 1.18534], [U.dial, 1.11350], [U.sentOut, 1.03245], [U.sent, 1], [U.sentIn, .96755], [U.head, .88884], [1, .42026]];
 const HEAD_REF = .04833, SENT_PAD_HEAD = .08078;
 // compte à rebours de REPRENDRE (s) : rotation figée, tirs ignorés
 const COUNTDOWN = .6;
@@ -93,7 +98,7 @@ const TEACH_TEXT = {
 // idées du générateur déjà réalisées (les autres arrivent chacune avec son commit ; d'ici là, leur niveau d'apprentissage
 // est un niveau ordinaire qui n'introduit rien)
 const IMPL = ['lancer', 'bloqueurs', 'etoiles', 'sens', 'accel', 'demitour', 'rythme', 'invImpact', 'rampe', 'irreg', 'pulse', 'glisse', 'respiration', 'serre', 'zone', 'acoups', 'arrets', 'fentes',
-  'alternee', 'ressac', 'sentinelle', 'traversantes', 'sentinelles2'];
+  'alternee', 'ressac', 'sentinelle', 'traversantes', 'sentinelles2', 'anneau', 'anneaux2', 'anneaux3', 'portesPulsees'];
 // Difficulté : tirs, obstacles fixes (en « équivalents aiguilles », capacité tirs + obstacles ≤ 14) et vitesse moyenne ω
 // (rad/s) au début et à la fin de chaque monde ; pos = progression dans un bloc de 10 (x1..x10 : respirations en x1-x2,
 // montée, spécial en x7, boss en x10) ; tune = facteurs de vitesse par niveau réglés par tests/sim/report.js.
@@ -135,6 +140,8 @@ const FAIL_TEXT = {
     tips: ['Vérifie aussi le côté opposé.', 'Un arc allumé est sûr des deux côtés.'] },
   twinZone: { short: 'SORTIE EN ZONE INTERDITE', long: 'L’aiguille est ressortie en pleine zone interdite.',
     tips: ['Vérifie aussi le côté opposé.', 'Un arc allumé est sûr des deux côtés.'] },
+  ring: { short: 'INTERCEPTÉE PAR L’ANNEAU', long: 'Tir intercepté par l’anneau.',
+    tips: ['Tire quand une porte passe sur l’axe.', 'Le losange s’allume quand la porte sera alignée.'] },
   sent: { short: 'INTERCEPTÉE PAR LA SENTINELLE', long: 'Tir intercepté par la sentinelle.',
     tips: ['Tire quand elle a quitté l’axe.', 'Regarde où elle sera dans un instant.'] }
 };

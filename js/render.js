@@ -3,7 +3,7 @@ const cvs = $('c'), ctx = cvs.getContext('2d');
 const glow = document.createElement('canvas'), gctx = glow.getContext('2d');   // couche phosphore (basse résolution, persistante)
 const bg = document.createElement('canvas');                                    // fond statique pré-rendu
 let W = 0, H = 0, DPR = 1, SX = 0, SW = 0, cx = 0, cy = 0, R = 60, PL = 60, HEAD = 6, PW = 2, RS = 150, RD = 170, LAUNCH = 0, FLYV = 2000;
-let SAT = 0, SAB = 0, bgKey = '', UMAP = [], SENT_HW = 5;
+let SAT = 0, SAB = 0, bgKey = '', UMAP = [], SENT_HW = 5, RRAD = [0, 0, 0];
 const GSC = {}, MSC = { r: 0 };
 let hero = null, heroTick = 0;
 // viseur d'avance : angle à l'écran où tomberait une aiguille lancée maintenant, et zone libre ou non (calculé au rendu)
@@ -34,8 +34,10 @@ function layout() {
   // de l'aiguille exactement quand la règle déclare l'interception
   SENT_HW = Math.max(1.5, SENT_PAD * RS - Math.max(1.3, R * .022) * .6);   // vitesse moyenne : (LAUNCH − (cy + R)) / FLYV = FLIGHT
   // carte affine par morceaux u → rayon, qui passe exactement par les éléments dessinés de cet écran
-  UMAP = [[-U.len, LAUNCH + PL + HEAD - cy], [0, LAUNCH - cy], [U.dial, RD], [U.sentOut, RS + SENT_HW], [U.sent, RS],
-    [U.sentIn, RS - SENT_HW], [U.head, R + PL + HEAD], [1, R]];
+  // anneaux à portes : dans le couloir de tir, hors du cadran, écart ≥ 14 px (≥ 2,2 têtes)
+  for (let k = 0; k < 3; k++) RRAD[k] = RD + 12 + k * Math.max(14, 2.2 * HEAD);
+  UMAP = [[-U.len, LAUNCH + PL + HEAD - cy], [0, LAUNCH - cy], [U.rings[2], RRAD[2]], [U.rings[1], RRAD[1]], [U.rings[0], RRAD[0]],
+    [U.dial, RD], [U.sentOut, RS + SENT_HW], [U.sent, RS], [U.sentIn, RS - SENT_HW], [U.head, R + PL + HEAD], [1, R]];
   document.documentElement.style.setProperty('--sx', SX + 'px');
   document.documentElement.style.setProperty('--sw', SW + 'px');
 }
@@ -264,6 +266,52 @@ function drawBody(c, g, S) {
   c.globalAlpha = 1;
 }
 
+// Anneaux à portes : barres pleines (obstacles mobiles) interrompues par les portes, repères aux bords des portes ; portes
+// pulsées : annoncées en pointillés qui clignotent, fermées en barre pleine. Losange sur l'axe de tir : plein quand la
+// porte de cet anneau sera alignée pour un tir lancé maintenant.
+function ringBar() { return Math.max(2.4, HEAD * .38); }
+const RING_VIS = .95, RING_FADE = 1.35;
+function drawRings(c, g) {
+  const bw = ringBar(), now = RV.t;
+  c.lineCap = 'butt';
+  for (const q of L.rings) {
+    const rr = RRAD[q.k], th = q.a0 + q.w * now, hot = failInfo && failInfo.ring === q, gs = gateState(q, now), n = q.gates.length;
+    const colr = col(hot ? PAL.alert : PAL.rgb, 1), cut = q.gates.map(gt => [th + gt.c - gt.h, th + gt.c + gt.h]);
+    // seule la partie basse compte (le couloir de tir) : arc plein sur ±RING_VIS, estompé au-delà, rien en haut de l'écran
+    c.strokeStyle = colr; c.lineWidth = g ? bw * 2.6 : bw;
+    for (const [span, al] of [[RING_FADE, .3], [RING_VIS, .95]]) {
+      c.globalAlpha = (g ? .4 : 1) * al; c.beginPath();
+      for (const [a, b] of subtractArcs([[HPI - span, HPI + span]], cut)) { c.moveTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); c.arc(cx, cy, rr, a, b); }
+      c.stroke();
+    }
+    if (!g) {
+      // repères aux bords des portes
+      c.lineWidth = 1.2; c.globalAlpha = .8; c.beginPath();
+      for (const gt of q.gates) for (const e of [-1, 1]) {
+        const an = th + gt.c + e * gt.h; if (Math.abs(angSigned(HPI, an)) > RING_FADE) continue;
+        const cs = Math.cos(an), sn = Math.sin(an); c.moveTo(cx + cs * (rr - 5), cy + sn * (rr - 5)); c.lineTo(cx + cs * (rr + 5), cy + sn * (rr + 5));
+      }
+      c.stroke();
+    }
+    // portes pulsées : annoncées (pointillés qui clignotent) puis fermées (barre pleine)
+    if (gs) {
+      const bl = gs === 1 ? (rm() ? 1 : .5 + .5 * Math.sin(time * 18)) : 1;
+      c.globalAlpha = (g ? .4 : .95) * bl; c.lineWidth = g ? bw * 2.6 : bw; c.setLineDash(gs === 1 ? [4, 4] : []);
+      c.beginPath(); for (const gt of q.gates) { if (Math.abs(angSigned(HPI, th + gt.c)) > RING_FADE + gt.h) continue; const a0 = th + gt.c - gt.h, a1 = th + gt.c + gt.h; c.moveTo(cx + Math.cos(a0) * rr, cy + Math.sin(a0) * rr); c.arc(cx, cy, rr, a0, a1); }
+      c.stroke(); c.setLineDash([]);
+    }
+    // losange de synchronisation sur l'axe de tir
+    {
+      const w = ringWindow(q, now), ok = state === 'play' && ringHit(q, w[0], w[1], RING_PAD[q.k]) < 0, yd = cy + rr, s = 5;
+      c.globalAlpha = g ? (ok ? .5 : 0) : 1; c.lineWidth = 1.4; c.strokeStyle = col(ok ? PAL.hi : PAL.rgb, 1); c.fillStyle = INK;
+      c.beginPath(); c.moveTo(cx, yd - s); c.lineTo(cx + s, yd); c.lineTo(cx, yd + s); c.lineTo(cx - s, yd); c.closePath();
+      if (!g) { c.fill(); if (ok) { c.fillStyle = col(PAL.hi, 1); c.fill(); } }
+      c.stroke();
+    }
+  }
+  c.lineCap = 'round'; c.globalAlpha = 1;
+}
+
 // bande d'une zone dynamique sur le cercle des têtes : [centre ± hw] (la tête d'une aiguille qui la touche est perdue)
 function drawZone(c, g, S, z, lw) {
   const x = S.x, y = S.y, r = S.r, rh = r + S.pl, hd = S.head, B = S.build, C = col(S.rgb, 1), st = zoneState(z, S.st), zc = zoneCenter(z, S.st) + S.rot;
@@ -413,6 +461,7 @@ function drawGame(c, g) {
       c.beginPath(); c.arc(S.x, S.y, R + PL + HEAD + 5, Math.min(a1, a1 + dlt), Math.max(a1, a1 + dlt)); c.stroke(); c.globalAlpha = 1;
     }
   }
+  if (L.rings.length) drawRings(c, g);
   // --- aiguille en vol / sur le pas de tir ---
   for (const f of flights) {
     if (f.yTip === undefined) continue;
@@ -568,32 +617,38 @@ function drawHud(c, g, sheet) {
 }
 
 function typed(str, k) { const n = [...str]; return k >= 1 ? str : n.slice(0, Math.ceil(n.length * k)).join(''); }
+// bas des anneaux d'un niveau (bandeaux et messages restent dessous), ou 0
+function ringsBottom() { return L && L.rings.length ? cy + RRAD[L.rings.length - 1] + ringBar() / 2 + 6 : 0; }
 function drawIntro(c, g) {
-  const rgb = PAL.rgb, hi = PAL.hi, yT = cy + RD + 13, yB = LAUNCH - 14, hC = yB - yT, xl = SX + 24, maxW = SW - 48;
+  const rgb = PAL.rgb, hi = PAL.hi, yT = Math.max(cy + RD + 13, ringsBottom()), yB = LAUNCH - 14, hC = yB - yT, xl = SX + 24, maxW = SW - 48;
   // pendant le compte à rebours de REPRENDRE, le couloir est laissé à l'anneau 3-2-1 ; bandeaux et rappel, dont les minuteries
   // sont figées, reprennent ensuite là où ils s'étaient arrêtés
   if (state !== 'play' || playPhase === 'compte' || hC < 30) return;
   if (wIntro > 0) {
     const el = 2.5 - wIntro, a = clamp(wIntro / .35, 0, 1), nm = PAL.name;
-    let hN = clamp(hC * .4, 16, 42); hN = fitH(nm, hN, maxW);
-    const y0 = yT + (hC - hN) / 2 + 2, yk = y0 - hN * .3 - 13;
+    // couloir étroit (sous trois anneaux, petit écran) : thème omis, titre réduit, tout sous le haut du couloir
+    const tight = hC < 58;
+    let hN = tight ? clamp(hC - 22, 12, 18) : clamp(hC * .4, 16, 42); hN = fitH(nm, hN, maxW);
+    const y0 = tight ? yT + 13 : yT + (hC - hN) / 2 + 2, yk = tight ? yT : y0 - hN * .3 - 13;
     c.globalAlpha = a * (g ? .45 : 1);
     vtext(c, typed(nm, el / .42), xl, y0, hN, 0, col(g ? rgb : hi, 1), g ? hN * .15 : Math.max(2, hN * .085));
     if (!g) {
-      c.globalAlpha = a; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, yk); c.lineTo(xl - 9, y0 + hN + 17); c.stroke();
+      c.globalAlpha = a; c.strokeStyle = col(rgb, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, yk); c.lineTo(xl - 9, y0 + hN + (tight ? 2 : 17)); c.stroke();
       vtext(c, L.w < WORLDS.length ? 'MONDE ' + pad2(L.w + 1) : 'MONDE ∞', xl, yk, 7, 0, col(rgb, Math.max(.8, PAL.lab)), 1.15);
-      if (el > .35) vtext(c, typed(PAL.theme, (el - .35) / .5), xl, y0 + hN + 10, 7, 0, col(rgb, .95), 1.15);
+      if (el > .35 && !tight) vtext(c, typed(PAL.theme, (el - .35) / .5), xl, y0 + hN + 10, 7, 0, col(rgb, .95), 1.15);
     }
     c.globalAlpha = 1; return;
   }
   // bandeau de règle d'un niveau d'apprentissage : titre et règle (≥ 10 px), au-dessus du pas de tir, TEACH_SHOW s
   if (teachT > 0 && L.teach && TEACH_TEXT[L.teach] && !intro) {
     const [ttl, rule] = TEACH_TEXT[L.teach], a = clamp(teachT / .35, 0, 1) * clamp((TEACH_SHOW - teachT) / .2, 0, 1);
-    const lines = wrapV(rule, 10, maxW - 30), y1 = LAUNCH - 34 - (lines.length - 1) * 15, y0 = y1 - 17;
+    const lines = wrapV(rule, 10, maxW - 30), lh = ringsBottom() ? 13.5 : 15;
+    // sous les anneaux s'il y en a, au-dessus du pas de tir ; interlignes resserrés si la place manque
+    const y0 = Math.max(LAUNCH - 34 - (lines.length - 1) * 15 - 17, ringsBottom()), y1 = y0 + (ringsBottom() ? 15 : 17);
     c.globalAlpha = a * (g ? .45 : 1);
     vtext(c, typed(ttl, (TEACH_SHOW - teachT) / .3), xl, y0, 10, 0, col(g ? PAL.acc : PAL.acc, 1), g ? 3 : 1.5);
-    lines.forEach((ln, i) => vtext(c, ln, xl, y1 + i * 15, 10, 0, col(g ? rgb : hi, 1), g ? 3 : 1.45));
-    if (!g) { c.globalAlpha = a; c.strokeStyle = col(PAL.acc, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y0 - 2); c.lineTo(xl - 9, y1 + (lines.length - 1) * 15 + 12); c.stroke(); }
+    lines.forEach((ln, i) => vtext(c, ln, xl, y1 + i * lh, 10, 0, col(g ? rgb : hi, 1), g ? 3 : 1.45));
+    if (!g) { c.globalAlpha = a; c.strokeStyle = col(PAL.acc, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y0 - 2); c.lineTo(xl - 9, y1 + (lines.length - 1) * lh + 12); c.stroke(); }
     c.globalAlpha = 1; return;
   }
   if (intro > 0) {
