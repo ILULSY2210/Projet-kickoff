@@ -36,6 +36,14 @@ const fails = [], check = (c, m) => { if (!c) fails.push(m); };
   check(c.g('bestStars[1]') === 2 && c.g('SAVE.legacyStars') === 11 && c.g('unlocked') === 150, 'relecture après migration et victoire');
   check(c.g('continueLevel()') === 2, `après le niveau 1, CONTINUER → niveau ${c.g('continueLevel()')} (2, deuxième niveau d'apprentissage)`);
 }
+// 1 bis. CONTINUER ne propose que des niveaux qui enseignent déjà une idée réalisée (teachOf) : migré à 160, 1-4 finis
+{
+  const { g } = boot({ orbita_unlocked: '160' });
+  g('for (let i = 1; i <= 4; i++) bestStars[i] = 1');
+  const seq = []; for (let i = 0; i < 12; i++) { const n = g('continueLevel()'); seq.push(n); g(`bestStars[${n}] = 1`); }
+  check(seq.every(n => g(`teachOf(${n})`)), `CONTINUER après migration : niveaux sans idée nouvelle proposés (${seq.join(' ')})`);
+  check(seq[0] === 9, `CONTINUER après migration, 1-4 finis → niveau ${seq[0]} (9, accélération)`);
+}
 // 2. au-delà de 300 : borné à 300 à la migration
 { const { g } = boot({ orbita_unlocked: '500000' }); check(g('unlocked') === 300, `migration d'un unlocked absurde → ${g('unlocked')} (300)`); }
 // 3. valeurs corrompues

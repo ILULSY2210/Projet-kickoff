@@ -68,7 +68,8 @@ function saveNow() {
 // niveau proposé par CONTINUER : le premier niveau d'apprentissage pas encore fini avant le niveau débloqué, sinon ce
 // dernier (un ancien joueur migré au niveau 150 revoit d'abord les mécaniques d'Émeraude et d'Ambre)
 function continueLevel() {
-  for (const k in TEACH) { const n = +k; if (n > unlocked) break; if (!(bestStars[n] >= 1) && n < unlocked) return n; }
+  // (seuls les niveaux qui enseignent déjà une idée réalisée : teachOf, levels.js)
+  for (const k in TEACH) { const n = +k; if (n > unlocked) break; if (teachOf(n) && !(bestStars[n] >= 1) && n < unlocked) return n; }
   return unlocked;
 }
 // total d'étoiles d'un monde (sur 150) et de toute la progression
