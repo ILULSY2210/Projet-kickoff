@@ -23,19 +23,28 @@ function layout() {
   SW = Math.min(W, Math.max(300, Math.round(H * .62)));
   SX = (W - SW) / 2; cx = W / 2;
   const top = Math.max(12, SAT);
-  R = Math.max(26, Math.min(SW * .18, H * .112, (H - top - 108 - SAB) / 6.26));
-  PL = R; HEAD = GAP * (R + PL) / 2; PW = Math.max(1.4, R * .024);
-  RS = R + PL + HEAD * 3.3;
-  RD = Math.min(RS + HEAD * 2.4, SW / 2 - 9);
-  cy = Math.max(H * .36, top + 62 + RD);
-  LAUNCH = Math.max(cy + RS + HEAD * 2 + 6, Math.min(H * .83, H - PL - HEAD - 30 - SAB));
+  // anneaux à portes dans le couloir de tir, entre le cadran et le pas de tir : sur un écran bas (téléphone en paysage),
+  // l'astre est réduit jusqu'à ce que le troisième anneau tienne au-dessus de l'aiguille posée sur le pas de tir ; à défaut
+  // (astre au minimum), l'écart entre anneaux est resserré, jamais sous 12 px
+  const place = r => {
+    R = r; PL = R; HEAD = GAP * (R + PL) / 2; PW = Math.max(1.4, R * .024);
+    RS = R + PL + HEAD * 3.3;
+    RD = Math.min(RS + HEAD * 2.4, SW / 2 - 9);
+    cy = Math.max(H * .36, top + 62 + RD);
+    LAUNCH = Math.max(cy + RS + HEAD * 2 + 6, Math.min(H * .83, H - PL - HEAD - 30 - SAB));
+    return LAUNCH - cy - (RD + 12 + 2 * Math.max(14, 2.2 * HEAD) + Math.max(2.4, HEAD * .38) / 2 + 8);
+  };
+  let r0 = Math.max(26, Math.min(SW * .18, H * .112, (H - top - 108 - SAB) / 6.26));
+  while (place(r0) < 0 && r0 > 26) r0 = Math.max(26, r0 - .5);
   FLYV = (LAUNCH - (cy + R)) / FLIGHT;
   // demi-épaisseur des sentinelles (et rayon de leur bout arrondi) : tirée de SENT_PAD, pour que le dessin touche la tige
   // de l'aiguille exactement quand la règle déclare l'interception
   SENT_HW = Math.max(1.5, SENT_PAD * RS - Math.max(1.3, R * .022) * .6);   // vitesse moyenne : (LAUNCH − (cy + R)) / FLYV = FLIGHT
   // carte affine par morceaux u → rayon, qui passe exactement par les éléments dessinés de cet écran
   // anneaux à portes : dans le couloir de tir, hors du cadran, écart ≥ 14 px (≥ 2,2 têtes)
-  for (let k = 0; k < 3; k++) RRAD[k] = RD + 12 + k * Math.max(14, 2.2 * HEAD);
+  const room = LAUNCH - cy - 8 - Math.max(2.4, HEAD * .38) / 2 - RD, sp = Math.max(14, 2.2 * HEAD), r1 = Math.min(12, Math.max(6, room - 2 * sp));
+  const sp2 = Math.max(12, Math.min(sp, (room - r1) / 2));
+  for (let k = 0; k < 3; k++) RRAD[k] = RD + r1 + k * sp2;
   UMAP = [[-U.len, LAUNCH + PL + HEAD - cy], [0, LAUNCH - cy], [U.rings[2], RRAD[2]], [U.rings[1], RRAD[1]], [U.rings[0], RRAD[0]],
     [U.dial, RD], [U.sentOut, RS + SENT_HW], [U.sent, RS], [U.sentIn, RS - SENT_HW], [U.head, R + PL + HEAD], [1, R]];
   document.documentElement.style.setProperty('--sx', SX + 'px');
@@ -639,7 +648,10 @@ function typed(str, k) { const n = [...str]; return k >= 1 ? str : n.slice(0, Ma
 // bas des anneaux d'un niveau (bandeaux et messages restent dessous), ou 0
 function ringsBottom() { return L && L.rings.length ? cy + RRAD[L.rings.length - 1] + ringBar() / 2 + 6 : 0; }
 function drawIntro(c, g) {
-  const rgb = PAL.rgb, hi = PAL.hi, yT = Math.max(cy + RD + 13, ringsBottom()), yB = LAUNCH - 14, hC = yB - yT, xl = SX + 24, maxW = SW - 48;
+  const rgb = PAL.rgb, hi = PAL.hi;
+  let rb = ringsBottom(), yT = Math.max(cy + RD + 13, rb), yB = LAUNCH - 14, hC = yB - yT, xl = SX + 24, maxW = SW - 48, yL = LAUNCH;
+  // écran bas et large (téléphone en paysage) : couloir trop court sous les anneaux, bandeaux dans la marge de gauche
+  if (hC < 30 && SX >= 150) { xl = 24; maxW = SX - 48; yT = cy - 70; yB = cy + 70; hC = yB - yT; rb = 0; yL = yB + 20; }
   // pendant le compte à rebours de REPRENDRE, le couloir est laissé à l'anneau 3-2-1 ; bandeaux et rappel, dont les minuteries
   // sont figées, reprennent ensuite là où ils s'étaient arrêtés
   if (state !== 'play' || playPhase === 'compte' || hC < 30) return;
@@ -661,9 +673,9 @@ function drawIntro(c, g) {
   // bandeau de règle d'un niveau d'apprentissage : titre et règle (≥ 10 px), au-dessus du pas de tir, TEACH_SHOW s
   if (teachT > 0 && L.teach && TEACH_TEXT[L.teach] && !intro) {
     const [ttl, rule] = TEACH_TEXT[L.teach], a = clamp(teachT / .35, 0, 1) * clamp((TEACH_SHOW - teachT) / .2, 0, 1);
-    const lines = wrapV(rule, 10, maxW - 30), lh = ringsBottom() ? 13.5 : 15;
+    const lines = wrapV(rule, 10, maxW - 30), lh = rb ? 13.5 : 15;
     // sous les anneaux s'il y en a, au-dessus du pas de tir ; interlignes resserrés si la place manque
-    const y0 = Math.max(LAUNCH - 34 - (lines.length - 1) * 15 - 17, ringsBottom()), y1 = y0 + (ringsBottom() ? 15 : 17);
+    const y0 = Math.max(yL - 34 - (lines.length - 1) * 15 - 17, rb), y1 = y0 + (rb ? 15 : 17);
     c.globalAlpha = a * (g ? .45 : 1);
     vtext(c, typed(ttl, (TEACH_SHOW - teachT) / .3), xl, y0, 10, 0, col(g ? PAL.acc : PAL.acc, 1), g ? 3 : 1.5);
     lines.forEach((ln, i) => vtext(c, ln, xl, y1 + i * lh, 10, 0, col(g ? rgb : hi, 1), g ? 3 : 1.45));
@@ -683,7 +695,7 @@ function drawIntro(c, g) {
   }
   // rappel de la cause de l'échec précédent, juste au-dessus du pas de tir
   if (recall) {
-    const msg = recall.txt, h = fitH(msg, 9, maxW - 40), y = LAUNCH - 34;
+    const msg = recall.txt, h = fitH(msg, 9, maxW - 40), y = yL - 34;
     c.globalAlpha = clamp(recall.life / .3, 0, 1) * (g ? .45 : 1);
     vtext(c, msg, xl, y, h, 0, col(PAL.alert, 1), g ? 3 : 1.4);
     if (!g) { c.strokeStyle = col(PAL.alert, 1); c.lineWidth = 1.5; c.beginPath(); c.moveTo(xl - 9, y - 4); c.lineTo(xl - 9, y + h + 4); c.stroke(); }
