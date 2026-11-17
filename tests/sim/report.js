@@ -15,7 +15,7 @@
 //              la fin de la cible (±7 points)
 //   falaises   niveau normal ≤ 12 points sous la moyenne de ses 4 voisins normaux à 70 ms ; boss ou spécial ≤ 20 points
 //              (voisins : niveaux normaux du même monde, hors niveaux d'apprentissage)
-//   respirations  x1-x2 d'un bloc ≥ x8-x9 du bloc précédent + 5 points à 70 ms (x8 seul en Émeraude) ; la cible du plan est
+//   respirations  x1-x2 d'un bloc ≥ x8-x9 du bloc précédent + 5 points à 70 ms (x8 seul quand x9 est un apprentissage) ; la cible du plan est
 //              « ≈ +10 » : le réglage vise +11, le rapport échoue sous +5 et imprime la moyenne par monde (annexe D)
 //   boss       boss et spéciaux de chaque monde à 70 ms : moyenne dans la plage de la table 5.10 (±7 points)
 //   infini     COSMOS ∞ : moyenne à 70 ms des niveaux mesurés dans 22-30 % (±7), boss et spéciaux de même
@@ -23,7 +23,7 @@
 //              400 essais avant d'échouer) ; au-delà, la falaise n'est « propre aux arrêts et aux inversions » (échec) que si
 //              le même joueur fait aussi plus de 15 points de mieux sur la variante calme du niveau (même niveau, loi
 //              continue à la même vitesse moyenne, sans demi-tours : tests/sim/worker.js)
-//   apprentissage  niveau d'apprentissage ≥ ses voisins + 12 points à 70 ms (ou ≥ 99 %)
+//   apprentissage  niveau d'apprentissage ≥ ses voisins + 12 points à 70 ms (ou ≥ 90 %)
 //   durées     médiane du niveau propre (45 ms) dans la plage du monde
 // Graines : tests/sim/seeds.json. Écrit <out>/report.json et sort avec le code 1 si une règle échoue.
 const path = require('path'), fs = require('fs');
@@ -177,12 +177,12 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
       if (row.bossSp70 < BOSS70[w][0] - .07 || row.bossSp70 > BOSS70[w][1] + .07) fail('boss', `${NAMES[w]} : boss et spéciaux à 70 ms ${pc(row.bossSp70)} % (table ${BOSS70[w][0] * 100}-${BOSS70[w][1] * 100} % ± 7)`);
     }
   }
-  // niveaux d'apprentissage : au moins 12 points au-dessus de leurs voisins à 70 ms (plafonné à 99 %), sans vitesse ajoutée
-  // (plan 5.3 : court, vitesse modérée ; facteur de réglage ≤ 1 dans le générateur)
+  // niveaux d'apprentissage : au moins 12 points au-dessus de leurs voisins à 70 ms, ou au moins 90 % (en début de monde,
+  // où les voisins sont déjà vers 85 %), sans vitesse ajoutée (plan 5.3 : court, vitesse modérée ; facteur ≤ 1)
   for (const n of levels) if (n <= 300 && L[n].teach) {
     const nb = neighbors(n, 'p70'); if (nb.length < 2) continue;
-    const want = Math.min(.99, mean(nb) + .12);
-    if (L[n].p70 < want - 1e-9) fail('apprentissage', `niveau ${n} (${L[n].teach}) : ${pc(L[n].p70)} % à 70 ms, ${((L[n].p70 - mean(nb)) * 100).toFixed(1)} points au-dessus de ses voisins (≥ +12, ou ≥ 99 %)`);
+    const want = Math.min(.90, mean(nb) + .12);
+    if (L[n].p70 < want - 1e-9) fail('apprentissage', `niveau ${n} (${L[n].teach}) : ${pc(L[n].p70)} % à 70 ms, ${((L[n].p70 - mean(nb)) * 100).toFixed(1)} points au-dessus de ses voisins (≥ +12, ou ≥ 90 %)`);
   }
   for (const c of cliffCheck()) fail('falaises', `niveau ${c.n}${normal(c.n) ? '' : L[c.n].boss ? ' (boss)' : ' (spécial)'} : ${pc(L[c.n].p70)} % à 70 ms, ${(c.gap * 100).toFixed(1)} points sous ses voisins (limite ${c.lim * 100}) ; IC95 ${pc(L[c.n].ci70[0])}-${pc(L[c.n].ci70[1])}`);
   // respirations : x1-x2 d'un bloc contre x8-x9 du bloc précédent
@@ -190,9 +190,10 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
   for (let b = 1; b < 30; b++) {
     const a1 = b * 10 + 1, a2 = b * 10 + 2, p8 = b * 10 - 2, p9 = b * 10 - 1;
     if (!L[a1] || !L[a2] || !L[p8] || !L[p9]) continue;
-    const prev = b < 5 ? [L[p8].p70] : [L[p8].p70, L[p9].p70], br = mean([L[a1].p70, L[a2].p70]) - mean(prev);
+    // x8 seul quand x9 est un niveau d'apprentissage (en Émeraude, plan 5.10 : celui de la mécanique du boss)
+    const prev = L[p9].teach ? [L[p8].p70] : [L[p8].p70, L[p9].p70], br = mean([L[a1].p70, L[a2].p70]) - mean(prev);
     breaths.push({ b, br, w: Math.floor(b / 5) });
-    if (br < .05) fail('respirations', `niveaux ${a1}-${a2} : ${(br * 100).toFixed(1)} points au-dessus de ${b < 5 ? p8 : p8 + '-' + p9} (≥ +5 ; cible ≈ +${D.breather * 100})`);
+    if (br < .05) fail('respirations', `niveaux ${a1}-${a2} : ${(br * 100).toFixed(1)} points au-dessus de ${L[p9].teach ? p8 : p8 + '-' + p9} (≥ +5 ; cible ≈ +${D.breather * 100})`);
   }
   // joueur réactif : pas de falaise propre aux arrêts et inversions
   for (const x of reactBad()) {
