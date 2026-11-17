@@ -13,7 +13,8 @@
 //            ne pas attendre davantage) ; son tap part avec une imprécision gaussienne σ ; il réfléchit THINK = 0,4 s après
 //            chaque impact (temps de voir l'aiguille plantée et de relire le bord, comme un joueur réel).
 //   reactive joueur qui n'anticipe pas : il extrapole la rotation à vitesse constante et tape RT = 0,2 s après avoir vu
-//            une ouverture (seuil qui baisse quand il attend), avec la même imprécision σ ; il ne tire pas pendant que les
+//            une ouverture (seuil qui baisse quand il attend), avec la même imprécision σ, quand l'astre tourne à peu près
+//            régulièrement (il voit une accélération en cours, il ne la prévoit pas) ; il ne tire pas pendant que les
 //            chevrons annoncent un arrêt ou une inversion (aheadEvent, 0,45 s à l'avance), ni quand les portes des anneaux
 //            ne laisseront pas passer l'aiguille (losanges de synchronisation), ni vers une zone active ou annoncée.
 //   mash     salve à l'aveugle : un tap toutes les c secondes ± 1 image, dès un départ tiré au hasard dans la première
@@ -110,8 +111,11 @@ var __sim = (function () {
       while (state === 'play' && t - T0 < MAXT) {
         var waited = t - tDec, thr = stuck.length ? best * Math.max(.4, .85 - .08 * waited) : -1;
         var a = norm(HPI - (rot + speedAt(t) * (RT + FLIGHT)));
-        // il lit les chevrons : pas de tir quand un arrêt ou une inversion est annoncé (0,45 s à l'avance)
-        var ok = clearAt(a) >= thr && !aheadEvent(t, announceWindow()).kind;
+        // il lit les chevrons : pas de tir quand un arrêt ou une inversion est annoncé (0,45 s à l'avance) ; il voit aussi
+        // l'astre accélérer ou ralentir : il attend un mouvement à peu près régulier (vitesse qui a changé de moins de 12 %
+        // en 0,15 s, tolérance qui grandit quand il attend), sans rien prévoir de la suite
+        var v0 = speedAt(t), v1 = speedAt(t - .15), steady = Math.abs(v0 - v1) <= (.12 + .04 * waited) * Math.max(Math.abs(v0), .3);
+        var ok = steady && clearAt(a) >= thr && !aheadEvent(t, announceWindow()).kind;
         // il voit les zones : pas de tir vers une zone active (bande hachurée) ou annoncée (pointillés qui clignotent),
         // à l'endroit où tomberait son aiguille (une zone éteinte ne peut pas s'allumer avant l'impact : l'annonce dure
         // 0,6 s, plus que RT + FLIGHT) ; une zone glissante est prise là où elle sera à l'impact
