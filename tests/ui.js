@@ -5,8 +5,9 @@
 //           son basculé, case de niveau, visibilitychange ; 0 erreur console ou page et état attendu après chaque action.
 //   migration : vraies clés de la version 1 posées avant le chargement : unlocked 150 → 150, aucune étoile, legacyStars =
 //           ancien total, CONTINUER → niveau 1 ; valeurs corrompues (v1 et v2) sans erreur.
-//   regles : bandeau de règle d'un niveau d'apprentissage à ≥ 10 px pendant ≥ 2 s (même après un tir), relisible dans
-//           la pause et dans la sélection des niveaux (320×568).
+//   regles : bandeau de règle d'un niveau d'apprentissage à ≥ 10 px pendant ≥ 2 s (même après un tir), depuis le menu
+//           (bandeau du monde) et en progression normale (niveau précédent du même monde : bandeau du niveau), relisible
+//           dans la pause et dans la sélection des niveaux (320×568).
 //   anneaux : géométrie des anneaux à portes en 320×568 et 360×640 (écarts, portes ≥ 3 têtes, losanges, bandeaux dessous).
 //   boot  : démarrage avec les domaines Google bloqués : state défini en < 1 s, aucune requête tierce, polices locales.
 //   offline : second chargement sans réseau (service worker) en < 1 s.
@@ -263,9 +264,11 @@ async function regles(b) {
   const p = await c.newPage(); hook(p, 'regles');
   await p.goto(URL);
   await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
-  for (const n of [29, 51, 2]) {
-    const r = await p.evaluate(n => new Promise(res => {
+  for (const [n, prev, shot] of [[29, 0, 1], [51, 0, 1], [2, 0, 1], [29, 1, 1], [29, 1, 0], [111, 1, 1], [111, 1, 0], [61, 1, 0]]) {
+    const r = await p.evaluate(([n, prev, shot]) => new Promise(res => {
       soundOn = false; unlocked = Math.max(unlocked, n); showMenu();
+      // prev : progression normale, le niveau précédent du même monde vient d'être joué (pas de bandeau du monde)
+      if (prev) startLevel(n - 1);
       const [ttl, rule] = TEACH_TEXT[TEACH[n]], words = rule.split(' ').slice(0, 2).join(' ');
       const seen = { first: 0, last: 0, minH: 99, maxX: 0, title: false };
       const ov = window.vtext;
@@ -278,12 +281,14 @@ async function regles(b) {
       };
       startLevel(n); const t0 = performance.now();
       // un tir sûr dès 0,5 s après le début : le bandeau n'est pas écourté
-      setTimeout(() => { const iv = setInterval(() => { if (window.__botSafe()) { throwPin(); clearInterval(iv); } }, 5); }, 500);
+      if (shot) setTimeout(() => { const iv = setInterval(() => { if (window.__botSafe()) { throwPin(); clearInterval(iv); } }, 5); }, 500);
       setTimeout(() => { window.vtext = ov; res({ dur: (seen.last - seen.first) / 1000, minH: seen.minH, title: seen.title, inside: seen.maxX <= SX + SW, start: (seen.first - t0) / 1000 }); }, 6500);
-    }), n);
-    S.ok(r.dur >= 2, `niveau ${n} : règle affichée ${r.dur.toFixed(2)} s (≥ 2 s, après un tir à 0,5 s ; début à ${r.start.toFixed(2)} s)`);
-    S.ok(r.minH >= 10, `niveau ${n} : hauteur du texte ${r.minH} px (≥ 10)`);
-    S.ok(r.title && r.inside, `niveau ${n} : titre affiché, texte dans l'écran`);
+    }), [n, prev, shot]);
+    const how = `niveau ${n}${prev ? ` après le ${n - 1}` : ' depuis le menu'}${shot ? ', tir à 0,5 s' : ', sans tir'}`;
+    S.ok(r.dur >= 2, `${how} : règle affichée ${r.dur.toFixed(2)} s (≥ 2 s ; début à ${r.start.toFixed(2)} s)`);
+    S.ok(r.minH >= 10, `${how} : hauteur du texte ${r.minH} px (≥ 10)`);
+    S.ok(r.title && r.inside, `${how} : titre affiché, texte dans l'écran`);
+    if (prev) continue;
     if (n === 29) await p.evaluate(() => { showMenu(); startLevel(29); }), await p.waitForTimeout(3600), await p.screenshot({ path: path.join(OUT, 'regle-29.png') });
     const pz = await p.evaluate(n => { startLevel(n); pauseGame(); return $('pauseRules').textContent; }, n);
     S.ok(pz.includes((await p.evaluate(n => TEACH_TEXT[TEACH[n]][1], n))), `niveau ${n} : règle relisible dans la pause`);

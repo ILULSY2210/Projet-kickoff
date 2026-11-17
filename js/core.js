@@ -412,7 +412,8 @@ function step(h) {
     }
   }
   if (state === 'play' && playPhase === 'jeu') {
-    intro = Math.max(0, intro - h); if (wIntro > 0) wIntro = Math.max(0, wIntro - h); else teachT = Math.max(0, teachT - h);
+    // le bandeau de règle ne s'écoule qu'une fois les bandeaux du monde et du niveau passés : il reste TEACH_SHOW s à l'écran
+    intro = Math.max(0, intro - h); if (wIntro > 0) wIntro = Math.max(0, wIntro - h); else if (intro <= 0) teachT = Math.max(0, teachT - h);
     build = Math.min(1, build + h * 2.8);
     readyK = Math.min(1, readyK + h * 10);
     levelTime += h;
