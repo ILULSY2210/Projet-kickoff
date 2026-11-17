@@ -16,13 +16,16 @@ function worldInfo(w) {
 // 5 ressac (retours en arrière : paliers avant et arrière reliés par des rampes lisses, comme la loi pas à pas ; la sinusoïde
 //   d'origine passait plus de la moitié du temps à accélérer ou à ralentir, et sa pointe valait 2,1 × sa vitesse moyenne)
 // 6 irrégulière : somme de 2 ou 3 sinusoïdes de fréquences non multiples (paramètres du niveau P : b, a[], f[], p[])
+// c : amplitude des lois à-coups et irrégulière autour de leur valeur moyenne (1 = loi d'origine ; plus petit, les pointes de
+// vitesse sont plus basses à vitesse moyenne égale : plafond de pointe, genLevel)
+const ACOUPS_MID = .590625;   // valeur moyenne de la loi à-coups : .45 + .9 × moyenne de max(0, sin)^6 = .45 + .9 × 5/32
 const RESSAC_T = TAU / 1.3;   // période du ressac (s)
-function patSpeed(p, s, t, P) {
+function patSpeed(p, s, t, P, c = 1) {
   switch (p) {
-    case 6: { let v = P.b; for (let i = 0; i < P.a.length; i++) v += P.a[i] * Math.sin(P.f[i] * t + P.p[i]); return s * v; }
+    case 6: { let v = P.b; for (let i = 0; i < P.a.length; i++) v += c * P.a[i] * Math.sin(P.f[i] * t + P.p[i]); return s * v; }
     case 1: return s * (.45 + .75 * (.5 + .5 * Math.sin(t * 1.6)));
     case 2: return s * 1.1 * Math.tanh(3 * (Math.sin(t * .9) + .3));
-    case 3: return s * (.45 + .9 * Math.pow(Math.max(0, Math.sin(t * 1.8)), 6));
+    case 3: { const x = .45 + .9 * Math.pow(Math.max(0, Math.sin(t * 1.8)), 6); return s * (c === 1 ? x : ACOUPS_MID + c * (x - ACOUPS_MID)); }
     case 4: { // pas à pas : départ en 0,25 s, palier de 1,35 s, arrêt en 0,25 s, pause de 0,75 s (rampes lisses)
       const u = ((t % 2.6) + 2.6) % 2.6, sm = x => x * x * (3 - 2 * x);
       return s * 1.6 * (u < .25 ? sm(u / .25) : u < 1.6 ? 1 : u < 1.85 ? sm((1.85 - u) / .25) : 0);
@@ -37,6 +40,20 @@ function patSpeed(p, s, t, P) {
 // vitesse moyenne |v| de chaque loi pour s = 1 : la vitesse d'un niveau (ω, table DIFFICULTY) est une vitesse moyenne
 // (arrondies : les fonctions sin, tanh, pow peuvent différer d'un dernier bit d'un moteur JavaScript à l'autre)
 const LAW_MEAN = (() => { const m = []; for (let p = 0; p < 6; p++) { let a = 0; for (let i = 0; i < 20000; i++) a += Math.abs(patSpeed(p, 1, i * .005)); m.push(Math.round(a / 20000 * 1e9) / 1e9); } return m; })();
+// moyenne |v| et pointe |v| d'une loi à-coups, ressac ou irrégulière d'amplitude c (s = 1), arrondies ; gardées en mémoire
+// (la loi irrégulière est quasi périodique : 200 s échantillonnées au centième, comme la moyenne d'origine)
+const LAW_STAT = new Map();
+function lawStat(p, P, c) {
+  const key = p + ':' + c + (p === 6 ? ':' + P.b + ':' + P.a.join() + ':' + P.f.join() + ':' + P.p.join() : '');
+  let st = LAW_STAT.get(key);
+  if (!st) {
+    const N = 20000, h = p === 6 ? .01 : .005; let a = 0, m = 0;
+    for (let i = 0; i < N; i++) { const v = Math.abs(patSpeed(p, 1, i * h, P, c)); a += v; if (v > m) m = v; }
+    st = { mean: Math.round(a / N * 1e9) / 1e9, peak: Math.round(m * 1e9) / 1e9 };
+    LAW_STAT.set(key, st);
+  }
+  return st;
+}
 // multiplicateur d'accélération à l'instant t : × (1 + k) par aiguille plantée, atteint en ACC_RAMP s après l'impact
 // (rampe lisse : vitesse continue), plafonné à cap
 const ACC_RAMP = .3, smooth01 = x => x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x);
@@ -61,7 +78,7 @@ function flipSign(t) {
 }
 function speedAt(t) {
   if (!L) return 0;
-  let v = patSpeed(L.pattern, L.speed * L.dir, t, L.irr);
+  let v = patSpeed(L.pattern, L.speed * L.dir, t, L.irr, L.amp);
   if (L.accel) v *= accelMult(t);
   if (L.ramp) v *= rampMult(t);
   if (L.demi || L.rhythm || L.inv) v *= flipSign(t);
@@ -326,15 +343,45 @@ function genLevel(n) {
   }
   // --- vitesse : ω moyenne (facteur de réglage par niveau), normalisée par la loi ---
   // loi irrégulière : 2 ou 3 sinusoïdes (3 fortes pour le Chaos VI), fréquences non multiples, phases tirées au hasard ;
-  // elle tourne surtout dans un sens, avec des arrêts et parfois de brefs retours (annoncés par les chevrons)
+  // elle tourne dans un sens, plus ou moins vite (amplitude bornée par le plafond de pointe : à pleine amplitude, elle avait
+  // des arrêts et de brefs retours)
   let irr = null;
   if (R.law === 6) {
     const k = R.irr || 2, strong = k === 4, m = Math.min(3, k);
     irr = { b: strong ? .45 : .6, a: [strong ? .55 : .42, strong ? .38 : .3, .22].slice(0, m), f: [.9 + .5 * r(), 2.05 + .6 * r(), 3.4 + .8 * r()].slice(0, m), p: [r() * TAU, r() * TAU, r() * TAU].slice(0, m) };
     irr.f = irr.f.map(x => Math.round(x * 1e6) / 1e6); irr.p = irr.p.map(x => Math.round(x * 1e6) / 1e6);
   }
-  const lawMean = R.law === 6 ? (() => { let a = 0; for (let i = 0; i < 20000; i++) a += Math.abs(patSpeed(6, 1, i * .01, irr)); return Math.round(a / 20000 * 1e9) / 1e9; })() : LAW_MEAN[R.law];
-  const omega = R.omega * tn[0], speed = omega / lawMean;
+  // --- plafond de pointe : à vitesse moyenne ω égale, les lois à-coups et irrégulière ne dépassent pas PK.ratio × ω, et
+  // les lois à-coups, ressac et irrégulière ne dépassent pas PK.total × ω ni PK.abs rad/s, accélération à l'impact et rampe
+  // comprises (au-delà, le joueur qui n'anticipe pas ne peut plus suivre : recette de l'étape 2, Q1). Leviers, dans l'ordre :
+  // amplitude c de la loi autour de sa valeur moyenne jusqu'à PK.cmin (ω inchangée), puis plafond de l'accélération ou de la
+  // rampe du niveau (jusqu'à une aiguille d'accélération, rampe de 15 %), puis amplitude plus basse encore. Le Réacteur garde
+  // son accélération (son archétype) : sa loi s'aplatit d'abord.
+  const PK = DIFFICULTY.peak, omega = R.omega * tn[0];
+  let amp = 1;
+  if (R.law === 3 || R.law === 5 || R.law === 6) {
+    const mult = () => (R.accel ? R.accel.cap : 1) * (R.ramp ? 1 + R.ramp.k : 1);
+    const tot = Math.min(PK.total, PK.abs / omega), ratio = c => { const st = lawStat(R.law, irr, c); return st.peak / st.mean; };
+    const ok = c => ratio(c) <= PK.ratio + 1e-9 && ratio(c) * mult() <= tot + 1e-9;
+    // plus grande amplitude (par pas de 0,02) qui tient le plafond, sans descendre sous lo ; le ressac (paliers) n'en a pas
+    const at = k => Math.round((amp - k * .02) * 100) / 100;
+    const squeeze = lo => {
+      if (R.law === 5 || ok(amp)) return;
+      let a = 0, b = Math.max(0, Math.round((amp - lo) / .02));
+      if (!ok(at(b))) { amp = at(b); return; }
+      while (b - a > 1) { const m = (a + b) >> 1; if (ok(at(m))) b = m; else a = m; }
+      amp = at(b);
+    };
+    squeeze(boss && bossArch(n) === 0 ? .1 : PK.cmin);
+    if (!ok(amp)) {
+      const allow = tot / ratio(amp);
+      if (R.accel) R.accel.cap = Math.min(R.accel.cap, Math.max(1 + R.accel.k, allow / (R.ramp ? 1 + R.ramp.k : 1)));
+      if (R.ramp && !ok(amp)) R.ramp.k = Math.min(R.ramp.k, Math.max(.15, allow / (R.accel ? R.accel.cap : 1) - 1));
+      squeeze(.1);
+    }
+  }
+  const lawMean = R.law === 6 || amp !== 1 ? lawStat(R.law, irr, amp).mean : LAW_MEAN[R.law];
+  const speed = omega / lawMean;
   const dir = R.dir, phase = r() * 10;
   // --- anneaux à portes. Portes régulièrement espacées, anneaux voisins à contre-sens ; tous les anneaux d'un niveau ont la
   // même période de passage Tp = 2π / (portes × |ω|) (un anneau à 2 portes tourne 1,5 fois plus vite) et leurs portes se
@@ -405,11 +452,11 @@ function genLevel(n) {
   if (occ.length) {
     const tgt = .25 + r() * .9 + FLIGHT;
     let R0 = 0, tt = phase; const h = .005;
-    for (let x = 0; x < tgt; x += h) { R0 += h * (patSpeed(R.law, speed * dir, tt, irr) + patSpeed(R.law, speed * dir, tt + h, irr)) / 2; tt += h; }
+    for (let x = 0; x < tgt; x += h) { R0 += h * (patSpeed(R.law, speed * dir, tt, irr, amp) + patSpeed(R.law, speed * dir, tt + h, irr, amp)) / 2; tt += h; }
     const c = walls.length ? (walls[0].a0 + walls[0].a1) / 2 : pre[Math.floor(r() * pre.length)];
     rot0 = Math.round(norm(HPI - R0 - c) * 1e9) / 1e9;   // arrondi : identique d'un moteur JavaScript à l'autre
   }
-  let vmax = .1; for (let i = 0; i < 400; i++) vmax = Math.max(vmax, Math.abs(patSpeed(R.law, speed, i * .1, irr)));
+  let vmax = .1; for (let i = 0; i < 400; i++) vmax = Math.max(vmax, Math.abs(patSpeed(R.law, speed, i * .1, irr, amp)));
   if (R.accel) { R.accel.k = Math.round(R.accel.k * 1e6) / 1e6; R.accel.cap = Math.round(R.accel.cap * 1e6) / 1e6; vmax *= R.accel.cap; }
   if (R.demi) R.demi.warn = Math.round(R.demi.warn * 1e3) / 1e3;
   if (R.ramp) { R.ramp.k = Math.round(R.ramp.k * 1e3) / 1e3; R.ramp.T = Math.round(R.ramp.T * 1e3) / 1e3; vmax *= 1 + R.ramp.k; }
@@ -417,7 +464,7 @@ function genLevel(n) {
   vmax = Math.round(vmax * 1e6) / 1e6;
   const blockers = pre.map(a => ({ a: norm(a), pre: true, k: 1 }));
   for (const wl of walls) for (const p of wallPoints(wl.a0, wl.a1 - wl.a0)) blockers.push({ a: norm(p), pre: true, wall: true, k: 1 });
-  const lv = { n, w, boss, special, sp, teach, throws, pre, walls, orbs, sents, speed, omega, pattern: R.law, dir, phase, rot0, trav, vmax, d,
+  const lv = { n, w, boss, special, sp, teach, throws, pre, walls, orbs, sents, speed, omega, pattern: R.law, amp, dir, phase, rot0, trav, vmax, d,
     layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, irr, zones, rings, ringWin: Math.round(ringW * 1e6) / 1e6, blockers };
   lv.flags = levelFlags(lv);
   return lv;

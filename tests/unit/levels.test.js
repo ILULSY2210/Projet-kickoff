@@ -9,6 +9,8 @@
 // - anneaux : fenêtre de passage de chaque anneau (portes, vitesse, marge de l'aiguille) ≥ 0,42 s jusqu'au monde 4, ≥ RING_WIN
 //   = 0,35 s en Obsidienne, Cosmos et COSMOS ∞, réglage
 //   compris, y compris l'anneau à deux portes des niveaux à trois anneaux ;
+// - plafond de pointe (recette de l'étape 2, Q1) : lois à-coups, ressac et irrégulière, vitesse de pointe ≤ 2,2 × ω et
+//   ≤ 7 rad/s, accélération et rampe comprises ; lois à-coups et irrégulière : pointe de la loi ≤ 1,8 × sa vitesse moyenne ;
 // - COSMOS ∞ : au-delà de 400, le niveau n est le niveau 301 + (n − 301) mod 100, en miroir un cycle sur deux ; le miroir
 //   est exact (même journal de tirs → mêmes issues, angles opposés à 1e-9 près, joueur simulé dans le vrai cœur).
 const { load } = require('../sim/load');
@@ -36,6 +38,11 @@ for (let n = 1; n <= 400; n++) {
   const DW = G.get('DIFFICULTY').worlds[Math.min(5, Math.floor((n - 1) / 50))], wmax = DW.speed[1];
   check(L.omega > .4 && L.omega <= 1.15 * wmax * 1.002, `niveau ${n} : vitesse moyenne ${L.omega} (au plus 1,15 × ${wmax})`);
   if (t && IMPL.has(t)) check(L.omega <= DW.speed[0] + 1e-9, `niveau ${n} : apprentissage à ${L.omega.toFixed(3)} rad/s (au plus ${DW.speed[0]}, vitesse de début du monde)`);
+  if ([3, 5, 6].includes(L.pattern)) {
+    const PK = G.get('DIFFICULTY').peak, st = G.run(`lawStat(${L.pattern}, ${JSON.stringify(L.irr)}, ${L.amp})`);
+    check(L.vmax <= Math.min(PK.total * L.omega, PK.abs) * 1.001, `niveau ${n} : vitesse de pointe ${L.vmax.toFixed(2)} rad/s pour ω = ${L.omega.toFixed(2)} (≤ ${PK.total} × ω et ≤ ${PK.abs})`);
+    if (L.pattern !== 5) check(st.peak / st.mean <= PK.ratio + 1e-6, `niveau ${n} : loi ${L.pattern}, pointe ${(st.peak / st.mean).toFixed(3)} × sa vitesse moyenne (≤ ${PK.ratio})`);
+  }
   for (const q of L.rings) {
     const win = Math.min(...q.gates.map(g => (2 * g.h - 2 * RING_PAD[q.k]) / Math.abs(q.w)));
     // (l'anneau anti-salve des niveaux d'apprentissage des mondes 2 à 6 : RING_WIN)
