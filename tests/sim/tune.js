@@ -35,6 +35,33 @@ async function measureAll(P, specs) {
   res.forEach((r, i) => { out[own[i]].w += r.wins; out[own[i]].t += r.trials; });
   return out.map(x => x.w / x.t);
 }
+// --floor=n1,n2,… : pour ces niveaux seulement, ralentir (facteur × 0,88 par étape, puis une aiguille de moins) jusqu'à
+// ≥ 80 % à 30 ms sur 400 essais (graines propres) ; plancher d'équité prioritaire sur la cible à 70 ms
+const FLOOR = arg('floor', '') ? arg('floor', '').split(',').map(Number) : null;
+async function floorFix() {
+  const P = pool(), st = {};
+  for (const n of FLOOR) { const c = D.tune[n] || [1, 0]; st[n] = { f: c[0], dn: c[1], ok: false }; }
+  for (let it = 0; it < 12; it++) {
+    const act = FLOOR.filter(n => !st[n].ok); if (!act.length) break;
+    const p = await measureAll(P, act.map(n => ({ n, f: st[n].f, dn: st[n].dn, sigma: .03, trials: 400, key: 3 + it })));
+    act.forEach((n, i) => {
+      const s = st[n]; s.p30 = p[i];
+      if (p[i] >= .80) { s.ok = true; return; }
+      if (s.f > .46) s.f = Math.max(.45, s.f * .88); else if (s.dn > -4 && !(TEACH[n] && IMPL.has(TEACH[n]))) s.dn--; else s.ok = true;
+    });
+    process.stderr.write(`plancher, étape ${it + 1} : ${act.length} niveau(x)\n`);
+  }
+  P.close();
+  const cfgP = path.join(ROOT, 'js', 'config.js'); let cfg = fs.readFileSync(cfgP, 'utf8');
+  const merged = Object.assign({}, D.tune);
+  for (const n of FLOOR) merged[n] = [Math.floor(st[n].f * 1000) / 1000, st[n].dn];
+  const keys = Object.keys(merged).map(Number).sort((a, b) => a - b), items = keys.map(k => `${k}: [${merged[k][0]}, ${merged[k][1]}]`), lines = [];
+  for (let i = 0; i < items.length; i += 8) lines.push('    ' + items.slice(i, i + 8).join(', '));
+  cfg = cfg.replace(/  tune: \{[^}]*\}/, `  tune: {\n${lines.join(',\n')}\n  }`);
+  fs.writeFileSync(cfgP, cfg);
+  for (const n of FLOOR) console.log(`niveau ${n} : facteur ${st[n].f.toFixed(3)}, ${st[n].dn} aiguille(s), ${(st[n].p30 * 100).toFixed(1)} % à 30 ms`);
+}
+if (FLOOR) { floorFix(); return; }
 (async () => {
   const t0 = Date.now(), P = pool();
   const ns = []; for (let n = FROM; n <= TO; n++) ns.push(n); for (let n = 301; n < 301 + ENDLESS; n++) ns.push(n);
