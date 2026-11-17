@@ -17,6 +17,9 @@
 //      d'aiguilles moins rapides font plus de tirs moyennement difficiles et moins de tirs très étroits : le joueur précis y
 //      gagne davantage (plan 5.10 : leviers qui punissent l'imprécision plutôt que la vitesse brute). Si la capacité
 //      (tirs + obstacles fixes ≤ 14) l'interdit, f baisse jusqu'au plancher, prioritaire sur la cible.
+//   4. durée d'un niveau propre (45 ms, 100 essais) au-delà de 92 % de son plafond (maximum du monde de la table 5.10,
+//      1,5 × pour un boss, 30 s dans COSMOS ∞) : autant d'aiguilles en moins que la durée l'exige, f réglé à nouveau, et plus
+//      d'aiguille ajoutée ensuite (trop facile au plafond de vitesse, le niveau le reste).
 // Les niveaux d'apprentissage gardent leur nombre d'aiguilles (3 à 5).
 const path = require('path'), fs = require('fs');
 const { pool } = require('./pool');
@@ -32,6 +35,8 @@ const G = load(), D = G.get('DIFFICULTY'), TEACH = G.get('TEACH'), IMPL = new Se
 const OFF = [.09, .07, .02, .01, 0, -.01, -.02, -.03, -.04, -.05];
 const FLOOR30 = [.95, .90, .85, .82, .80, .80, .80];
 const isTeach = n => !!(TEACH[n] && IMPL.has(TEACH[n]));
+// plafond de durée d'un niveau propre (45 ms) : maximum de son monde (plan 5.10), 1,5 × pour un boss ; marge DURK
+const DURMAX = [15, 18, 22, 24, 28, 30, 30], DURK = .92, durCap = n => DURMAX[worldOf(n)] * (n % 10 === 0 ? 1.5 : 1);
 function target70(n) {
   if (TGT[n] !== undefined) return TGT[n];
   if (n > 300) return .26;
@@ -84,9 +89,11 @@ const q3 = f => Math.floor(f * 1000 + 1e-9) / 1000;
     const cur = D.tune[n] || [1, 0], s = st[n] = { n, T: target70(n), F30: FLOOR30[worldOf(n)], tries: 0, log: [] };
     reset(s, isTeach(n) ? 0 : Math.max(0, cur[1]), cur[0]);
   }
+  // passes sur une liste de niveaux : facteur réglé sur la cible à 70 ms, puis plancher à 30 ms
+  async function passes(list) {
   for (let pass = 0; pass < 4; pass++) {
     for (let it = 0; it < ITERS; it++) {
-      const act = ns.filter(n => !st[n].done);
+      const act = list.filter(n => !st[n].done);
       if (!act.length) break;
       const p = await measureAll(P, act.map(n => ({ n, f: st[n].f, dn: st[n].dn, sigma: .07, trials: M, key: 1 })));
       act.forEach((n, i) => {
@@ -95,7 +102,7 @@ const q3 = f => Math.floor(f * 1000 + 1e-9) / 1000;
         const canUp = !isTeach(n) && s.dn < 5 && bounds(n, s.dn + 1).throws > s.throws;
         const canDown = !isTeach(n) && s.dn > -3 && s.throws > 3;
         // trop facile à la vitesse plafond : une aiguille de plus ; trop dur à la vitesse plancher : une de moins
-        if (v > s.T + .04 && s.f >= s.cap * .999 && canUp) { s.log.push(`+1 (facile au plafond, ${v.toFixed(2)})`); reset(s, s.dn + 1, s.f); return; }
+        if (v > s.T + .04 && s.f >= s.cap * .999 && canUp && !s.noUp) { s.log.push(`+1 (facile au plafond, ${v.toFixed(2)})`); reset(s, s.dn + 1, s.f); return; }
         if (v < s.T - .04 && s.f <= s.flo + 1e-9 && canDown && !s.noDown) { s.log.push(`-1 (dur au plancher, ${v.toFixed(2)})`); reset(s, s.dn - 1, s.f); return; }
         if (Math.abs(v - s.T) <= .025 || (v >= s.T && s.f >= s.hi * .999 && (s.hi < s.cap * .999 || !canUp)) || (v <= s.T && s.f <= s.lo * 1.001)) { s.done = true; return; }
         // trop facile → plus vite ; trop dur → plus lent
@@ -111,13 +118,13 @@ const q3 = f => Math.floor(f * 1000 + 1e-9) / 1000;
       });
       process.stderr.write(`passe ${pass + 1}, itération ${it + 1} : ${act.length} niveaux à régler, ${((Date.now() - t0) / 1000).toFixed(0)} s\n`);
     }
-    for (const n of ns) { const s = st[n]; if (s.best) { s.f = s.best.f; s.p70 = s.best.p; } }
+    for (const n of list) { const s = st[n]; if (s.best) { s.f = s.best.f; s.p70 = s.best.p; } }
     // plancher à 30 ms (niveaux réglés à nouveau pendant cette passe seulement) : sous le plancher, une aiguille de plus et
     // on règle de nouveau ; à défaut, plus lent
-    const chk = ns.filter(n => st[n].p30 === undefined || st[n].changed);
+    const chk = list.filter(n => st[n].p30 === undefined || st[n].changed);
     const p30 = await measureAll(P, chk.map(n => ({ n, f: st[n].f, dn: st[n].dn, sigma: .03, trials: M30, key: 2 })));
     let redo = 0;
-    for (const n of ns) st[n].changed = false;
+    for (const n of list) st[n].changed = false;
     chk.forEach((n, i) => {
       const s = st[n]; s.p30 = p30[i].p;
       if (s.p30 >= s.F30 || pass === 3) return;
@@ -132,9 +139,23 @@ const q3 = f => Math.floor(f * 1000 + 1e-9) / 1000;
     process.stderr.write(`plancher à 30 ms : ${redo} niveau(x) repris\n`);
     if (!redo) break;
   }
-  // durée d'un niveau propre (victoires à 45 ms), pour information
-  const p45 = await measureAll(P, ns.map(n => ({ n, f: st[n].f, dn: st[n].dn, sigma: .045, trials: 60, key: 4 })));
-  ns.forEach((n, i) => { st[n].dur45 = median(p45[i].T); });
+  }
+  await passes(ns);
+  // durée d'un niveau propre (victoires à 45 ms, 100 essais) : au-delà de DURK × son plafond (plan 5.10 : maximum du monde,
+  // 1,5 × pour un boss, 30 s dans COSMOS ∞), des aiguilles en moins (autant que la durée l'exige) et le facteur réglé à
+  // nouveau, sans aiguille ajoutée ensuite (le plancher à 30 ms passe alors par un astre plus lent)
+  for (let round = 0; round < 3; round++) {
+    const p45 = await measureAll(P, ns.map(n => ({ n, f: st[n].f, dn: st[n].dn, sigma: .045, trials: 100, key: 4 })));
+    ns.forEach((n, i) => { st[n].dur45 = median(p45[i].T); });
+    const over = round < 2 ? ns.filter(n => !isTeach(n) && st[n].dur45 > DURK * durCap(n) && st[n].throws > 3) : [];
+    if (!over.length) break;
+    for (const n of over) {
+      const s = st[n], k = Math.max(1, Math.ceil(s.throws * (1 - DURK * durCap(n) / s.dur45))), dn = s.dn - Math.min(k, s.throws - 3);
+      s.log.push(`${dn - s.dn} (durée ${s.dur45.toFixed(1)} s, plafond ${durCap(n)} s)`); s.noUp = true; s.p30 = undefined; s.lastUp = null; reset(s, dn, s.f);
+    }
+    process.stderr.write(`durées : ${over.length} niveau(x) trop long(s) repris avec moins d'aiguilles : ${over.join(' ')}\n`);
+    await passes(over);
+  }
   P.close();
   const tune = {};
   for (const n of ns) { const s = st[n]; if (Math.abs(s.f - 1) > 1e-9 || s.dn) tune[n] = [q3(s.f), s.dn]; }
