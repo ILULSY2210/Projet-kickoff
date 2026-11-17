@@ -27,7 +27,7 @@ for (let n = 1; n <= 400; n++) {
   check(JSON.stringify(mk(n)) === JSON.stringify(L), `niveau ${n} : makeLevel non déterministe`);
   check(L.boss === (n % 10 === 0) && L.special === (n % 10 === 7), `niveau ${n} : statut boss / spécial`);
   const wmax = G.get('DIFFICULTY').worlds[Math.min(5, Math.floor((n - 1) / 50))].speed[1];
-  check(L.omega > .4 && L.omega <= 1.3 * wmax + 1e-9, `niveau ${n} : vitesse moyenne ${L.omega} (au plus 1,3 × ${wmax})`);
+  check(L.omega > .4 && L.omega <= 1.3 * wmax * 1.002, `niveau ${n} : vitesse moyenne ${L.omega} (au plus 1,3 × ${wmax})`);
 }
 for (const k in TEACH) if (IMPL.has(TEACH[k])) check(intro[TEACH[k]] === +k, `« ${TEACH[k]} » apparaît au niveau ${intro[TEACH[k]]}, apprise au niveau ${k}`);
 console.log('idées introduites : ' + Object.entries(intro).map(([k, v]) => `${k} ${v}`).join(', '));

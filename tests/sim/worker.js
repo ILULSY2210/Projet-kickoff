@@ -4,11 +4,12 @@ const { load } = require('./load');
 const { DRIVER } = require('./driver');
 const G = load(); G.run(DRIVER);
 const S = G.run('__sim');
+const BASE = JSON.stringify(G.get('DIFFICULTY').tune);
 let tuned = '';
 process.on('message', job => {
-  // réglages de vitesse par niveau à essayer (sans toucher à config.js)
+  // réglages par niveau à essayer (tune.js), ajoutés à ceux de config.js sans les remplacer
   const tk = JSON.stringify(job.tune || {});
-  if (tk !== tuned) { G.run(`DIFFICULTY.tune = ${tk};`); tuned = tk; }
+  if (tk !== tuned) { G.run(`DIFFICULTY.tune = Object.assign(${BASE}, ${tk});`); tuned = tk; }
   const out = { id: job.id, n: job.n, wins: 0, trials: job.trials, T: [], why: {}, sum: 0 };
   for (let i = 0; i < job.trials; i++) {
     const seed = job.seed0 + i;

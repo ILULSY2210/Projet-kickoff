@@ -41,7 +41,8 @@ async function measureAll(P, specs) {
   const st = {};
   // vitesse plafonnée à 1,3 × la vitesse de fin du monde (table DIFFICULTY.worlds) ; un niveau encore trop facile à ce
   // plafond reçoit une aiguille de plus (jusqu'à 2)
-  const hiOf = (n, dn) => { const w = Math.min(5, Math.floor((n - 1) / 50)), cur = D.tune[n] || [1, 0]; G.run(`DIFFICULTY.tune[${n}] = [1, ${dn}]`); const om = G.makeLevel(n).omega; G.run(`DIFFICULTY.tune[${n}] = ${JSON.stringify(cur)}`); return Math.max(1, Math.min(2.4, 1.3 * D.worlds[w].speed[1] / om)); };
+  // (et fenêtre commune des anneaux d'au moins 0,3 s une fois accélérée)
+  const hiOf = (n, dn) => { const w = Math.min(5, Math.floor((n - 1) / 50)), cur = D.tune[n] || [1, 0]; G.run(`DIFFICULTY.tune[${n}] = [1, ${dn}]`); const l = G.makeLevel(n), om = l.omega, rw = l.ringWin; G.run(`DIFFICULTY.tune[${n}] = ${JSON.stringify(cur)}`); return Math.max(1, Math.min(2.4, 1.3 * D.worlds[w].speed[1] / om, rw ? rw / .3 : 9)); };
   for (const n of ns) {
     const cur = D.tune[n] || [1, 0];
     st[n] = { n, T: target70(n), f: cur[0], dn: cur[1], lo: .45, hi: hiOf(n, cur[1]), best: null, done: false, hist: [] };
@@ -79,7 +80,7 @@ async function measureAll(P, specs) {
   }
   P.close();
   const tune = {};
-  for (const n of ns) { const s = st[n]; if (Math.abs(s.f - 1) > 1e-3 || s.dn) tune[n] = [Math.round(s.f * 1000) / 1000, s.dn]; }
+  for (const n of ns) { const s = st[n]; if (Math.abs(s.f - 1) > 1e-3 || s.dn) tune[n] = [Math.floor(s.f * 1000) / 1000, s.dn]; }
   const rows = ns.map(n => st[n]);
   fs.mkdirSync(path.join(ROOT, 'tests', 'out', 'sim'), { recursive: true });
   fs.writeFileSync(path.join(ROOT, 'tests', 'out', 'sim', 'tune.json'), JSON.stringify(rows.map(s => ({ n: s.n, T: s.T, f: s.f, dn: s.dn, p70: s.p70, p30: s.p30, hist: s.hist })), null, 1));

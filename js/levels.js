@@ -285,7 +285,9 @@ function makeLevel(n) {
     // vitesse des anneaux choisie (±20 %) pour que l'astre ne fasse pas un nombre presque entier de tours par période de
     // passage, à sa vitesse moyenne comme à ses vitesses accélérées : sinon chaque fenêtre de passage présenterait les
     // mêmes angles d'impact, et le bord pourrait ne plus jamais offrir de place au bon moment
-    const oms = [omega]; if (R.accel) oms.push(omega * R.accel.cap, omega * Math.sqrt(R.accel.cap)); if (R.ramp) oms.push(omega * (1 + R.ramp.k), omega * (1 + R.ramp.k / 2));
+    // (réglage par niveau : un changement d'échelle de temps de toutes les rotations, astre et anneaux ensemble, appliqué
+    // ensuite ; la structure du niveau ne dépend donc pas du réglage)
+    const om0 = R.omega, oms = [om0]; if (R.accel) oms.push(om0 * R.accel.cap, om0 * Math.sqrt(R.accel.cap)); if (R.ramp) oms.push(om0 * (1 + R.ramp.k), om0 * (1 + R.ramp.k / 2));
     let bv = R.ringV, bs = -1;
     // (fraction de tour par période loin de 0, 1/4, 1/3, 1/2, 2/3, 3/4 : les fenêtres successives balaient tout le bord)
     const RAT = [0, .25, 1 / 3, .5, 2 / 3, .75, 1];
@@ -295,9 +297,11 @@ function makeLevel(n) {
     for (let k = 0; k < R.rings; k++) { const nk = R.gates === 3 && k === 2 ? 2 : R.gates; bv = Math.min(bv, (R.gateW - 2 * RING_PAD[k]) * nk / (R.gates * RING_WIN)); }
     R.ringV = Math.round(bv * 1e6) / 1e6;
     if (R.ringW) R.gateW = R.ringW * R.ringV + 2 * RING_PAD[0];   // la fenêtre visée est gardée à la nouvelle vitesse
-    const Tp = TAU / (R.gates * R.ringV), tStar = phase + .8 + r() * Tp, s0 = r() < .5 ? 1 : -1;
+    R.win0 = Infinity;
+    for (let k = 0; k < R.rings; k++) { const nk = R.gates === 3 && k === 2 ? 2 : R.gates; R.win0 = Math.min(R.win0, (R.gateW - 2 * RING_PAD[k]) * nk / (R.gates * R.ringV)); }
+    const fT = tn[0], Tp = TAU / (R.gates * R.ringV * fT), tStar = phase + (.8 + r() * Tp * fT) / fT, s0 = r() < .5 ? 1 : -1;
     for (let k = 0; k < R.rings; k++) {
-      const nk = R.gates === 3 && k === 2 ? 2 : R.gates, wk = (k % 2 ? -s0 : s0) * R.gates * R.ringV / nk, h = R.gateW / 2;
+      const nk = R.gates === 3 && k === 2 ? 2 : R.gates, wk = (k % 2 ? -s0 : s0) * R.gates * R.ringV * fT / nk, h = R.gateW / 2;
       const c0 = r() * TAU, gates = [];
       for (let i = 0; i < nk; i++) gates.push({ c: Math.round(norm(c0 + i * TAU / nk) * 1e9) / 1e9, h: Math.round(h * 1e6) / 1e6 });
       const w = Math.round(wk * 1e6) / 1e6, q = { k, a0: Math.round(norm(HPI - c0 - w * tStar) * 1e9) / 1e9, w, gates, pulse: null };
@@ -348,7 +352,7 @@ function makeLevel(n) {
   const blockers = pre.map(a => ({ a: norm(a), pre: true, k: 1 }));
   for (const wl of walls) for (const p of wallPoints(wl.a0, wl.a1 - wl.a0)) blockers.push({ a: norm(p), pre: true, wall: true, k: 1 });
   const lv = { n, w, boss, special, sp, teach, throws, pre, walls, orbs, sents, speed, omega, pattern: R.law, dir, phase, rot0, trav, vmax, d,
-    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, irr, zones, rings, blockers };
+    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, irr, zones, rings, ringWin: R.rings ? Math.round(R.win0 / tn[0] * 1e6) / 1e6 : 0, blockers };
   lv.flags = levelFlags(lv);
   return lv;
 }
