@@ -4,11 +4,17 @@
 // - chaque niveau d'apprentissage d'une idée réalisée (IMPL) l'introduit, elle seule, en 3 à 5 aiguilles ;
 // - capacité : tirs (doublés pour les traversantes) + obstacles fixes ≤ 14 sur 1..400 ;
 // - déterminisme : makeLevel(n) identique d'un appel à l'autre ; boss tous les 10, spéciaux en x7 ;
-// - chaque niveau a au moins 3 tirs, une vitesse moyenne d'au plus 1,3 × la vitesse de fin de son monde (réglage compris).
+// - chaque niveau a au moins 3 tirs, une vitesse moyenne d'au plus 1,15 × la vitesse de fin de son monde (réglage compris) ;
+//   un niveau d'apprentissage n'est jamais plus rapide que la vitesse de début de son monde (vitesse modérée, plan 5.3) ;
+// - anneaux : fenêtre de passage de chaque anneau (portes, vitesse, marge de l'aiguille) ≥ RING_WIN = 0,42 s, réglage
+//   compris, y compris l'anneau à deux portes des niveaux à trois anneaux ;
+// - COSMOS ∞ : au-delà de 400, le niveau n est le niveau 301 + (n − 301) mod 100, en miroir un cycle sur deux ; le miroir
+//   est exact (même journal de tirs → mêmes issues, angles opposés à 1e-9 près, joueur simulé dans le vrai cœur).
 const { load } = require('../sim/load');
 const G = load();
 const fails = [], check = (c, m) => { if (!c) fails.push(m); };
 const TEACH = G.get('TEACH'), IMPL = new Set(G.get('IMPL')), mk = G.makeLevel, cap = G.get('DIFFICULTY').capacity;
+const RING_PAD = G.get('RING_PAD'), RING_WIN = G.get('RING_WIN');
 const seen = new Set(), intro = {};
 for (let n = 1; n <= 400; n++) {
   const L = mk(n), f = L.flags, t = TEACH[n];
@@ -26,8 +32,31 @@ for (let n = 1; n <= 400; n++) {
   check(L.throws >= 3, `niveau ${n} : ${L.throws} tirs`);
   check(JSON.stringify(mk(n)) === JSON.stringify(L), `niveau ${n} : makeLevel non déterministe`);
   check(L.boss === (n % 10 === 0) && L.special === (n % 10 === 7), `niveau ${n} : statut boss / spécial`);
-  const wmax = G.get('DIFFICULTY').worlds[Math.min(5, Math.floor((n - 1) / 50))].speed[1];
-  check(L.omega > .4 && L.omega <= 1.3 * wmax * 1.002, `niveau ${n} : vitesse moyenne ${L.omega} (au plus 1,3 × ${wmax})`);
+  const DW = G.get('DIFFICULTY').worlds[Math.min(5, Math.floor((n - 1) / 50))], wmax = DW.speed[1];
+  check(L.omega > .4 && L.omega <= 1.15 * wmax * 1.002, `niveau ${n} : vitesse moyenne ${L.omega} (au plus 1,15 × ${wmax})`);
+  if (t && IMPL.has(t)) check(L.omega <= DW.speed[0] + 1e-9, `niveau ${n} : apprentissage à ${L.omega.toFixed(3)} rad/s (au plus ${DW.speed[0]}, vitesse de début du monde)`);
+  for (const q of L.rings) {
+    const win = Math.min(...q.gates.map(g => (2 * g.h - 2 * RING_PAD[q.k]) / Math.abs(q.w)));
+    check(win >= RING_WIN - 1e-5, `niveau ${n} : anneau ${q.k}, fenêtre de passage ${win.toFixed(3)} s (≥ ${RING_WIN})`);
+  }
+}
+// COSMOS ∞ : réserve 301-400 rejouée, en miroir un cycle sur deux
+for (const n of [401, 457, 500, 517, 990, 1001, 1234]) {
+  const L = mk(n), k = 301 + (n - 301) % 100, mir = Math.floor((n - 301) / 100) % 2 === 1, B = mk(k);
+  check(L.n === n && L.boss === B.boss && L.special === B.special && L.throws === B.throws && L.omega === B.omega, `niveau ${n} : structure du niveau ${k}`);
+  check(mir ? L.dir === -B.dir && Math.abs(Math.cos(L.rot0) + Math.cos(B.rot0)) < 1e-6 : JSON.stringify(Object.assign({}, L, { n: 0, src: 0, mirror: 0 })) === JSON.stringify(Object.assign({}, B, { n: 0, src: 0, mirror: 0 })), `niveau ${n} : ${mir ? 'miroir' : 'copie'} du niveau ${k}`);
+}
+{
+  const { DRIVER } = require('../sim/driver');
+  G.run(DRIVER); const S = G.run('__sim');
+  let diff = 0, maxd = 0, games = 0;
+  for (let k = 301; k <= 400; k += 3) {
+    const a = S.aim(k, .05, 4242 + k), b = S.replay(k + 100, a.taps); games++;
+    if (a.st !== b.st || a.kind !== b.kind || a.ang.length !== b.ang.length) { diff++; continue; }
+    for (let j = 0; j < a.ang.length; j++) maxd = Math.max(maxd, Math.abs(Math.sin((a.ang[j] + b.ang[j]) / 2)));
+  }
+  check(diff === 0 && maxd < 1e-8, `COSMOS ∞ en miroir : ${diff} issue(s) différente(s) sur ${games} parties, écart d'angle ${maxd.toExponential(1)}`);
+  console.log(`COSMOS ∞ : ${games} parties rejouées en miroir, issues identiques, écart d'angle ${maxd.toExponential(1)}`);
 }
 for (const k in TEACH) if (IMPL.has(TEACH[k])) check(intro[TEACH[k]] === +k, `« ${TEACH[k]} » apparaît au niveau ${intro[TEACH[k]]}, apprise au niveau ${k}`);
 console.log('idées introduites : ' + Object.entries(intro).map(([k, v]) => `${k} ${v}`).join(', '));

@@ -98,8 +98,37 @@ function wallPoints(a0, A) { const k = Math.ceil(A / (GAP * 1.9)), o = []; for (
 // charge fixe du bord en « équivalents aiguilles » : une aiguille isolée interdit 3,4 × GAP au joueur prudent
 function fixedUnits(points, trav) { const all = trav ? points.concat(points.map(a => a + Math.PI)) : points; return unionMeasure(all, GAP * 1.7) / (GAP * 3.4); }
 
+// COSMOS ∞ : les niveaux 301-400 forment une réserve réglée et vérifiée niveau par niveau (DIFFICULTY.tune, tests/sim) ;
+// au-delà, le niveau n rejoue le niveau 301 + (n − 301) mod 100 (boss et spéciaux restent à leur place), en miroir un cycle
+// sur deux. Le miroir (symétrie gauche-droite de toute la scène, sens de rotation inversé) est exact : même difficulté,
+// autre dessin. Aucun niveau sans fin n'échappe ainsi à la mesure du plancher d'équité.
+const ENDLESS_POOL = 100;
 function makeLevel(n) {
   n = Math.max(1, n | 0);
+  if (n <= LAST_LEVEL + ENDLESS_POOL) return genLevel(n);
+  const k = LAST_LEVEL + 1 + (n - LAST_LEVEL - 1) % ENDLESS_POOL, cyc = Math.floor((n - LAST_LEVEL - 1) / ENDLESS_POOL);
+  const lv = genLevel(k);
+  if (cyc % 2) mirrorLevel(lv);
+  lv.n = n; lv.src = k; lv.mirror = cyc % 2 === 1;
+  return lv;
+}
+// symétrie par rapport à l'axe vertical de l'écran (le pas de tir est sur l'axe) : un angle a du repère de l'astre devient
+// −a, la rotation rot devient π − rot et toutes les vitesses changent de signe (sens de rotation, anneaux, sentinelles,
+// zones glissantes) ; les instants (lois, demi-tours, portes pulsées, zones pulsées) ne changent pas
+function mirrorLevel(lv) {
+  const m = a => Math.round(norm(-a) * 1e9) / 1e9, mp = a => Math.round(norm(Math.PI - a) * 1e9) / 1e9;
+  lv.dir = -lv.dir; lv.rot0 = mp(lv.rot0);
+  lv.pre = lv.pre.map(m);
+  lv.walls = lv.walls.map(wl => { const a0 = m(wl.a1); return { a0, a1: a0 + (wl.a1 - wl.a0) }; });
+  lv.blockers = lv.blockers.map(b => Object.assign({}, b, { a: m(b.a) }));
+  lv.orbs = lv.orbs.map(o => ({ a: m(o.a), hit: false }));
+  lv.sents = lv.sents.map(q => ({ a0: mp(q.a0), w: -q.w, hw: q.hw }));
+  lv.zones = lv.zones.map(z => Object.assign({}, z, { c: m(z.c) }, z.kind === 'glide' ? { w: -z.w } : {}));
+  lv.rings = lv.rings.map(q => Object.assign({}, q, { a0: mp(q.a0), w: -q.w, gates: q.gates.map(g => ({ c: m(g.c), h: g.h })) }));
+  lv.flags = levelFlags(lv);
+  return lv;
+}
+function genLevel(n) {
   const r = rng(n * 7919 + 17 + GEN_VERSION * 104729);
   const pick = (arr, wts) => { let tot = 0; for (let i = 0; i < arr.length; i++) tot += wts ? wts[i] : 1; let x = r() * tot; for (let i = 0; i < arr.length; i++) { x -= wts ? wts[i] : 1; if (x < 0) return arr[i]; } return arr[arr.length - 1]; };
   const w = worldOf(n), wi = Math.min(w, WORLDS.length - 1), DW = DIFFICULTY.worlds[wi], d = levelD(n);
@@ -148,7 +177,8 @@ function makeLevel(n) {
     if (teach === 'portesPulsees') { R.N = 5; R.rings = 1; ringWin(R, .8, 2.4, 3); R.gatePulse = true; }
     // à partir du monde 2, un anneau aussi sur les niveaux d'apprentissage (anti-salve : 3 à 5 aiguilles passent trop
     // facilement à l'aveugle) ; idée déjà apprise, l'idée nouvelle reste la seule nouveauté
-    if (wi >= 1 && has('anneau')) { if (!R.rings) { R.rings = 1; ringWin(R, .45, 2.6, 3); } R.N = 5; }
+    // (fenêtre de 0,45 s qui revient toutes les 1,3 s : plus courte qu'une salve de 5 aiguilles, mais souvent offerte)
+    if (wi >= 1 && has('anneau')) { if (!R.rings) { R.rings = 1; ringWin(R, .45, 1.3, 3); } R.N = 5; }
   } else if (boss) {
     const B = BOSSES[bossArch(n)], tier = Math.min(wi, 5);
     R.N = B.throws[tier]; R.omega = B.speed[tier]; R.F = 0; R.orbs = has('etoiles') ? 3 : 0;
@@ -166,7 +196,7 @@ function makeLevel(n) {
     }
     // à partir du palier II, un anneau sur les boss qui n'ont ni anneau ni sentinelle (anti-salve)
     if (tier >= 1 && arch !== 'anneaux' && arch !== 'chaos' && has('anneau')) { R.rings = 1; ringWin(R, .6, 2.2, 3); }
-    if (arch === 'chaos' && has('anneau') && tier >= 1 && tier !== 4) { R.rings = tier >= 3 && has('anneaux2') ? 2 : 1; R.gateW = .8 - .04 * tier; R.ringV = .45 + .1 * tier; }
+    if (arch === 'chaos' && has('anneau') && tier >= 1 && tier !== 4) { R.rings = tier >= 3 && has('anneaux2') ? 2 : 1; ringWin(R, .7 - .03 * tier, 2.4 - .1 * tier, 3); }
     if (arch === 'chaos') { R.law = has('irreg') ? 6 : has('alternee') ? 2 : has('respiration') ? 1 : 0; R.irr = tier === 0 ? 2 : tier === 5 ? 4 : 3; R.F = 2; if (tier >= 4 && has('sentinelle')) R.sent = has('sentinelles2') ? 2 : 1; }
     R.F += R.zones.length * 2;
   } else {
@@ -187,7 +217,8 @@ function makeLevel(n) {
     if (has('anneau') && (wi >= 1 || r() < .4)) {
       R.rings = has('anneaux3') && r() < (wi >= 5 ? .3 : .12) ? 3 : has('anneaux2') && r() < (wi >= 5 ? .45 : .25) ? 2 : 1;
       // fenêtre plus courte qu'une salve de N aiguilles à 100 ms
-      if (wi === 0) ringWin(R, lerp(1.2, .8, d), 2.6, 3); else ringWin(R, clamp(Math.min(lerp(.6, .45, d), (R.N - 1.2) * .1), RING_WIN, .6), lerp(2.4, 1.9, d), 3);
+      // (période de passage courte à partir du monde 2 : l'attente d'une fenêtre ne doit pas allonger le niveau)
+      if (wi === 0) ringWin(R, lerp(1.2, .8, d), 2, 3); else ringWin(R, clamp(Math.min(lerp(.6, .45, d), (R.N - 1.2) * .1), RING_WIN, .6), lerp(1.35, 1.1, d), 3);
       R.gatePulse = has('portesPulsees') && r() < .35;
     }
     // zones pulsées (111) : cœur de Rubis
@@ -202,18 +233,30 @@ function makeLevel(n) {
     else if (has('rythme') && r() < pd) R.rhythm = { P: 3.2 - .8 * d, warn: Math.max(.45, .7 - .2 * d) };
     else if (has('demitour') && r() < pd) R.demi = { every: d < .5 ? 3 : 2, warn: Math.max(.45, .9 - .4 * d - .1 * wi) };
     if (has('traversantes') && r() < (wi >= 4 ? .3 : .15)) { R.trav = true; R.N = Math.max(R.N, 6); R.zones = []; R.fentes = false; }
+    // traversantes des deux derniers mondes : deux anneaux (leurs aiguilles remplissent déjà le bord, la difficulté vient
+    // des obstacles mobiles)
+    if (R.trav && wi >= 4 && has('anneaux2')) R.rings = Math.max(R.rings, 2);
+    // une seule source d'arrêts ou d'inversions par niveau : une loi à arrêts ou inversions (alternée, pas à pas, ressac)
+    // OU des demi-tours (toutes les k aiguilles, au rythme, à l'impact), jamais les deux (deux systèmes d'annonce à lire
+    // en même temps : le joueur qui n'anticipe pas décrochait, plan 5.10)
+    if ((R.demi || R.rhythm || R.inv) && [2, 4, 5].includes(R.law)) {
+      if (r() < .5) { R.demi = null; R.rhythm = null; R.inv = false; }
+      else { const calm = laws.filter(x => x === 0 || x === 1 || x === 3); R.law = calm[Math.floor(r() * calm.length)]; }
+    }
     // anti-salve (à partir du monde 2) : au moins deux moyens parmi zones larges, loi à arrêts ou inversions,
     // obstacles mobiles ; à défaut, on ajoute ceux qui sont appris
     if (wi >= 1) {
-      const A = () => (R.zones.length || R.fentes ? 1 : 0), Bm = () => ([2, 4, 5].includes(R.law) ? 1 : 0), C = () => (R.sent || R.rings ? 1 : 0);
+      const A = () => (R.zones.length || R.fentes ? 1 : 0), Bm = () => ([2, 4, 5].includes(R.law) || R.demi || R.rhythm || R.inv ? 1 : 0), C = () => (R.sent || R.rings ? 1 : 0);
       if (A() + Bm() + C() < 2 && has('zone') && !A() && !R.trav) R.zones = [.35 + .15 * r()];
-      if (A() + Bm() + C() < 2) { const stops = laws.filter(x => [2, 4, 5].includes(x)); if (stops.length) { R.law = stops[Math.floor(r() * stops.length)]; R.irr = null; } }
+      if (A() + Bm() + C() < 2) { const stops = laws.filter(x => [2, 4, 5].includes(x)); if (stops.length) { R.law = stops[Math.floor(r() * stops.length)]; R.irr = null; R.demi = null; R.rhythm = null; R.inv = false; } }
     }
     // budget de complexité (dangers simultanés) par monde : au-delà, on retire d'abord ce qui n'est pas le cœur du monde
     // (deuxième sentinelle, accélération ou rampe, demi-tours, zones dynamiques, anneaux en trop, zones fixes)
     const cx = () => R.rings * .8 + R.sent + (R.pulse + R.glide) * .7 + (R.zones.length + (R.fentes ? 1 : 0)) * .5 + (R.trav ? 1.5 : 0) +
       (R.accel || R.ramp ? .5 : 0) + (R.demi || R.rhythm || R.inv ? .5 : 0) + ([2, 4, 5, 6].includes(R.law) ? .4 : 0);
-    const CAP = [2.4, 3, 3.3, 3.4, 3.6, 3.8][wi];
+    const CAP = inf ? 3.4 : [2.4, 3, 3.3, 3.4, 3.6, 3.8][wi];
+    // COSMOS ∞ (réserve 301-400) : au plus deux anneaux, jamais d'anneaux multiples avec une loi à arrêts et des fentes
+    if (inf) { if (R.rings > 2) R.rings = 2; if (R.rings > 1 && R.fentes && [2, 4, 5].includes(R.law)) R.fentes = false; }
     const drops = [() => { if (R.sent > 1) R.sent = 1; }, () => { if (R.trav && R.sent) R.sent = 0; }, () => { if (wi !== 1) { R.accel = null; R.ramp = null; } },
       () => { if (R.trav && R.accel) R.accel = null; }, () => { if (wi !== 3) { R.demi = null; R.rhythm = null; R.inv = false; } }, () => { if (wi !== 2) { R.pulse = 0; R.glide = 0; } },
       () => { if (R.rings > 1) R.rings = 1; }, () => { if (wi !== 2) { R.zones = []; R.fentes = false; } }, () => { if (R.sent && wi !== 4) R.sent = 0; },
@@ -245,7 +288,8 @@ function makeLevel(n) {
   for (let i = 0; i < blk; i++) { const a = put(.56); if (a != null) single(a); }
   // capacité : tirs (doublés pour les traversantes) + obstacles fixes ≤ 14
   // réglage par niveau (tests/sim/tune.js) : [facteur de vitesse, aiguilles en plus ou en moins]
-  const tn = DIFFICULTY.tune[n] || [1, 0];
+  // un niveau d'apprentissage n'est jamais accéléré (vitesse modérée, plan 5.3)
+  const tn0 = DIFFICULTY.tune[n] || [1, 0], tn = teach ? [Math.min(1, tn0[0]), tn0[1]] : tn0;
   let fixed = unitsNow(), throws = Math.max(3, R.N + tn[1]);
   const per = trav ? 2 : 1;
   while (throws * per + fixed > cap && pre.length) { const x = pre.pop(); occ.splice(occ.indexOf(x), 1); fixed = unitsNow(); }
@@ -281,27 +325,25 @@ function makeLevel(n) {
   // rejoignent sur l'axe de tir à t* + j·Tp : une fenêtre de passage commune revient à chaque période. Portes pulsées :
   // période 1,5·Tp, ouvertes la moitié du temps puis annoncées (0,6 s) et fermées : un passage sur trois environ est fermé.
   const rings = [];
+  let ringW = 0;
   if (R.rings) {
-    // vitesse des anneaux choisie (±20 %) pour que l'astre ne fasse pas un nombre presque entier de tours par période de
-    // passage, à sa vitesse moyenne comme à ses vitesses accélérées : sinon chaque fenêtre de passage présenterait les
+    // Les anneaux gardent leur fenêtre de passage W et leur période Tp en secondes : le facteur de réglage tn[0] ne change
+    // que la vitesse de l'astre (une période de passage étirée allongeait les niveaux ralentis par le réglage).
+    // Vitesse des anneaux choisie (±20 %) pour que l'astre ne fasse pas un nombre presque entier de tours par période de
+    // passage, à sa vitesse moyenne réglée comme à ses vitesses accélérées : sinon chaque fenêtre de passage présenterait les
     // mêmes angles d'impact, et le bord pourrait ne plus jamais offrir de place au bon moment
-    // (réglage par niveau : un changement d'échelle de temps de toutes les rotations, astre et anneaux ensemble, appliqué
-    // ensuite ; la structure du niveau ne dépend donc pas du réglage)
-    const om0 = R.omega, oms = [om0]; if (R.accel) oms.push(om0 * R.accel.cap, om0 * Math.sqrt(R.accel.cap)); if (R.ramp) oms.push(om0 * (1 + R.ramp.k), om0 * (1 + R.ramp.k / 2));
+    const om0 = R.omega * tn[0], oms = [om0]; if (R.accel) oms.push(om0 * R.accel.cap, om0 * Math.sqrt(R.accel.cap)); if (R.ramp) oms.push(om0 * (1 + R.ramp.k), om0 * (1 + R.ramp.k / 2));
     let bv = R.ringV, bs = -1;
     // (fraction de tour par période loin de 0, 1/4, 1/3, 1/2, 2/3, 3/4 : les fenêtres successives balaient tout le bord)
     const RAT = [0, .25, 1 / 3, .5, 2 / 3, .75, 1];
     for (let f = .8; f <= 1.2001; f += .01) { const v = R.ringV * f, T = TAU / (R.gates * v); let m = 1; for (const o of oms) { const x = (o * T / TAU) % 1; for (const q of RAT) m = Math.min(m, Math.abs(x - q)); } if (m > bs + 1e-9) { bs = m; bv = v; } }
-    // fenêtre de passage commune d'au moins RING_WIN s (porte moins la marge de l'aiguille, à la vitesse de l'anneau le
-    // plus rapide) : sinon le bord n'offrirait presque jamais de place au moment où les portes s'alignent
-    for (let k = 0; k < R.rings; k++) { const nk = R.gates === 3 && k === 2 ? 2 : R.gates; bv = Math.min(bv, (R.gateW - 2 * RING_PAD[k]) * nk / (R.gates * RING_WIN)); }
     R.ringV = Math.round(bv * 1e6) / 1e6;
-    if (R.ringW) R.gateW = R.ringW * R.ringV + 2 * RING_PAD[0];   // la fenêtre visée est gardée à la nouvelle vitesse
-    R.win0 = Infinity;
-    for (let k = 0; k < R.rings; k++) { const nk = R.gates === 3 && k === 2 ? 2 : R.gates; R.win0 = Math.min(R.win0, (R.gateW - 2 * RING_PAD[k]) * nk / (R.gates * R.ringV)); }
-    const fT = tn[0], Tp = TAU / (R.gates * R.ringV * fT), tStar = phase + (.8 + r() * Tp * fT) / fT, s0 = r() < .5 ? 1 : -1;
+    // fenêtre de passage commune d'au moins RING_WIN s pour chaque anneau : chaque anneau a ses propres portes, assez larges
+    // pour laisser passer l'aiguille pendant W à sa vitesse (l'anneau à deux portes tourne 1,5 fois plus vite)
+    ringW = Math.max(RING_WIN, R.ringW);
+    const Tp = TAU / (R.gates * R.ringV), tStar = phase + .8 + r() * Tp, s0 = r() < .5 ? 1 : -1;
     for (let k = 0; k < R.rings; k++) {
-      const nk = R.gates === 3 && k === 2 ? 2 : R.gates, wk = (k % 2 ? -s0 : s0) * R.gates * R.ringV * fT / nk, h = R.gateW / 2;
+      const nk = R.gates === 3 && k === 2 ? 2 : R.gates, wk = (k % 2 ? -s0 : s0) * R.gates * R.ringV / nk, h = (ringW * Math.abs(wk) + 2 * RING_PAD[k]) / 2;
       const c0 = r() * TAU, gates = [];
       for (let i = 0; i < nk; i++) gates.push({ c: Math.round(norm(c0 + i * TAU / nk) * 1e9) / 1e9, h: Math.round(h * 1e6) / 1e6 });
       const w = Math.round(wk * 1e6) / 1e6, q = { k, a0: Math.round(norm(HPI - c0 - w * tStar) * 1e9) / 1e9, w, gates, pulse: null };
@@ -352,7 +394,7 @@ function makeLevel(n) {
   const blockers = pre.map(a => ({ a: norm(a), pre: true, k: 1 }));
   for (const wl of walls) for (const p of wallPoints(wl.a0, wl.a1 - wl.a0)) blockers.push({ a: norm(p), pre: true, wall: true, k: 1 });
   const lv = { n, w, boss, special, sp, teach, throws, pre, walls, orbs, sents, speed, omega, pattern: R.law, dir, phase, rot0, trav, vmax, d,
-    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, irr, zones, rings, ringWin: R.rings ? Math.round(R.win0 / tn[0] * 1e6) / 1e6 : 0, blockers };
+    layout: R.layout, fentes: R.fentes, fixed: +fixed.toFixed(3), accel: R.accel, demi: R.demi, rhythm: R.rhythm, inv: R.inv, ramp: R.ramp, irr, zones, rings, ringWin: Math.round(ringW * 1e6) / 1e6, blockers };
   lv.flags = levelFlags(lv);
   return lv;
 }
