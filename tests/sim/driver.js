@@ -109,7 +109,10 @@ var __sim = (function () {
       runTo(tDec); if (state !== 'play') break;
       var best = bestGap(), tTap = -1;
       while (state === 'play' && t - T0 < MAXT) {
-        var waited = t - tDec, thr = stuck.length ? best * Math.max(.4, .85 - .08 * waited) : -1;
+        // marge exigée sur l'arc : une bonne part du plus grand arc libre (85 %, puis 40 % quand il attend), mais jamais plus
+        // qu'une marge confortable pour sa précision (3 σ de temps à la vitesse de l'astre, plus 0,15 rad) : sur un astre encore
+        // vide, il ne vise pas le milieu exact du plus grand arc
+        var waited = t - tDec, thr = stuck.length ? Math.min(best * Math.max(.4, .85 - .08 * waited), .15 + 3 * sigma * Math.abs(speedAt(t))) : -1;
         var a = norm(HPI - (rot + speedAt(t) * (RT + FLIGHT)));
         // il lit les chevrons : pas de tir quand un arrêt ou une inversion est annoncé (0,45 s à l'avance) ; il voit aussi
         // l'astre accélérer ou ralentir : il attend un mouvement à peu près régulier (vitesse qui a changé de moins de 12 %
