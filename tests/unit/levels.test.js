@@ -11,6 +11,7 @@
 //   compris, y compris l'anneau à deux portes des niveaux à trois anneaux ;
 // - plafond de pointe (recette de l'étape 2, Q1) : lois à-coups, ressac et irrégulière, vitesse de pointe ≤ 2,2 × ω et
 //   ≤ 7 rad/s, accélération et rampe comprises ; lois à-coups et irrégulière : pointe de la loi ≤ 1,8 × sa vitesse moyenne ;
+// - demi-tours au rythme : entre la fin d'un demi-tour et l'annonce du suivant, l'astre balaie au moins 1,15 tour ;
 // - COSMOS ∞ : au-delà de 400, le niveau n est le niveau 301 + (n − 301) mod 100, en miroir un cycle sur deux ; le miroir
 //   est exact (même journal de tirs → mêmes issues, angles opposés à 1e-9 près, joueur simulé dans le vrai cœur).
 const { load } = require('../sim/load');
@@ -42,6 +43,10 @@ for (let n = 1; n <= 400; n++) {
     const PK = G.get('DIFFICULTY').peak, st = G.run(`lawStat(${L.pattern}, ${JSON.stringify(L.irr)}, ${L.amp})`);
     check(L.vmax <= Math.min(PK.total * L.omega, PK.abs) * 1.001, `niveau ${n} : vitesse de pointe ${L.vmax.toFixed(2)} rad/s pour ω = ${L.omega.toFixed(2)} (≤ ${PK.total} × ω et ≤ ${PK.abs})`);
     if (L.pattern !== 5) check(st.peak / st.mean <= PK.ratio + 1e-6, `niveau ${n} : loi ${L.pattern}, pointe ${(st.peak / st.mean).toFixed(3)} × sa vitesse moyenne (≤ ${PK.ratio})`);
+  }
+  if (L.rhythm) {
+    const sw = L.omega * (L.rhythm.P - L.rhythm.warn - G.get('FLIP_T') - .2) / (2 * Math.PI);
+    check(sw >= G.get('DIFFICULTY').peak.sweep - 2e-3, `niveau ${n} : ${sw.toFixed(3)} tour(s) balayé(s) entre deux annonces de demi-tour au rythme`);
   }
   for (const q of L.rings) {
     const win = Math.min(...q.gates.map(g => (2 * g.h - 2 * RING_PAD[q.k]) / Math.abs(q.w)));

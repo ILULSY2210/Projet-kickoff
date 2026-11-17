@@ -118,8 +118,9 @@ const DIFFICULTY = {
   pos: [-.55, -.35, .15, .3, .45, .55, .45, .7, .8, .9],
   // plafond de pointe (levels.js) : lois à-coups et irrégulière, pointe de la loi ≤ ratio × sa vitesse moyenne ; lois
   // à-coups, ressac et irrégulière, vitesse de pointe ≤ total × ω et ≤ abs rad/s, accélération et rampe comprises ;
-  // amplitude de la loi réduite d'abord jusqu'à cmin
-  peak: { ratio: 1.8, total: 2.2, abs: 7, cmin: .3 },
+  // amplitude de la loi réduite d'abord jusqu'à cmin. sweep : tours balayés par l'astre entre deux annonces de demi-tour au
+  // rythme
+  peak: { ratio: 1.8, total: 2.2, abs: 7, cmin: .3, sweep: 1.15 },
   tune: {
     5: [1.448, 2], 6: [1.359, 3], 7: [1.444, 3], 8: [1.393, 4], 10: [1.055, 1], 13: [1.212, 3], 14: [1.3, 2], 15: [1.345, 3],
     16: [1.342, 3], 17: [1.368, 0], 18: [1.3, 1], 20: [1.375, 3], 22: [1.3, 0], 23: [1.248, 2], 24: [1.231, 2], 25: [1.258, 1],

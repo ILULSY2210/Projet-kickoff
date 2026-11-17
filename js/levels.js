@@ -382,6 +382,10 @@ function genLevel(n) {
   }
   const lawMean = R.law === 6 || amp !== 1 ? lawStat(R.law, irr, amp).mean : LAW_MEAN[R.law];
   const speed = omega / lawMean;
+  // demi-tours au rythme : aller et retour durent autant, l'astre ne balaie donc qu'un arc de ω × P ; entre la fin d'un
+  // demi-tour et l'annonce du suivant, il couvre au moins PK.sweep tour(s) (sinon une partie du bord ne passe jamais sous le
+  // pas de tir hors des annonces, et un joueur qui attend la fin de l'annonce pour tirer ne peut plus finir)
+  if (R.rhythm) R.rhythm.P = Math.max(R.rhythm.P, PK.sweep * TAU / omega + R.rhythm.warn + FLIP_T + .2);
   const dir = R.dir, phase = r() * 10;
   // --- anneaux à portes. Portes régulièrement espacées, anneaux voisins à contre-sens ; tous les anneaux d'un niveau ont la
   // même période de passage Tp = 2π / (portes × |ω|) (un anneau à 2 portes tourne 1,5 fois plus vite) et leurs portes se
@@ -401,11 +405,14 @@ function genLevel(n) {
     const RAT = [0, .25, 1 / 3, .5, 2 / 3, .75, 1];
     // loi pas à pas (arrêts francs, période 2,6 s) : la période de passage ne doit pas non plus être presque commensurable
     // avec la période de la loi, sinon les passages tombent toujours aux mêmes phases (toujours à l'arrêt, ou jamais)
-    const lawP = R.law === 4 ? 2.6 : 0;
+    // De même pour les lois alternée et ressac, périodiques, dont les inversions sont annoncées, et pour les demi-tours au
+    // rythme (période P, aller-retour 2P) : sinon les passages peuvent tomber toujours pendant une annonce, ou toujours au
+    // même angle du va-et-vient (le joueur qui attend la fin de l'annonce ne trouvait jamais de tir : 161, 283, 299)
+    const lawP = R.law === 4 ? [2.6] : R.law === 2 ? [TAU / .9] : R.law === 5 ? [RESSAC_T] : R.rhythm ? [R.rhythm.P, 2 * R.rhythm.P] : [];
     for (let f = .8; f <= 1.2001; f += .01) {
       const v = R.ringV * f, T = TAU / (R.gates * v); let m = 1;
       for (const o of oms) { const x = (o * T / TAU) % 1; for (const q of RAT) m = Math.min(m, Math.abs(x - q)); }
-      if (lawP) { const x = (lawP / T) % 1; for (const q of RAT) m = Math.min(m, Math.abs(x - q)); }
+      for (const lp of lawP) { const x = (lp / T) % 1; for (const q of RAT) m = Math.min(m, Math.abs(x - q)); }
       if (m > bs + 1e-9) { bs = m; bv = v; }
     }
     R.ringV = Math.round(bv * 1e6) / 1e6;
