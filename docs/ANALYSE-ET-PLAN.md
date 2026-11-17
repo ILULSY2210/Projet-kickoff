@@ -1115,18 +1115,28 @@ Une relecture critique du plan a vérifié ses références au code (toutes just
 | 2.12 (recette 2, P4) | Falaises : 4 voisins normaux | Les niveaux d'apprentissage ne servent pas de voisins de référence (ils restent soumis à la règle), ni pour le début et la fin d'un monde à 70 ms ; respirations : `report.js` échoue sous +5 points, imprime la moyenne par monde, le réglage vise ≈ +10 ; x8 seul quand x9 est un niveau d'apprentissage (le plan le prévoit pour Émeraude, où x9 apprend la mécanique du boss : le bloc 51-52 suit 48 et l'apprentissage 49) | Un niveau d'apprentissage est par construction bien plus facile (court, vitesse modérée) : compté comme voisin, il faisait passer pour falaises les niveaux x3 des derniers mondes |
 | Recette 2 (P10) | Géométrie des anneaux pour les écrans en portrait | En paysage (écran bas), l'astre est réduit jusqu'à ce que le troisième anneau tienne au-dessus du pas de tir ; bandeaux dans la marge de gauche si le couloir reste trop court | Les anneaux se trouvaient au-delà du pas de tir (carte u → rayon non monotone) |
 
-### Mesures à la fin de l'étape 2 (vrai cœur dans Node, joueur qui vise, 300 essais, remesures à 1 000)
+### Mesures à la fin de l'étape 2, après la recette 2 (vrai cœur dans Node, `node tests/sim/report.js`, graines officielles, 300 essais, remesures à 1 000)
 
-| Monde | 30 ms : minimum / moyenne (table) | 70 ms : début → fin (table ±7) | Boss et spéciaux à 70 ms | Niveau propre à 45 ms (plage) |
+| Monde | 30 ms : minimum / moyenne (table) | 70 ms : début → fin (table ±7) | Boss et spéciaux à 70 ms (table ±7) | Niveau propre à 45 ms (plage) |
 |---|---|---|---|---|
-| Émeraude | 90,0 / 98,7 % (≥ 95 / ≈ 99) | 99,5 → 87,0 % (97 → 80) | 89,5 % | 4,7 s (6-15) |
-| Ambre | 89,7 / 98,1 % (≥ 90 / ≈ 96) | 81,9 → 70,3 % (80 → 65) | 64,8 % | 27,4 s (10-18) |
-| Rubis | 80,5 / 96,5 % (≥ 85 / ≈ 93) | 72,9 → 55,8 % (68 → 52) | 61,3 % | 29,2 s (12-22) |
-| Saphir | 87,4 / 95,5 % (≥ 82 / ≈ 90) | 61,1 → 47,2 % (58 → 42) | 48,3 % | 23,4 s (12-24) |
-| Obsidienne | 85,0 / 94,0 % (≥ 78 / ≈ 87) | 52,4 → 42,5 % (45 → 32) | 43,2 % | 19,7 s (14-28) |
-| Cosmos | 77,2 / 90,2 % (≥ 75 / ≈ 84) | 43,4 → 40,5 % (35 → 22) | 42,5 % | 18,8 s (15-30) |
-| COSMOS ∞ (301-400) | 77,8 % au minimum | moyenne 37,7 % (22-30) | — | — |
+| Émeraude | 99,0 / 99,9 % (≥ 95 / ≈ 99) | 95,1 → 85,8 % (97 → 80) | 86,3 % (75-85) | 7,1 s (6-15) |
+| Ambre | 92,3 / 99,2 % (≥ 90 / ≈ 96) | 80,1 → 70,3 % (80 → 65) | 68,0 % (60-70) | 16,9 s (10-18) |
+| Rubis | 93,7 / 98,5 % (≥ 85 / ≈ 93) | 68,0 → 55,4 % (68 → 52) | 56,0 % (48-58) | 17,5 s (12-22) |
+| Saphir | 86,1 / 96,3 % (≥ 82 / ≈ 90) | 57,7 → 46,0 % (58 → 42) | 46,0 % (38-48) | 18,3 s (12-24) |
+| Obsidienne | 83,7 / 93,4 % (≥ 78 / ≈ 87) | 46,1 → 31,0 % (45 → 32) | 36,5 % (28-38) | 22,2 s (14-28) |
+| Cosmos | 79,4 / 90,3 % (≥ 75 / ≈ 84) | 34,6 → 26,8 % (35 → 22) | 25,1 % (20-30) | 25,8 s (15-30) |
+| COSMOS ∞ (401-500, cycle en miroir jamais vu par le réglage) | 76,3 % au minimum (Wilson 73,6 %) | moyenne 26,7 % (22-30) | 26,3 % (20-30) | — |
 
-- Tenu : plancher d'équité (≥ 75 % à 30 ms et borne de Wilson ≥ 72 %) sur 1..300 et 100 niveaux de COSMOS ∞ ; moyennes à 30 ms ; début et fin d'Ambre, de Rubis et de Saphir ; salve aveugle (26,5 % en moyenne sur 11-50, au plus 1 départ sur 200 au-delà, salve soutenue : aucun niveau fini) ; prédicteur honnête 0 mort, 0 blocage ; accord Chromium / Node 2 000 / 2 000.
-- Pas tenu : fin d'Émeraude (87,0 %, limite 87) ; début d'Obsidienne et de Cosmos un peu faciles (52,4 et 43,4 %, limites 52 et 42) ; fin d'Obsidienne (42,5 %) et de Cosmos (40,5 %) trop faciles à 70 ms : à ces vitesses, durcir encore fait passer des niveaux sous le plancher à 30 ms (le réglage retire alors des aiguilles), le plancher passant en premier ; 15 falaises (12 à 34 points sous les voisins), 11 respirations sous +5 points, 2 niveaux où le joueur réactif décroche (35, 46) ; durées : Émeraude trop courte (4,7 s), Ambre et Rubis trop longues (27 à 29 s, l'attente des fenêtres d'anneaux). À reprendre au début de l'étape 3, après le retour du porteur.
-
+- Tenu : plancher d'équité sur 1..300 (minimum 79,4 % au niveau 275, borne de Wilson 76,8 %) et sur COSMOS ∞ ; toutes les
+  cibles par monde (début, fin, moyennes à 30 ms, boss et spéciaux), moyenne de COSMOS ∞ ; aucune falaise ; respirations
+  ≥ +5 points partout (moyennes par monde +10,4, +13,6, +16,6, +20,1, +20,2, +20,9) ; apprentissages ≥ voisins + 12 ou
+  ≥ 90 % ; durées dans les plages ; salve aveugle (`mash.js` : 20,9 % sur 11-50, 0/200 au pire au-delà, salve soutenue :
+  aucun niveau fini) ; prédicteur honnête (`bot.js` : 0 mort, 0 blocage sur 1..300, 301-700 et 1001-1100) ; accord
+  Chromium / Node 2 000 / 2 000 (`agree.js`).
+- Pas tenu : joueur réactif sur 27 niveaux à arrêts, inversions ou vitesse très variable, où il fait plus de 15 points de
+  moins que ses voisins ET que la variante calme du même niveau : 57, 65, 69, 75, 96, 100, 117, 126, 133, 143, 149, 150,
+  161, 165, 174, 187, 199, 200, 224, 232, 239, 254, 265, 276, 277, 283, 299 (écarts de 16,5 à 45 points ; détail par niveau, causes
+  d'échec et graines : `node tests/sim/report.js`, puis `tests/out/sim/report.json`). Le joueur qui vise les gagne (≥ 79 % à 30 ms) ; le joueur réactif modélisé (aucune
+  anticipation, extrapolation à vitesse constante sur 0,26 s) y perd surtout aux lois irrégulière, en ressac et à-coups à
+  vitesse élevée (pointes de 7 à 10 rad/s) et aux demi-tours au rythme combinés aux fenêtres d'anneaux. À reprendre avec
+  le porteur : adoucir ces lois (pointe de vitesse bornée) ou accepter qu'elles récompensent l'anticipation.
