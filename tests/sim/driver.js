@@ -12,7 +12,8 @@
 //            meilleure (≥ 85 %) ; son tap part avec une imprécision gaussienne σ ; il réfléchit THINK s après chaque impact.
 //   reactive joueur qui n'anticipe pas : il extrapole la rotation à vitesse constante et tape RT = 0,2 s après avoir vu
 //            une ouverture (seuil qui baisse quand il attend), avec la même imprécision σ ; il ne tire pas pendant que les
-//            chevrons annoncent un arrêt ou une inversion (aheadEvent, 0,45 s à l'avance).
+//            chevrons annoncent un arrêt ou une inversion (aheadEvent, 0,45 s à l'avance), ni quand les portes des anneaux
+//            ne laisseront pas passer l'aiguille (losanges de synchronisation).
 //   mash     salve à l'aveugle : un tap toutes les c secondes ± 1 image, dès un départ tiré au hasard dans la première
 //            seconde, sans regarder.
 //   bot      prédicteur honnête du banc d'essai (__botSafe), comme tests/play.js.
@@ -109,6 +110,9 @@ var __sim = (function () {
         var a = norm(HPI - (rot + speedAt(t) * (RT + FLIGHT)));
         // il lit les chevrons : pas de tir quand un arrêt ou une inversion est annoncé (0,45 s à l'avance)
         var ok = clearAt(a) >= thr && !aheadEvent(t, announceWindow()).kind;
+        // il voit les losanges des anneaux (portes alignées) et les portes qui approchent : tir seulement si elles laissent
+        // passer une aiguille lancée au moment de son tap
+        if (ok && L.rings.length) { var tR = t + RT; for (var ri = 0; ri < L.rings.length; ri++) { var rq = L.rings[ri], rw = ringWindow(rq, tR); if (ringHit(rq, rw[0] - .03, rw[1] + .03, RING_PAD[rq.k]) >= 0) ok = false; } }
         if (ok && L.sents.length) { var tL = t + RT, w = sentWindow(); for (var i = 0; i < L.sents.length; i++) { var q = L.sents[i]; if (sentMin(q, tL + w[0] - .12, tL + HEAD_WIN[1] + .12) <= q.hw + SENT_PAD_HEAD) ok = false; } }
         if (ok) { tTap = t + RT; break; }
         update(STEP);

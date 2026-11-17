@@ -23,7 +23,8 @@
 //               puis le jeu reprend.
 //   echec   : sur 5 écrans : feuille d'échec à 0,45 s ; tap (et Espace) à 0,3 s ignoré, tap à 0,5 s → relance ;
 //             tirs ignorés 250 ms après une relance par tap ; cause rappelée près du pas de tir après la relance ;
-//             point de collision (aiguille, niveau 3) et sentinelle fautive (niveau 21) ≥ 4 px au-dessus du filet du
+//             point de collision (aiguille, niveau 3) et sentinelle fautive (niveau à sentinelle et anneau où le tir peut
+//             la croiser) ≥ 4 px au-dessus du filet du
 //             panneau ; MENU à droite ; HUD aligné sur la colonne de texte de la feuille ; aiguilles restantes annoncées =
 //             aiguilles non plantées, avec une ou deux aiguilles en vol. Captures echec-*.png.
 // Écrit <out>/summary.json ({ pass, sections, errors }) et sort avec le code 1 en cas d'échec.
@@ -704,15 +705,27 @@ async function echec(b) {
     S.eq(r.lock100, 0, `${tag} : tir ignoré 100 ms après la relance par tap`);
     S.eq(r.lock300, 1, `${tag} : tir accepté 300 ms après la relance par tap`);
     // mise en page de la feuille d'échec, collision contre une aiguille puis interception par une sentinelle
-    const nSent = await p.evaluate(() => { for (let n = 1; n < 400; n++) if (makeLevel(n).sents.length) return n; });
+    // niveau à sentinelle où un tir qui passe les anneaux croise le plus souvent la sentinelle (premiers niveaux à sentinelle)
+    const nSent = await p.evaluate(() => {
+      let best = 0, bn = 0, k = 0;
+      for (let n = 1; n < 300 && k < 12; n++) {
+        if (!makeLevel(n).sents.length) continue; k++;
+        startLevel(n); let c = 0; const w = sentWindow();
+        for (let i = 0; i < 1200; i++) { update(STEP * 4); if (L.sents.some(q => sentMin(q, t + w[0], t + w[1]) < q.hw * .5) && L.rings.every(q => { const rw = ringWindow(q, t); return ringHit(q, rw[0], rw[1], RING_PAD[q.k]) < 0; })) c++; }
+        if (c > best) { best = c; bn = n; }
+      }
+      showMenu(); return bn;
+    });
     for (const [n, kind] of [[3, 'pin'], [nSent, 'sent']]) {
       const ok = await p.evaluate(async ([n, kind]) => {
         const frame = () => new Promise(res => requestAnimationFrame(() => res()));
         startLevel(n);
-        for (let i = 0; i < 1200 && state === 'play'; i++) {
+        for (let i = 0; i < 3600 && state === 'play'; i++) {
           if (!flying && left > 0) {
             const a = predict(t).a, w = sentWindow();
-            if (kind === 'pin' ? stuck.some(s => angDiff(s.a, a) < GAP * .4) : L.sents.some(q => sentMin(q, t + w[0], t + w[1]) < q.hw * .5)) throwPin();
+            // sentinelle : seulement quand les anneaux laissent passer l'aiguille (sinon c'est l'anneau qui l'intercepte)
+            const rp = L.rings.every(q => { const rw = ringWindow(q, t); return ringHit(q, rw[0], rw[1], RING_PAD[q.k]) < 0; });
+            if (kind === 'pin' ? stuck.some(s => angDiff(s.a, a) < GAP * .4) && rp : L.sents.some(q => sentMin(q, t + w[0], t + w[1]) < q.hw * .5) && rp) throwPin();
           }
           await frame();
         }
