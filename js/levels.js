@@ -13,8 +13,10 @@ function worldInfo(w) {
 
 /* ---------- lois de rotation ---------- */
 // 0 continue, 1 respirante, 2 alternée (inversions douces), 3 à-coups, 4 pas à pas (arrêts francs, rampes lisses),
-// 5 ressac (retours en arrière)
+// 5 ressac (retours en arrière : paliers avant et arrière reliés par des rampes lisses, comme la loi pas à pas ; la sinusoïde
+//   d'origine passait plus de la moitié du temps à accélérer ou à ralentir, et sa pointe valait 2,1 × sa vitesse moyenne)
 // 6 irrégulière : somme de 2 ou 3 sinusoïdes de fréquences non multiples (paramètres du niveau P : b, a[], f[], p[])
+const RESSAC_T = TAU / 1.3;   // période du ressac (s)
 function patSpeed(p, s, t, P) {
   switch (p) {
     case 6: { let v = P.b; for (let i = 0; i < P.a.length; i++) v += P.a[i] * Math.sin(P.f[i] * t + P.p[i]); return s * v; }
@@ -25,7 +27,10 @@ function patSpeed(p, s, t, P) {
       const u = ((t % 2.6) + 2.6) % 2.6, sm = x => x * x * (3 - 2 * x);
       return s * 1.6 * (u < .25 ? sm(u / .25) : u < 1.6 ? 1 : u < 1.85 ? sm((1.85 - u) / .25) : 0);
     }
-    case 5: return s * (.5 + .8 * Math.sin(t * 1.3));
+    case 5: { // ressac : palier en avant (2,9 s), bref recul (1,33 s à 30 % de la vitesse), rampes lisses de 0,3 s
+      const u = ((t % RESSAC_T) + RESSAC_T) % RESSAC_T, sm = x => x * x * (3 - 2 * x);
+      return s * (u < .3 ? -.3 + 1.3 * sm(u / .3) : u < 3.2 ? 1 : u < 3.5 ? 1 - 1.3 * sm((u - 3.2) / .3) : -.3);
+    }
     default: return s;
   }
 }
