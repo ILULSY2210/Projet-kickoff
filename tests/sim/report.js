@@ -11,7 +11,8 @@
 // Règles vérifiées (plan, 5.10) :
 //   plancher   chaque niveau 1..300 et les niveaux de COSMOS ∞ mesurés : ≥ 75 % à 30 ms ET borne basse de Wilson ≥ 72 %
 //   mondes     à 30 ms : minimum par niveau et moyenne du monde (table 5.10, ±7 points pour la moyenne) ;
-//              à 70 ms : moyenne du premier et du dernier bloc de 10 contre le début et la fin de la cible (±7 points)
+//              à 70 ms : moyenne du premier et du dernier bloc de 10 (niveaux normaux hors apprentissage) contre le début et
+//              la fin de la cible (±7 points)
 //   falaises   niveau normal ≤ 12 points sous la moyenne de ses 4 voisins normaux à 70 ms ; boss ou spécial ≤ 20 points
 //              (voisins : niveaux normaux du même monde, hors niveaux d'apprentissage)
 //   respirations  x1-x2 d'un bloc ≥ x8-x9 du bloc précédent + 5 points à 70 ms (x8 seul en Émeraude) ; la cible du plan est
@@ -147,7 +148,9 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
   for (let w = 0; w < 6; w++) {
     const ns = levels.filter(n => n <= 300 && Math.floor((n - 1) / 50) === w);
     if (!ns.length) continue;
-    const p30 = ns.map(n => L[n].p30), first = ns.filter(n => (n - 1) % 50 < 10 && normal(n)), last = ns.filter(n => (n - 1) % 50 >= 40 && normal(n));
+    // début et fin du monde : niveaux normaux du premier et du dernier bloc, hors niveaux d'apprentissage (comme pour les
+    // falaises : volontairement bien plus faciles, ils ne disent rien de la courbe de difficulté)
+    const p30 = ns.map(n => L[n].p30), first = ns.filter(n => (n - 1) % 50 < 10 && ref(n)), last = ns.filter(n => (n - 1) % 50 >= 40 && ref(n));
     const T = D.worldTargets70[w], s70 = mean(first.map(n => L[n].p70)), e70 = mean(last.map(n => L[n].p70));
     const bs = ns.filter(n => !normal(n)).map(n => L[n].p70), durs = ns.map(n => L[n].dur45).filter(x => x);
     const row = { w, name: NAMES[w], min30: Math.min(...p30), mean30: mean(p30), start70: s70, end70: e70, mean70: mean(ns.map(n => L[n].p70)), bossSp70: mean(bs), dur45: median(durs), target70: T, floor30: FLOOR30[w], target30: MEAN30[w], boss70: BOSS70[w] };

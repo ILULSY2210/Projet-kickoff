@@ -218,7 +218,11 @@ function genLevel(n) {
       R.rings = has('anneaux3') && r() < (wi >= 5 ? .3 : .12) ? 3 : has('anneaux2') && r() < (wi >= 5 ? .45 : .25) ? 2 : 1;
       // fenêtre plus courte qu'une salve de N aiguilles à 100 ms
       // (période de passage courte à partir du monde 2 : l'attente d'une fenêtre ne doit pas allonger le niveau)
-      if (wi === 0) ringWin(R, lerp(1.2, .8, d), 2, 3); else ringWin(R, clamp(Math.min(lerp(.6, .45, d), (R.N - 1.2) * .1), RING_WIN, .6), lerp(1.35, 1.1, d), 3);
+      // (Obsidienne, Cosmos et COSMOS ∞ : fenêtres plus courtes mais régulières, 0,45 → 0,35 s : elles punissent l'imprécision
+      // plus que la vitesse brute, plan 5.10)
+      if (wi === 0) ringWin(R, lerp(1.2, .8, d), 2, 3);
+      else if (wi >= 4) ringWin(R, inf ? .35 : wi === 4 ? lerp(.45, .38, d) : lerp(.4, .35, d), lerp(1.35, 1.1, d), 3);
+      else ringWin(R, clamp(Math.min(lerp(.6, .45, d), (R.N - 1.2) * .1), .42, .6), lerp(1.35, 1.1, d), 3);
       R.gatePulse = has('portesPulsees') && r() < .35;
     }
     // zones pulsées (111) : cœur de Rubis
@@ -232,7 +236,9 @@ function genLevel(n) {
     if (has('invImpact') && r() < (wi === 3 ? .3 : .12)) R.inv = true;
     else if (has('rythme') && r() < pd) R.rhythm = { P: 3.2 - .8 * d, warn: Math.max(.45, .7 - .2 * d) };
     else if (has('demitour') && r() < pd) R.demi = { every: d < .5 ? 3 : 2, warn: Math.max(.45, .9 - .4 * d - .1 * wi) };
-    if (has('traversantes') && r() < (wi >= 4 ? .3 : .15)) { R.trav = true; R.N = Math.max(R.N, 6); R.zones = []; R.fentes = false; }
+    // (moins souvent dans les deux derniers mondes : leurs aiguilles remplissent le bord à 7 tirs, et la vitesse plafond
+    // ne les rend pas assez durs pour la fin du jeu)
+    if (has('traversantes') && r() < (wi >= 5 ? .06 : wi === 4 ? .12 : .15)) { R.trav = true; R.N = Math.max(R.N, 6); R.zones = []; R.fentes = false; }
     // traversantes des deux derniers mondes : deux anneaux (leurs aiguilles remplissent déjà le bord, la difficulté vient
     // des obstacles mobiles)
     if (R.trav && wi >= 4 && has('anneaux2')) R.rings = Math.max(R.rings, 2);
@@ -255,8 +261,10 @@ function genLevel(n) {
     const cx = () => R.rings * .8 + R.sent + (R.pulse + R.glide) * .7 + (R.zones.length + (R.fentes ? 1 : 0)) * .5 + (R.trav ? 1.5 : 0) +
       (R.accel || R.ramp ? .5 : 0) + (R.demi || R.rhythm || R.inv ? .5 : 0) + ([2, 4, 5, 6].includes(R.law) ? .4 : 0);
     const CAP = inf ? 3.4 : [2.4, 3, 3.3, 3.4, 3.6, 3.8][wi];
-    // COSMOS ∞ (réserve 301-400) : au plus deux anneaux, jamais d'anneaux multiples avec une loi à arrêts et des fentes
+    // COSMOS ∞ (réserve 301-400) : au plus deux anneaux, jamais d'anneaux multiples avec une loi à arrêts et des fentes ;
+    // partout : jamais trois anneaux avec la loi pas à pas (difficulté erratique : le plancher à 30 ms n'y tenait pas)
     if (inf) { if (R.rings > 2) R.rings = 2; if (R.rings > 1 && R.fentes && [2, 4, 5].includes(R.law)) R.fentes = false; }
+    if (R.rings > 2 && R.law === 4) R.rings = 2;
     const drops = [() => { if (R.sent > 1) R.sent = 1; }, () => { if (R.trav && R.sent) R.sent = 0; }, () => { if (wi !== 1) { R.accel = null; R.ramp = null; } },
       () => { if (R.trav && R.accel) R.accel = null; }, () => { if (wi !== 3) { R.demi = null; R.rhythm = null; R.inv = false; } }, () => { if (wi !== 2) { R.pulse = 0; R.glide = 0; } },
       () => { if (R.rings > 1) R.rings = 1; }, () => { if (wi !== 2) { R.zones = []; R.fentes = false; } }, () => { if (R.sent && wi !== 4) R.sent = 0; },
@@ -336,7 +344,15 @@ function genLevel(n) {
     let bv = R.ringV, bs = -1;
     // (fraction de tour par période loin de 0, 1/4, 1/3, 1/2, 2/3, 3/4 : les fenêtres successives balaient tout le bord)
     const RAT = [0, .25, 1 / 3, .5, 2 / 3, .75, 1];
-    for (let f = .8; f <= 1.2001; f += .01) { const v = R.ringV * f, T = TAU / (R.gates * v); let m = 1; for (const o of oms) { const x = (o * T / TAU) % 1; for (const q of RAT) m = Math.min(m, Math.abs(x - q)); } if (m > bs + 1e-9) { bs = m; bv = v; } }
+    // loi pas à pas (arrêts francs, période 2,6 s) : la période de passage ne doit pas non plus être presque commensurable
+    // avec la période de la loi, sinon les passages tombent toujours aux mêmes phases (toujours à l'arrêt, ou jamais)
+    const lawP = R.law === 4 ? 2.6 : 0;
+    for (let f = .8; f <= 1.2001; f += .01) {
+      const v = R.ringV * f, T = TAU / (R.gates * v); let m = 1;
+      for (const o of oms) { const x = (o * T / TAU) % 1; for (const q of RAT) m = Math.min(m, Math.abs(x - q)); }
+      if (lawP) { const x = (lawP / T) % 1; for (const q of RAT) m = Math.min(m, Math.abs(x - q)); }
+      if (m > bs + 1e-9) { bs = m; bv = v; }
+    }
     R.ringV = Math.round(bv * 1e6) / 1e6;
     // fenêtre de passage commune d'au moins RING_WIN s pour chaque anneau : chaque anneau a ses propres portes, assez larges
     // pour laisser passer l'aiguille pendant W à sa vitesse (l'anneau à deux portes tourne 1,5 fois plus vite)

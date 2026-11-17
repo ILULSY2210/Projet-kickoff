@@ -6,7 +6,8 @@
 // - déterminisme : makeLevel(n) identique d'un appel à l'autre ; boss tous les 10, spéciaux en x7 ;
 // - chaque niveau a au moins 3 tirs, une vitesse moyenne d'au plus 1,15 × la vitesse de fin de son monde (réglage compris) ;
 //   un niveau d'apprentissage n'est jamais plus rapide que la vitesse de début de son monde (vitesse modérée, plan 5.3) ;
-// - anneaux : fenêtre de passage de chaque anneau (portes, vitesse, marge de l'aiguille) ≥ RING_WIN = 0,42 s, réglage
+// - anneaux : fenêtre de passage de chaque anneau (portes, vitesse, marge de l'aiguille) ≥ 0,42 s jusqu'au monde 4, ≥ RING_WIN
+//   = 0,35 s en Obsidienne, Cosmos et COSMOS ∞, réglage
 //   compris, y compris l'anneau à deux portes des niveaux à trois anneaux ;
 // - COSMOS ∞ : au-delà de 400, le niveau n est le niveau 301 + (n − 301) mod 100, en miroir un cycle sur deux ; le miroir
 //   est exact (même journal de tirs → mêmes issues, angles opposés à 1e-9 près, joueur simulé dans le vrai cœur).
@@ -37,7 +38,8 @@ for (let n = 1; n <= 400; n++) {
   if (t && IMPL.has(t)) check(L.omega <= DW.speed[0] + 1e-9, `niveau ${n} : apprentissage à ${L.omega.toFixed(3)} rad/s (au plus ${DW.speed[0]}, vitesse de début du monde)`);
   for (const q of L.rings) {
     const win = Math.min(...q.gates.map(g => (2 * g.h - 2 * RING_PAD[q.k]) / Math.abs(q.w)));
-    check(win >= RING_WIN - 1e-5, `niveau ${n} : anneau ${q.k}, fenêtre de passage ${win.toFixed(3)} s (≥ ${RING_WIN})`);
+    const minW = n <= 200 ? .42 : RING_WIN;
+    check(win >= minW - 1e-5, `niveau ${n} : anneau ${q.k}, fenêtre de passage ${win.toFixed(3)} s (≥ ${minW})`);
   }
 }
 // COSMOS ∞ : réserve 301-400 rejouée, en miroir un cycle sur deux

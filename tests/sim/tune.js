@@ -92,16 +92,18 @@ const median = a => { if (!a.length) return 0; const s = a.slice().sort((x, y) =
         const canUp = !isTeach(n) && s.dn < 5 && bounds(n, s.dn + 1).throws > s.throws;
         const canDown = !isTeach(n) && s.dn > -3 && s.throws > 3;
         // trop facile à la vitesse plafond : une aiguille de plus ; trop dur à la vitesse plancher : une de moins
-        if (v > s.T + .04 && s.f >= s.cap - 1e-9 && canUp) { s.log.push(`+1 (facile au plafond, ${v.toFixed(2)})`); reset(s, s.dn + 1, s.f); return; }
+        if (v > s.T + .04 && s.f >= s.cap * .999 && canUp) { s.log.push(`+1 (facile au plafond, ${v.toFixed(2)})`); reset(s, s.dn + 1, s.f); return; }
         if (v < s.T - .04 && s.f <= s.flo + 1e-9 && canDown && !s.noDown) { s.log.push(`-1 (dur au plancher, ${v.toFixed(2)})`); reset(s, s.dn - 1, s.f); return; }
-        if (Math.abs(v - s.T) <= .025 || (v >= s.T && s.f >= s.hi - 1e-9) || (v <= s.T && s.f <= s.lo + 1e-9)) { s.done = true; return; }
+        if (Math.abs(v - s.T) <= .025 || (v >= s.T && s.f >= s.hi * .999 && (s.hi < s.cap * .999 || !canUp)) || (v <= s.T && s.f <= s.lo * 1.001)) { s.done = true; return; }
         // trop facile → plus vite ; trop dur → plus lent
         if (v > s.T) s.lo = Math.max(s.lo, s.f); else s.hi = Math.min(s.hi, s.f);
         const h = s.hist, k = h.length;
         let nf;
         if (k >= 2 && Math.abs(h[k - 1][1] - h[k - 2][1]) > .02 && h[k - 1][0] !== h[k - 2][0]) { const sl = (h[k - 1][1] - h[k - 2][1]) / (Math.log(h[k - 1][0]) - Math.log(h[k - 2][0])); nf = Math.exp(Math.log(s.f) + (s.T - v) / sl); }
         else nf = s.f * Math.exp(Math.max(-.3, Math.min(.3, (v - s.T) * 1.2)));
-        if (!(nf > s.lo && nf < s.hi)) nf = Math.sqrt(s.lo * s.hi);
+        // hors de l'intervalle : bissection ; encore trop facile avec le plafond pour borne : le plafond lui-même (sinon f s'en
+        // approche sans jamais l'atteindre, et l'aiguille de plus n'arrive jamais)
+        if (!(nf > s.lo && nf < s.hi)) nf = v > s.T && s.hi >= s.cap * .999 && nf >= s.hi ? s.cap : Math.sqrt(s.lo * s.hi);
         s.f = Math.min(s.cap, Math.max(s.flo, nf));
       });
       process.stderr.write(`passe ${pass + 1}, itération ${it + 1} : ${act.length} niveaux à régler, ${((Date.now() - t0) / 1000).toFixed(0)} s\n`);
@@ -119,7 +121,9 @@ const median = a => { if (!a.length) return 0; const s = a.slice().sort((x, y) =
       redo++;
       const canUp = !isTeach(n) && s.dn < 5 && bounds(n, s.dn + 1).throws > s.throws;
       s.changed = true;
-      if (canUp && s.tries < 3) { s.tries++; s.log.push(`+1 (plancher 30 ms : ${s.p30.toFixed(2)})`); s.noDown = true; reset(s, s.dn + 1, s.f * .9); }
+      // l'aiguille de plus a empiré le plancher (bord saturé) : on revient en arrière et on ralentit
+      if (s.lastUp && s.p30 < s.lastUp.p30) { s.log.push(`retour à ${s.lastUp.dn} (plancher 30 ms : ${s.p30.toFixed(2)})`); s.noUp = true; reset(s, s.lastUp.dn, s.lastUp.f * .9); s.T = Math.min(.995, s.lastUp.p70 + .06); s.lastUp = null; return; }
+      if (canUp && !s.noUp && s.tries < 3) { s.tries++; s.log.push(`+1 (plancher 30 ms : ${s.p30.toFixed(2)})`); s.noDown = true; s.lastUp = { dn: s.dn, f: s.f, p30: s.p30, p70: s.p70 }; reset(s, s.dn + 1, s.f * .9); }
       else { s.log.push(`plus lent (plancher 30 ms : ${s.p30.toFixed(2)})`); s.T = Math.min(.995, s.p70 + .06); s.hi = s.f; s.lo = s.flo; s.f = Math.max(s.flo, s.f * .88); s.best = null; s.hist = []; s.done = false; }
     });
     process.stderr.write(`plancher à 30 ms : ${redo} niveau(x) repris\n`);
