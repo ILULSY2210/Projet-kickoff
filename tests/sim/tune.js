@@ -1,7 +1,7 @@
 // Réglage de la difficulté niveau par niveau sur le vrai cœur (joueur simulé qui vise). Deux leviers par niveau, écrits dans
 // DIFFICULTY.tune (js/config.js) avec --write : [facteur de vitesse de l'astre, aiguilles en plus ou en moins].
 //   node tests/sim/tune.js [--from=1] [--to=300] [--endless=0] [--only=n,…] [--target=n:T,…] [--trials=200] [--trials30=300]
-//                          [--iters=7] [--fresh] [--write]
+//                          [--iters=7] [--fresh] [--grid] [--gridn=10] [--write]
 // Cible à 70 ms (target70) : droite du monde (début → fin, table worldTargets70) + décalage selon la place dans le bloc de 10
 // (respirations en x1-x2 : +9 et +7 points, soit ≈ +10 sur x8-x9 du bloc précédent ; montée jusqu'au boss : −5) ; niveaux
 // d'apprentissage au moins 12 points au-dessus de la droite ; réserve de COSMOS ∞ (301-400) : 26 %.
@@ -20,6 +20,8 @@
 //   4. durée d'un niveau propre (45 ms, 100 essais) au-delà de 92 % de son plafond (maximum du monde de la table 5.10,
 //      1,5 × pour un boss, 30 s dans COSMOS ∞) : autant d'aiguilles en moins que la durée l'exige, f réglé à nouveau, et plus
 //      d'aiguille ajoutée ensuite (trop facile au plafond de vitesse, le niveau le reste).
+// --grid : au lieu des étapes 1 à 3, une grille de facteurs (et ±1 aiguille) pour les niveaux dont la réponse au facteur
+// est trop irrégulière (voir plus bas).
 // Les niveaux d'apprentissage gardent leur nombre d'aiguilles (3 à 5).
 const path = require('path'), fs = require('fs');
 const { pool } = require('./pool');
@@ -27,6 +29,7 @@ const { load, ROOT } = require('./load');
 const arg = (k, d) => { const a = process.argv.find(x => x.startsWith('--' + k + '=')); return a ? a.slice(k.length + 3) : d; };
 const FROM = +arg('from', 1), TO = +arg('to', 300), M = +arg('trials', 200), M30 = +arg('trials30', 300), ITERS = +arg('iters', 7);
 const ENDLESS = +arg('endless', 0), WRITE = process.argv.includes('--write'), FRESH = process.argv.includes('--fresh');
+const GRID = process.argv.includes('--grid'), GRIDN = +arg('gridn', 10);
 const ONLY = arg('only', '') ? arg('only', '').split(',').map(Number) : null;
 // --target=n:T,… : cible à 70 ms imposée pour ces niveaux (reprise d'une falaise contre la moyenne de ses voisins)
 const TGT = {}; for (const x of arg('target', '').split(',').filter(Boolean)) { const [n, T] = x.split(':'); TGT[+n] = +T; }
@@ -86,8 +89,8 @@ const q3 = f => Math.floor(f * 1000 + 1e-9) / 1000;
   // (la vitesse des anneaux dépend de la vitesse réglée de l'astre : un facteur arrondi après coup peut donner un autre niveau)
   const reset = (s, dn, f) => { const b = bounds(s.n, dn); Object.assign(s, { dn, lo: b.lo, hi: b.hi, cap: b.hi, flo: b.lo, throws: b.throws, f: q3(Math.min(b.hi, Math.max(b.lo, f))), best: null, hist: [], done: false }); };
   for (const n of ns) {
-    const cur = D.tune[n] || [1, 0], s = st[n] = { n, T: target70(n), F30: FLOOR30[worldOf(n)], tries: 0, log: [] };
-    reset(s, isTeach(n) ? 0 : Math.max(0, cur[1]), cur[0]);
+    const cur = D.tune[n] || [1, 0], s = st[n] = { n, T: target70(n), F30: FLOOR30[worldOf(n)], tries: 0, log: [], dnMax: 5 };
+    reset(s, isTeach(n) ? 0 : n % 10 === 0 ? Math.max(0, cur[1]) : cur[1], cur[0]);
   }
   // passes sur une liste de niveaux : facteur réglé sur la cible à 70 ms, puis plancher à 30 ms
   async function passes(list) {
@@ -99,10 +102,10 @@ const q3 = f => Math.floor(f * 1000 + 1e-9) / 1000;
       act.forEach((n, i) => {
         const s = st[n], v = p[i].p; s.hist.push([+s.f.toFixed(4), +v.toFixed(3)]);
         if (!s.best || Math.abs(v - s.T) < Math.abs(s.best.p - s.T)) s.best = { f: s.f, p: v };
-        const canUp = !isTeach(n) && s.dn < 5 && bounds(n, s.dn + 1).throws > s.throws;
+        const canUp = !isTeach(n) && s.dn < s.dnMax && bounds(n, s.dn + 1).throws > s.throws;
         const canDown = !isTeach(n) && s.dn > -3 && s.throws > 3;
         // trop facile à la vitesse plafond : une aiguille de plus ; trop dur à la vitesse plancher : une de moins
-        if (v > s.T + .04 && s.f >= s.cap * .999 && canUp && !s.noUp) { s.log.push(`+1 (facile au plafond, ${v.toFixed(2)})`); reset(s, s.dn + 1, s.f); return; }
+        if (v > s.T + .04 && s.f >= s.cap * .999 && canUp) { s.log.push(`+1 (facile au plafond, ${v.toFixed(2)})`); reset(s, s.dn + 1, s.f); return; }
         if (v < s.T - .04 && s.f <= s.flo + 1e-9 && canDown && !s.noDown) { s.log.push(`-1 (dur au plancher, ${v.toFixed(2)})`); reset(s, s.dn - 1, s.f); return; }
         if (Math.abs(v - s.T) <= .025 || (v >= s.T && s.f >= s.hi * .999 && (s.hi < s.cap * .999 || !canUp)) || (v <= s.T && s.f <= s.lo * 1.001)) { s.done = true; return; }
         // trop facile → plus vite ; trop dur → plus lent
@@ -129,7 +132,7 @@ const q3 = f => Math.floor(f * 1000 + 1e-9) / 1000;
       const s = st[n]; s.p30 = p30[i].p;
       if (s.p30 >= s.F30 || pass === 3) return;
       redo++;
-      const canUp = !isTeach(n) && s.dn < 5 && bounds(n, s.dn + 1).throws > s.throws;
+      const canUp = !isTeach(n) && s.dn < s.dnMax && bounds(n, s.dn + 1).throws > s.throws;
       s.changed = true;
       // l'aiguille de plus a empiré le plancher (bord saturé) : on revient en arrière et on ralentit
       if (s.lastUp && s.p30 < s.lastUp.p30) { s.log.push(`retour à ${s.lastUp.dn} (plancher 30 ms : ${s.p30.toFixed(2)})`); s.noUp = true; reset(s, s.lastUp.dn, s.lastUp.f * .9); s.T = Math.min(.995, s.lastUp.p70 + .06); s.lastUp = null; return; }
@@ -140,18 +143,47 @@ const q3 = f => Math.floor(f * 1000 + 1e-9) / 1000;
     if (!redo) break;
   }
   }
-  await passes(ns);
+  // --grid : réponse au facteur trop irrégulière pour la sécante (la vitesse des anneaux suit celle de l'astre et peut sauter
+  // d'une valeur à l'autre) : chaque niveau est mesuré sur une grille de GRIDN facteurs, avec son nombre d'aiguilles et ±1 ;
+  // on garde le réglage le plus proche de la cible à 70 ms parmi ceux qui tiennent le plancher à 30 ms (avec 2 points de
+  // marge) et la durée, sinon celui qui a le meilleur plancher
+  if (GRID) {
+    const meta = [];
+    for (const n of ns) {
+      const s = st[n];
+      for (const dn of isTeach(n) ? [s.dn] : [s.dn - 1, s.dn, s.dn + 1]) {
+        if (dn > 5 || (n % 10 === 0 && dn < 0)) continue;
+        const b = bounds(n, dn); if (dn !== s.dn && b.throws === s.throws) continue;
+        for (let i = 0; i < GRIDN; i++) meta.push({ n, dn, f: q3(b.lo * Math.pow(b.hi / b.lo, i / (GRIDN - 1))) });
+      }
+    }
+    const a = await measureAll(P, meta.map(m => ({ n: m.n, f: m.f, dn: m.dn, sigma: .07, trials: M, key: 1 })));
+    const b = await measureAll(P, meta.map(m => ({ n: m.n, f: m.f, dn: m.dn, sigma: .03, trials: M30, key: 2 })));
+    const c = await measureAll(P, meta.map(m => ({ n: m.n, f: m.f, dn: m.dn, sigma: .045, trials: 60, key: 4 })));
+    meta.forEach((m, i) => { m.p70 = a[i].p; m.p30 = b[i].p; m.dur = median(c[i].T); });
+    for (const n of ns) {
+      const s = st[n], cand = meta.filter(m => m.n === n), ok = cand.filter(m => m.p30 >= s.F30 + .02 && m.dur <= DURK * durCap(n));
+      const pick = ok.length ? ok.sort((x, y) => Math.abs(x.p70 - s.T) - Math.abs(y.p70 - s.T))[0] : cand.sort((x, y) => y.p30 - x.p30)[0];
+      s.log.push(`grille : ${cand.map(m => `${m.dn}/${m.f}:${(m.p70 * 100).toFixed(0)}/${(m.p30 * 100).toFixed(0)}/${m.dur.toFixed(0)}s`).join(' ')}`);
+      reset(s, pick.dn, pick.f); Object.assign(s, { p70: pick.p70, p30: pick.p30, best: { f: pick.f, p: pick.p70 }, done: true, dnMax: pick.dn });
+    }
+    process.stderr.write(`grille : ${meta.length} réglages mesurés, ${((Date.now() - t0) / 1000).toFixed(0)} s\n`);
+  } else await passes(ns);
   // durée d'un niveau propre (victoires à 45 ms, 100 essais) : au-delà de DURK × son plafond (plan 5.10 : maximum du monde,
   // 1,5 × pour un boss, 30 s dans COSMOS ∞), des aiguilles en moins (autant que la durée l'exige) et le facteur réglé à
   // nouveau, sans aiguille ajoutée ensuite (le plancher à 30 ms passe alors par un astre plus lent)
-  for (let round = 0; round < 3; round++) {
+  for (let round = 0; round < 4; round++) {
     const p45 = await measureAll(P, ns.map(n => ({ n, f: st[n].f, dn: st[n].dn, sigma: .045, trials: 100, key: 4 })));
     ns.forEach((n, i) => { st[n].dur45 = median(p45[i].T); });
-    const over = round < 2 ? ns.filter(n => !isTeach(n) && st[n].dur45 > DURK * durCap(n) && st[n].throws > 3) : [];
+    // (un boss garde au moins le nombre d'aiguilles de son archétype, table BOSSES : son cadre est repris à l'étape 4)
+    const minDn = n => n % 10 === 0 ? 0 : -99;
+    const over = round < 3 ? ns.filter(n => !isTeach(n) && st[n].dur45 > DURK * durCap(n) && st[n].throws > 3 && st[n].dn > minDn(n)) : [];
     if (!over.length) break;
+    // une aiguille de moins à la fois, sauf très au-delà du plafond (la durée baisse plus vite que le nombre d'aiguilles : le
+    // facteur de vitesse remonte) ; le niveau ne reprend plus d'aiguille au-delà (dnMax)
     for (const n of over) {
-      const s = st[n], k = Math.max(1, Math.ceil(s.throws * (1 - DURK * durCap(n) / s.dur45))), dn = s.dn - Math.min(k, s.throws - 3);
-      s.log.push(`${dn - s.dn} (durée ${s.dur45.toFixed(1)} s, plafond ${durCap(n)} s)`); s.noUp = true; s.p30 = undefined; s.lastUp = null; reset(s, dn, s.f);
+      const s = st[n], k = s.dur45 > 1.15 * DURK * durCap(n) ? Math.max(1, Math.ceil(s.throws * (1 - DURK * durCap(n) / s.dur45)) - 1) : 1, dn = Math.max(minDn(n), s.dn - Math.min(k, s.throws - 3));
+      s.log.push(`${dn - s.dn} (durée ${s.dur45.toFixed(1)} s, plafond ${durCap(n)} s)`); s.dnMax = dn; s.p30 = undefined; s.lastUp = null; reset(s, dn, s.f);
     }
     process.stderr.write(`durées : ${over.length} niveau(x) trop long(s) repris avec moins d'aiguilles : ${over.join(' ')}\n`);
     await passes(over);
