@@ -6,7 +6,7 @@
 // COSMOS ∞ : niveaux endlessFrom .. endlessFrom + endless − 1 (par défaut 401-500, un cycle que le réglage n'a pas mesuré :
 // les niveaux 301-400 forment la réserve de COSMOS ∞, rejouée en miroir un cycle sur deux, levels.js).
 // Mesures par niveau : taux de victoire à σ = 30 ms et 70 ms (trials essais), durée d'un niveau propre (victoires à
-// 45 ms), joueur réactif (n'anticipe pas) à 45 ms. Tout niveau estimé sous 85 % à 30 ms est remesuré avec 1 000 essais ;
+// 45 ms, aussi sur COSMOS ∞), joueur réactif (n'anticipe pas) à 45 ms (1..300). Tout niveau estimé sous 85 % à 30 ms est remesuré avec 1 000 essais ;
 // tout niveau signalé par la règle des falaises est remesuré à 70 ms avec 1 000 essais avant d'échouer.
 // Règles vérifiées (plan, 5.10) :
 //   plancher   chaque niveau 1..300 et les niveaux de COSMOS ∞ mesurés : ≥ 75 % à 30 ms ET borne basse de Wilson ≥ 72 %
@@ -24,7 +24,8 @@
 //              le même joueur fait aussi plus de 15 points de mieux sur la variante calme du niveau (même niveau, loi
 //              continue à la même vitesse moyenne, sans demi-tours : tests/sim/worker.js)
 //   apprentissage  niveau d'apprentissage ≥ ses voisins + 12 points à 70 ms (ou ≥ 90 %)
-//   durées     médiane du niveau propre (45 ms) dans la plage du monde
+//   durées     médiane du niveau propre (45 ms) dans la plage du monde ; chaque niveau propre au plus au maximum de son monde
+//              (1,5 × pour un boss ; COSMOS ∞ : 30 s, durées mesurées aussi sur les niveaux de COSMOS ∞ du rapport)
 // Graines : tests/sim/seeds.json. Écrit <out>/report.json et sort avec le code 1 si une règle échoue.
 const path = require('path'), fs = require('fs');
 const { pool, wilson } = require('./pool');
@@ -40,7 +41,7 @@ fs.mkdirSync(OUT, { recursive: true });
 const G = load(), D = G.get('DIFFICULTY'), mk = G.makeLevel;
 const FLOOR30 = [.95, .90, .85, .82, .78, .75], MEAN30 = [.99, .96, .93, .90, .87, .84];
 const DUR = [[6, 15], [10, 18], [12, 22], [12, 24], [14, 28], [15, 30]];
-const BOSS70 = [[.75, .85], [.60, .70], [.48, .58], [.38, .48], [.28, .38], [.20, .30]], INF70 = [.22, .30];
+const BOSS70 = [[.75, .85], [.60, .70], [.48, .58], [.38, .48], [.28, .38], [.20, .30]], INF70 = [.22, .30], INFDUR = 30;
 const NAMES = G.get('WORLDS').map(w => w.name);
 const pc = x => (x * 100).toFixed(1).padStart(5);
 const seedOf = (kind, n) => SEEDS[kind] + n * 10007 + SEED;
@@ -79,10 +80,8 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
   for (const n of levels) {
     specs.push({ key: n + ':30', kind: 'aim_30', n, trials: TRIALS, extra: { sigma: .03 } });
     specs.push({ key: n + ':70', kind: 'aim_70', n, trials: TRIALS, extra: { sigma: .07 } });
-    if (n <= 300) {
-      specs.push({ key: n + ':45', kind: 'aim_45', n, trials: QUICK ? 40 : 100, extra: { sigma: .045 } });
-      specs.push({ key: n + ':r', kind: 'reactive_45', n, trials: QUICK ? 40 : 200, extra: { sigma: .045 } });
-    }
+    specs.push({ key: n + ':45', kind: 'aim_45', n, trials: QUICK ? 40 : 100, extra: { sigma: .045 } });
+    if (n <= 300) specs.push({ key: n + ':r', kind: 'reactive_45', n, trials: QUICK ? 40 : 200, extra: { sigma: .045 } });
   }
   console.error(`report : ${levels.length} niveaux, ${TRIALS} essais à 30 et 70 ms`);
   const M = await measure(P, specs);
@@ -177,6 +176,10 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
       if (row.bossSp70 < BOSS70[w][0] - .07 || row.bossSp70 > BOSS70[w][1] + .07) fail('boss', `${NAMES[w]} : boss et spéciaux à 70 ms ${pc(row.bossSp70)} % (table ${BOSS70[w][0] * 100}-${BOSS70[w][1] * 100} % ± 7)`);
     }
   }
+  // durée de chaque niveau propre (45 ms, médiane des victoires) : au plus le maximum de son monde (table 5.10 ; 30 s dans
+  // COSMOS ∞), 1,5 × pour un boss
+  const durCap = n => (n > 300 ? INFDUR : DUR[Math.floor((n - 1) / 50)][1]) * (L[n].boss ? 1.5 : 1);
+  for (const n of levels) if (L[n].dur45 > durCap(n)) fail('durées', `niveau ${n}${L[n].boss ? ' (boss)' : ''} : niveau propre (45 ms) en ${L[n].dur45.toFixed(1)} s (au plus ${durCap(n)} s)`);
   // niveaux d'apprentissage : au moins 12 points au-dessus de leurs voisins à 70 ms, ou au moins 90 % (en début de monde,
   // où les voisins sont déjà vers 85 %), sans vitesse ajoutée (plan 5.3 : court, vitesse modérée ; facteur ≤ 1)
   for (const n of levels) if (n <= 300 && L[n].teach) {
@@ -212,7 +215,7 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
   console.log('monde        30 ms min / moy (cible)      70 ms début → fin (cible)        boss+spéciaux 70   niveau propre 45 ms');
   for (const r of worlds) console.log(`${r.name.padEnd(11)} ${pc(r.min30)} / ${pc(r.mean30)} (≥${r.floor30 * 100}/≈${r.target30 * 100})   ${pc(r.start70)} → ${pc(r.end70)} (${r.target70[0] * 100} → ${r.target70[1] * 100})   ${pc(r.bossSp70)}             ${r.dur45.toFixed(1)} s`);
   const inf = levels.filter(n => n > 300);
-  if (inf.length) console.log(`COSMOS ∞ (${inf[0]}-${inf[inf.length - 1]}) : 30 ms min ${pc(Math.min(...inf.map(n => L[n].p30)))} %, 70 ms moyenne ${pc(mean(inf.map(n => L[n].p70)))} %, boss et spéciaux ${pc(mean(inf.filter(n => !normal(n)).map(n => L[n].p70)))} %`);
+  if (inf.length) console.log(`COSMOS ∞ (${inf[0]}-${inf[inf.length - 1]}) : 30 ms min ${pc(Math.min(...inf.map(n => L[n].p30)))} %, 70 ms moyenne ${pc(mean(inf.map(n => L[n].p70)))} %, boss et spéciaux ${pc(mean(inf.filter(n => !normal(n)).map(n => L[n].p70)))} %, niveau propre médian ${median(inf.map(n => L[n].dur45).filter(x => x)).toFixed(1)} s`);
   for (let w = 0; w < 6; w++) { const bw = breaths.filter(x => x.w === w); if (bw.length) console.log(`respirations ${NAMES[w].padEnd(11)} : moyenne +${(mean(bw.map(x => x.br)) * 100).toFixed(1)} points, minimum ${(Math.min(...bw.map(x => x.br)) * 100).toFixed(1)}`); }
   for (const nt of notes) console.log('  · ' + nt);
   for (const f of fails) console.log('  - ' + f);
