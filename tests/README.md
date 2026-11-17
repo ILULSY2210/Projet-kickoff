@@ -41,10 +41,10 @@ mêmes que `__botSafe`.
 | Outil | Ce qui est vérifié |
 |---|---|
 | `tests/sim/agree.js [--n=2000] [--max=400]` | ≥ 2 000 tentatives du joueur qui vise (σ au hasard) rejouées dans Chromium et dans Node : ≥ 99,5 % d'issues identiques, angles à 1e-9 |
-| `tests/sim/report.js [--quick] [--from= --to=]` | joueur qui vise à 30 et 70 ms (300 essais, remesure à 1 000 sous 85 % et sur les falaises), joueur réactif, durées : plancher 75 % à 30 ms (Wilson ≥ 72 %), cibles par monde ±7 points, falaises, respirations, durées (≈ 15 min sur 4 cœurs) |
+| `tests/sim/report.js [--quick] [--from= --to=] [--endless=100 --endlessFrom=401] [--seed=K]` | joueur qui vise à 30 et 70 ms (300 essais, remesure à 1 000 sous 85 % et sur les falaises), joueur réactif (200 essais, remesure à 400), durées : plancher 75 % à 30 ms (Wilson ≥ 72 %) sur 1..300 et sur un cycle de COSMOS ∞ jamais mesuré par le réglage (401-500 par défaut), cibles par monde ±7 points, boss et spéciaux par monde, moyenne de COSMOS ∞, falaises, respirations, joueur réactif, durées ; `--seed=K` décale toutes les graines (contrôle avec des graines neuves) (≈ 40 min sur 4 cœurs) |
 | `tests/sim/mash.js [--quick]` | salve à l'aveugle (4 cadences × 200 départs) : ≤ 30 % sur 11-50, ≤ 6/200 par niveau dès 51 ; salve soutenue 60 s |
-| `tests/sim/tune.js [--write]` | réglage niveau par niveau : facteur d'échelle de temps des rotations (astre et anneaux) qui amène le joueur qui vise à 70 ms sur la cible du plan, une aiguille de plus si le niveau reste trop facile au plafond de vitesse, jusqu'à trois de moins si le plancher à 30 ms n'est pas tenu ; écrit `DIFFICULTY.tune` (≈ 50 min sur 4 cœurs) |
-| `tests/sim/bot.js` | `__botSafe` sur le vrai cœur : 0 mort, 0 blocage sur 1..300 et 50 niveaux de COSMOS ∞ × 4 parties, à dt 1/60 et 1/120 |
+| `tests/sim/tune.js [--endless=100] [--only=n,…] [--write]` | réglage niveau par niveau : facteur de vitesse de l'astre (borné : 1,45 × la vitesse prévue, 1,15 × la vitesse de fin du monde, 1 pour un niveau d'apprentissage) qui amène le joueur qui vise à 70 ms sur la cible du plan ; jusqu'à cinq aiguilles de plus si le niveau reste trop facile au plafond ; plancher à 30 ms manqué : une aiguille de plus et plus lent ; écrit `DIFFICULTY.tune` (≈ 2 h sur 4 cœurs, réserve de COSMOS ∞ comprise) |
+| `tests/sim/bot.js [--endless=100] [--endlessFrom=301]` | `__botSafe` sur le vrai cœur : 0 mort, 0 blocage sur 1..300 et COSMOS ∞ × 4 parties, à dt 1/60 et 1/120 |
 
 Les calculs se répartissent sur un processus par cœur (`tests/sim/pool.js`, `tests/sim/worker.js`) ; les graines sont
 dans `tests/sim/seeds.json`, les résultats dans `tests/out/sim/`.
