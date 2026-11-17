@@ -70,13 +70,16 @@ async function measureAll(P, specs) {
   return out.map(x => ({ p: x.w / x.t, T: x.T }));
 }
 const median = a => { if (!a.length) return 0; const s = a.slice().sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
+const q3 = f => Math.floor(f * 1000 + 1e-9) / 1000;
 
 (async () => {
   const t0 = Date.now(), P = pool();
   let ns = []; for (let n = FROM; n <= TO; n++) ns.push(n); for (let n = 301; n < 301 + ENDLESS; n++) ns.push(n);
   if (ONLY) ns = ONLY;
   const st = {};
-  const reset = (s, dn, f) => { const b = bounds(s.n, dn); Object.assign(s, { dn, lo: b.lo, hi: b.hi, cap: b.hi, flo: b.lo, throws: b.throws, f: Math.min(b.hi, Math.max(b.lo, f)), best: null, hist: [], done: false }); };
+  // f est arrondi au millième AVANT d'être mesuré : la valeur écrite dans config.js est exactement celle qui a été mesurée
+  // (la vitesse des anneaux dépend de la vitesse réglée de l'astre : un facteur arrondi après coup peut donner un autre niveau)
+  const reset = (s, dn, f) => { const b = bounds(s.n, dn); Object.assign(s, { dn, lo: b.lo, hi: b.hi, cap: b.hi, flo: b.lo, throws: b.throws, f: q3(Math.min(b.hi, Math.max(b.lo, f))), best: null, hist: [], done: false }); };
   for (const n of ns) {
     const cur = D.tune[n] || [1, 0], s = st[n] = { n, T: target70(n), F30: FLOOR30[worldOf(n)], tries: 0, log: [] };
     reset(s, isTeach(n) ? 0 : Math.max(0, cur[1]), cur[0]);
@@ -104,7 +107,7 @@ const median = a => { if (!a.length) return 0; const s = a.slice().sort((x, y) =
         // hors de l'intervalle : bissection ; encore trop facile avec le plafond pour borne : le plafond lui-même (sinon f s'en
         // approche sans jamais l'atteindre, et l'aiguille de plus n'arrive jamais)
         if (!(nf > s.lo && nf < s.hi)) nf = v > s.T && s.hi >= s.cap * .999 && nf >= s.hi ? s.cap : Math.sqrt(s.lo * s.hi);
-        s.f = Math.min(s.cap, Math.max(s.flo, nf));
+        s.f = q3(Math.min(s.cap, Math.max(s.flo, nf)));
       });
       process.stderr.write(`passe ${pass + 1}, itération ${it + 1} : ${act.length} niveaux à régler, ${((Date.now() - t0) / 1000).toFixed(0)} s\n`);
     }
@@ -124,7 +127,7 @@ const median = a => { if (!a.length) return 0; const s = a.slice().sort((x, y) =
       // l'aiguille de plus a empiré le plancher (bord saturé) : on revient en arrière et on ralentit
       if (s.lastUp && s.p30 < s.lastUp.p30) { s.log.push(`retour à ${s.lastUp.dn} (plancher 30 ms : ${s.p30.toFixed(2)})`); s.noUp = true; reset(s, s.lastUp.dn, s.lastUp.f * .9); s.T = Math.min(.995, s.lastUp.p70 + .06); s.lastUp = null; return; }
       if (canUp && !s.noUp && s.tries < 3) { s.tries++; s.log.push(`+1 (plancher 30 ms : ${s.p30.toFixed(2)})`); s.noDown = true; s.lastUp = { dn: s.dn, f: s.f, p30: s.p30, p70: s.p70 }; reset(s, s.dn + 1, s.f * .9); }
-      else { s.log.push(`plus lent (plancher 30 ms : ${s.p30.toFixed(2)})`); s.T = Math.min(.995, s.p70 + .06); s.hi = s.f; s.lo = s.flo; s.f = Math.max(s.flo, s.f * .88); s.best = null; s.hist = []; s.done = false; }
+      else { s.log.push(`plus lent (plancher 30 ms : ${s.p30.toFixed(2)})`); s.T = Math.min(.995, s.p70 + .06); s.hi = s.f; s.lo = s.flo; s.f = q3(Math.max(s.flo, s.f * .88)); s.best = null; s.hist = []; s.done = false; }
     });
     process.stderr.write(`plancher à 30 ms : ${redo} niveau(x) repris\n`);
     if (!redo) break;
@@ -134,7 +137,7 @@ const median = a => { if (!a.length) return 0; const s = a.slice().sort((x, y) =
   ns.forEach((n, i) => { st[n].dur45 = median(p45[i].T); });
   P.close();
   const tune = {};
-  for (const n of ns) { const s = st[n]; if (Math.abs(s.f - 1) > 1e-3 || s.dn) tune[n] = [Math.floor(s.f * 1000) / 1000, s.dn]; }
+  for (const n of ns) { const s = st[n]; if (Math.abs(s.f - 1) > 1e-9 || s.dn) tune[n] = [q3(s.f), s.dn]; }
   const rows = ns.map(n => st[n]);
   fs.mkdirSync(path.join(ROOT, 'tests', 'out', 'sim'), { recursive: true });
   fs.writeFileSync(path.join(ROOT, 'tests', 'out', 'sim', 'tune.json'), JSON.stringify(rows.map(s => ({ n: s.n, T: s.T, f: s.f, dn: s.dn, p70: s.p70, p30: s.p30, dur45: s.dur45, log: s.log, hist: s.hist })), null, 1));
