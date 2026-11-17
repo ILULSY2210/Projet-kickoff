@@ -1,7 +1,7 @@
 // Réglage de la difficulté niveau par niveau sur le vrai cœur (joueur simulé qui vise). Deux leviers par niveau, écrits dans
 // DIFFICULTY.tune (js/config.js) avec --write : [facteur de vitesse de l'astre, aiguilles en plus ou en moins].
 //   node tests/sim/tune.js [--from=1] [--to=300] [--endless=0] [--only=n,…] [--target=n:T,…] [--trials=200] [--trials30=300]
-//                          [--iters=7] [--fresh] [--grid] [--gridn=10] [--write]
+//                          [--iters=7] [--fresh] [--grid] [--gridn=10] [--gridd=1] [--prmin=n:p,…] [--lowp30] [--write]
 // Cible à 70 ms (target70) : droite du monde (début → fin, table worldTargets70) + décalage selon la place dans le bloc de 10
 // (respirations en x1-x2 : +9 et +7 points, soit ≈ +10 sur x8-x9 du bloc précédent ; montée jusqu'au boss : −5) ; niveaux
 // d'apprentissage au moins 12 points au-dessus de la droite ; réserve de COSMOS ∞ (301-400) : 26 %.
@@ -20,8 +20,11 @@
 //   4. durée d'un niveau propre (45 ms, 100 essais) au-delà de 92 % de son plafond (maximum du monde de la table 5.10,
 //      1,5 × pour un boss, 30 s dans COSMOS ∞) : autant d'aiguilles en moins que la durée l'exige, f réglé à nouveau, et plus
 //      d'aiguille ajoutée ensuite (trop facile au plafond de vitesse, le niveau le reste).
-// --grid : au lieu des étapes 1 à 3, une grille de facteurs (et ±1 aiguille) pour les niveaux dont la réponse au facteur
-// est trop irrégulière (voir plus bas).
+// --grid : au lieu des étapes 1 à 3, une grille de facteurs (et ±gridd aiguille) pour les niveaux dont la réponse au facteur
+// est trop irrégulière (voir plus bas). Avec la grille : --prmin=n:p exige aussi du joueur réactif (45 ms) au moins p sur le
+// niveau n (règle « réactif » de report.js : p = moyenne de ses voisins moins une marge) ; --lowp30 préfère, parmi les
+// réglages presque aussi proches de la cible à 70 ms (3 points), celui où le joueur précis (30 ms) gagne le moins, plancher
+// tenu (moyenne à 30 ms des derniers mondes, table 5.10).
 // Les niveaux d'apprentissage gardent leur nombre d'aiguilles (3 à 5).
 const path = require('path'), fs = require('fs');
 const { pool } = require('./pool');
@@ -29,7 +32,8 @@ const { load, ROOT } = require('./load');
 const arg = (k, d) => { const a = process.argv.find(x => x.startsWith('--' + k + '=')); return a ? a.slice(k.length + 3) : d; };
 const FROM = +arg('from', 1), TO = +arg('to', 300), M = +arg('trials', 200), M30 = +arg('trials30', 300), ITERS = +arg('iters', 7);
 const ENDLESS = +arg('endless', 0), WRITE = process.argv.includes('--write'), FRESH = process.argv.includes('--fresh');
-const GRID = process.argv.includes('--grid'), GRIDN = +arg('gridn', 10);
+const GRID = process.argv.includes('--grid'), GRIDN = +arg('gridn', 10), GRIDD = +arg('gridd', 1), LOWP30 = process.argv.includes('--lowp30');
+const PRMIN = {}; for (const x of arg('prmin', '').split(',').filter(Boolean)) { const [n, p] = x.split(':'); PRMIN[+n] = +p; }
 const ONLY = arg('only', '') ? arg('only', '').split(',').map(Number) : null;
 // --target=n:T,… : cible à 70 ms imposée pour ces niveaux (reprise d'une falaise contre la moyenne de ses voisins)
 const TGT = {}; for (const x of arg('target', '').split(',').filter(Boolean)) { const [n, T] = x.split(':'); TGT[+n] = +T; }
@@ -65,14 +69,14 @@ function bounds(n, dn) {
   return { lo, hi, throws: l.throws };
 }
 const CHUNK = 40;
-function jobs(n, f, dn, sigma, trials, key) {
+function jobs(n, f, dn, sigma, trials, key, kind) {
   const o = [], base = (FRESH ? SEEDS.tune * 7 : SEEDS.tune) + n * 10007 + key * 1000003 + (dn + 5) * 77777;
-  for (let i = 0; i < trials; i += CHUNK) o.push({ kind: 'aim', n, sigma, trials: Math.min(CHUNK, trials - i), seed0: base + i, tune: { [n]: [f, dn] } });
+  for (let i = 0; i < trials; i += CHUNK) o.push({ kind: kind || 'aim', n, sigma, trials: Math.min(CHUNK, trials - i), seed0: base + i, tune: { [n]: [f, dn] } });
   return o;
 }
 async function measureAll(P, specs) {
   const all = [], own = [];
-  specs.forEach((s, i) => { for (const j of jobs(s.n, s.f, s.dn, s.sigma, s.trials, s.key)) { all.push(j); own.push(i); } });
+  specs.forEach((s, i) => { for (const j of jobs(s.n, s.f, s.dn, s.sigma, s.trials, s.key, s.kind)) { all.push(j); own.push(i); } });
   const res = await P.run(all), out = specs.map(() => ({ w: 0, t: 0, T: [] }));
   res.forEach((r, i) => { out[own[i]].w += r.wins; out[own[i]].t += r.trials; out[own[i]].T.push(...r.T); });
   return out.map(x => ({ p: x.w / x.t, T: x.T }));
@@ -146,25 +150,39 @@ const q3 = f => Math.floor(f * 1000 + 1e-9) / 1000;
   // --grid : réponse au facteur trop irrégulière pour la sécante (la vitesse des anneaux suit celle de l'astre et peut sauter
   // d'une valeur à l'autre) : chaque niveau est mesuré sur une grille de GRIDN facteurs, avec son nombre d'aiguilles et ±1 ;
   // on garde le réglage le plus proche de la cible à 70 ms parmi ceux qui tiennent le plancher à 30 ms (avec 2 points de
-  // marge) et la durée, sinon celui qui a le meilleur plancher
+  // marge), la durée et, avec --prmin, le joueur réactif ; à défaut, parmi ceux qui tiennent plancher et durée, celui où le
+  // joueur réactif fait le mieux (--prmin) ; sinon celui qui a le meilleur plancher. Le réglage actuel est l'un des candidats.
   if (GRID) {
     const meta = [];
     for (const n of ns) {
-      const s = st[n];
-      for (const dn of isTeach(n) ? [s.dn] : [s.dn - 1, s.dn, s.dn + 1]) {
+      const s = st[n], ds = [s.dn];
+      if (!isTeach(n)) for (let k = 1; k <= GRIDD; k++) ds.push(s.dn - k, s.dn + k);
+      for (const dn of ds) {
         if (dn > 5 || (n % 10 === 0 && dn < 0)) continue;
-        const b = bounds(n, dn); if (dn !== s.dn && b.throws === s.throws) continue;
-        for (let i = 0; i < GRIDN; i++) meta.push({ n, dn, f: q3(b.lo * Math.pow(b.hi / b.lo, i / (GRIDN - 1))) });
+        const b = bounds(n, dn); if (dn !== s.dn && (b.throws === s.throws || b.throws < 3)) continue;
+        const fs = []; for (let i = 0; i < GRIDN; i++) fs.push(q3(b.lo * Math.pow(b.hi / b.lo, i / (GRIDN - 1))));
+        if (dn === s.dn && !fs.includes(s.f)) fs.push(s.f);
+        for (const f of fs) meta.push({ n, dn, f });
       }
     }
     const a = await measureAll(P, meta.map(m => ({ n: m.n, f: m.f, dn: m.dn, sigma: .07, trials: M, key: 1 })));
     const b = await measureAll(P, meta.map(m => ({ n: m.n, f: m.f, dn: m.dn, sigma: .03, trials: M30, key: 2 })));
     const c = await measureAll(P, meta.map(m => ({ n: m.n, f: m.f, dn: m.dn, sigma: .045, trials: 60, key: 4 })));
+    const rm = meta.filter(m => PRMIN[m.n] !== undefined);
+    const r = await measureAll(P, rm.map(m => ({ n: m.n, f: m.f, dn: m.dn, sigma: .045, trials: M, key: 5, kind: 'reactive' })));
     meta.forEach((m, i) => { m.p70 = a[i].p; m.p30 = b[i].p; m.dur = median(c[i].T); });
+    rm.forEach((m, i) => { m.pr = r[i].p; });
     for (const n of ns) {
-      const s = st[n], cand = meta.filter(m => m.n === n), ok = cand.filter(m => m.p30 >= s.F30 + .02 && m.dur <= DURK * durCap(n));
-      const pick = ok.length ? ok.sort((x, y) => Math.abs(x.p70 - s.T) - Math.abs(y.p70 - s.T))[0] : cand.sort((x, y) => y.p30 - x.p30)[0];
-      s.log.push(`grille : ${cand.map(m => `${m.dn}/${m.f}:${(m.p70 * 100).toFixed(0)}/${(m.p30 * 100).toFixed(0)}/${m.dur.toFixed(0)}s`).join(' ')}`);
+      const s = st[n], cand = meta.filter(m => m.n === n), base = cand.filter(m => m.p30 >= s.F30 + .02 && m.dur <= DURK * durCap(n));
+      const ok = base.filter(m => PRMIN[n] === undefined || m.pr >= PRMIN[n]), dist = m => Math.abs(m.p70 - s.T);
+      let pick;
+      if (ok.length) {
+        ok.sort((x, y) => dist(x) - dist(y)); pick = ok[0];
+        if (LOWP30) pick = ok.filter(m => dist(m) <= dist(ok[0]) + .03).sort((x, y) => x.p30 - y.p30)[0];
+      } else if (base.length && PRMIN[n] !== undefined) pick = base.sort((x, y) => y.pr - x.pr)[0];
+      else pick = cand.sort((x, y) => y.p30 - x.p30)[0];
+      s.log.push(`grille : ${cand.map(m => `${m.dn}/${m.f}:${(m.p70 * 100).toFixed(0)}/${(m.p30 * 100).toFixed(0)}/${m.dur.toFixed(0)}s${m.pr !== undefined ? '/r' + (m.pr * 100).toFixed(0) : ''}`).join(' ')}`);
+      s.log.push(`choix : ${pick.dn}/${pick.f}${ok.length ? '' : ' (aucun réglage ne tient toutes les contraintes)'}`);
       reset(s, pick.dn, pick.f); Object.assign(s, { p70: pick.p70, p30: pick.p30, best: { f: pick.f, p: pick.p70 }, done: true, dnMax: pick.dn });
     }
     process.stderr.write(`grille : ${meta.length} réglages mesurés, ${((Date.now() - t0) / 1000).toFixed(0)} s\n`);
