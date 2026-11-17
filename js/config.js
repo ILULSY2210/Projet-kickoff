@@ -107,7 +107,7 @@ const DIFFICULTY = {
   worldTargets70: [[.97, .80], [.80, .65], [.68, .52], [.58, .42], [.45, .32], [.35, .22]], endless70: [.22, .30],
   breather: .10, cliff: .12, bossCliff: .20, mashEarly: .30, mashLate: 6 / 200, trials: 300, trialsRecheck: 1000, recheckBelow: .85,
   worlds: [
-    { throws: [4, 8], fixed: [0, 4], speed: [1.1, 2.2] },
+    { throws: [4, 8], fixed: [3, 5], speed: [1.1, 2.2] },
     { throws: [6, 9], fixed: [2, 5], speed: [1.6, 2.8] },
     { throws: [6, 9], fixed: [3, 5], speed: [1.8, 3.0] },
     { throws: [7, 10], fixed: [2, 4], speed: [1.9, 3.2] },

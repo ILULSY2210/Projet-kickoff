@@ -484,8 +484,10 @@ async function ecrans(b) {
       // continue, à-coups, sentinelle, traversantes
       const fst = (f, from) => { for (let n = from || 1; n < 400; n++) if (f(makeLevel(n))) return n; return 0; };
       o.jeux = [8, fst(l => l.pattern === 3), fst(l => l.sents.length > 0), fst(l => l.trav), fst(l => l.rings.length > 1)].map(n => {
+        // journal préparé par une partie du prédicteur honnête (tirs sûrs espacés d'au moins 40 pas), rejoué ensuite
+        startLevel(n); const journal = []; let last = -99;
+        for (let k = 0; k < 12 * 120 && journal.length < 12 && state === 'play'; k++) { if (k - last > 40 && !flying && window.__botSafe()) { journal.push(k); throwPin(); last = k; } update(STEP); }
         startLevel(n);
-        const journal = [70, 150, 230, 320, 400, 470, 560, 650, 720, 810, 900, 980];
         let j = 0;
         for (let k = 0; k < 12 * 120 && (state === 'play' || state === 'dying'); k++) {
           if (state === 'play' && j < journal.length && k >= journal[j]) { throwPin(); j++; }

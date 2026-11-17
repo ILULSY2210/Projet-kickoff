@@ -137,7 +137,10 @@ function zoneCheck(name, kind, first) {
   let agree = 0, dead = 0, kept = 0, passed = 0;
   for (const n of ns.slice(0, 4)) for (let i = 0; i < 300; i++) {
     G.startLevel(n); G.update(.3 + i * .021);
-    const zi = G.get('L').zones.findIndex(z => z.kind === kind), z = G.get('L').zones[zi], t = G.get('t'), tL = t + rnd() * STEP;
+    // instant de lancer où les anneaux (et les sentinelles) laissent passer : seule la zone décide
+    let tL = G.get('t') + rnd() * STEP;
+    for (let j = 0; j < 2000 && !G.run(`L.rings.every(q => { const w = ringWindow(q, ${tL}); return ringHit(q, w[0], w[1], RING_PAD[q.k]) < 0; }) && L.sents.every(q => sentMin(q, ${tL} + sentWindow()[0], ${tL} + HEAD_WIN[1]) > q.hw + SENT_PAD_HEAD)`); j++) { G.update(STEP); tL = G.get('t') + rnd() * STEP; }
+    const zi = G.get('L').zones.findIndex(z => z.kind === kind), z = G.get('L').zones[zi], t = G.get('t');
     // tir visé près du centre de la zone : on tourne l'astre pour que l'impact y tombe
     const pr = G.predict(tL), zc = G.run(`zoneCenter(L.zones[${zi}], ${pr.tI})`);
     G.set('rot', G.get('rot') + (pr.a - zc) + (rnd() - .5) * (z.hw + .1) * 2);
@@ -182,7 +185,8 @@ function ringCheck(name, pred, first) {
       G.throwPin(tL);
       for (let j = 0; j < 20 && G.get('flights').length && G.get('state') === 'play'; j++) G.update(STEP);
       const kind = G.get('state') !== 'play' && G.get('failInfo') ? G.get('failInfo').kind : null;
-      check((kind === 'ring') === fatal, `${name}, niveau ${n} : tir à ${tL.toFixed(4)} : règle ${fatal ? 'interception' : 'passage'}, jeu ${kind || 'planté'}`);
+      // une sentinelle peut intercepter l'aiguille avant l'anneau
+      check(fatal ? kind === 'ring' || kind === 'sent' : kind !== 'ring', `${name}, niveau ${n} : tir à ${tL.toFixed(4)} : règle ${fatal ? 'interception' : 'passage'}, jeu ${kind || 'planté'}`);
       if (fatal) hit++; else pass++;
     }
   }

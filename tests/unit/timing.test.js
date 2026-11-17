@@ -40,6 +40,8 @@ const VIRTUAL_RAF = () => {
         startLevel(n);
         const t0 = t, r0 = rot;
         for (let i = 0; i < 30 * 120; i++) update(STEP);
+        // tir dès que le prédicteur honnête le permet (anneaux, zones, sentinelles)
+        for (let i = 0; i < 20 * 120 && !window.__botSafe(); i++) update(STEP);
         const before = stuck.length;
         throwPin();
         const tL = t;
@@ -73,16 +75,32 @@ const VIRTUAL_RAF = () => {
       const s1 = fst(l => l.sents.length > 0), s2 = fst(l => l.sents.length > 0, s1 + 1);
       return [[8, fst(l => l.pattern === 3), s1, fst(l => l.trav)], [s1, s2]];
     });
+    // journaux de tirs : préparés une fois par une partie du prédicteur honnête (tirs sûrs espacés d'au moins 40 pas, au
+    // début d'un pas ou à 0,37 pas), puis rejoués tels quels à chaque cadence
+    const JOURNAUX = await p.evaluate(LEVELS => {
+      const o = {};
+      for (const n of LEVELS) for (const mode of ['pas', 'instants']) {
+        startLevel(n); const t0 = t, out = []; let last = -99;
+        for (let k = 0; k < 14 * 120 && out.length < 12 && state === 'play'; k++) {
+          const tS = mode === 'pas' ? t : t + .37 * STEP;
+          if (k - last > 40 && !flying && window.__botSafe(tS)) { out.push(mode === 'pas' ? k : tS - t0); throwPin(tS); last = k; }
+          update(STEP);
+        }
+        o[n + mode] = out;
+      }
+      showMenu();
+      return o;
+    }, LEVELS);
     for (const n of LEVELS) for (const mode of ['pas', 'instants']) {
-      const res = [];
+      const res = [], JR = JOURNAUX[n + mode];
       for (const hz of RATES) {
-        const r = await p.evaluate(({ n, hz, mode }) => {
+        const r = await p.evaluate(({ n, hz, mode, JR }) => {
           soundOn = false;
           // tirs injectés au début d'un pas, à des numéros de pas fixés (journal), quel que soit le découpage en images
-          const journal = mode === 'pas' ? [70, 150, 230, 320, 400, 470, 560, 650, 720, 810, 900, 980] : [];
+          const journal = mode === 'pas' ? JR : [];
           // seconde moitié du journal : instants de simulation quelconques (au milieu d'un pas), lancés par throwPin(tSim)
           // entre deux images, avant que la simulation ne les dépasse
-          const instants = mode === 'pas' ? [] : [.52, 1.237, 1.9811, 2.7303, 3.4417, 4.1, 4.86, 5.5133, 6.2, 6.97, 7.71, 8.4];
+          const instants = mode === 'pas' ? [] : JR;
           const orig = window.update;
           let k = 0, j = 0, q = 0, t0 = 0;
           window.update = function (dt) { if (state === 'play' && j < journal.length && k >= journal[j]) { throwPin(); j++; } k++; orig(dt); };
@@ -97,7 +115,7 @@ const VIRTUAL_RAF = () => {
           const o = { state, steps: k, angles: stuck.filter(s => !s.pre).map(s => s.a), fail: failInfo && { kind: failInfo.kind, a: failInfo.a } };
           showMenu();
           return o;
-        }, { n, hz, mode });
+        }, { n, hz, mode, JR });
         res.push([hz, r]);
       }
       const [, ref] = res[0];
@@ -108,6 +126,7 @@ const VIRTUAL_RAF = () => {
         check(d < 1e-9, `niveau ${n} : angles différents à ${hz} Hz (écart ${d})`);
         if (ref.fail || r.fail) check(!!ref.fail && !!r.fail && ref.fail.kind === r.fail.kind && Math.abs(ref.fail.a - r.fail.a) < 1e-9, `niveau ${n} : échec différent à ${hz} Hz`);
       }
+      check(ref.angles.length >= 3, `niveau ${n} (${mode}) : journal trop court (${ref.angles.length} aiguilles plantées)`);
       console.log(`niveau ${n} (${mode}) : ${ref.state}, ${ref.angles.length} aiguilles, identique sur ${RATES.join('/')} Hz`);
     }
 

@@ -78,7 +78,8 @@ fs.mkdirSync(OUT, { recursive: true });
             const tL = tc - .1 + k * .0005;
             startLevel(n); update(1); update(tL - t); throwPin(tL); te = -1;
             for (let i = 0; i < 700 && state === 'play' && flights.length; i++) update(1e-4);
-            const hit = state === 'dying' && failInfo.kind === 'sent', tend = hit ? te - tL : FLIGHT;
+            // la mesure s'arrête au premier échec (sentinelle, ou anneau qui intercepte l'aiguille avant)
+            const hit = state === 'dying' && failInfo.kind === 'sent', tend = state === 'dying' ? te - tL : FLIGHT;
             hs.n++;
             for (let tau = .68 * FLIGHT; tau < tend - 1e-6; tau += 2e-5) for (const q of L.sents) hs.overlap = Math.max(hs.overlap, -gaps(q, tL, tau)[0]);
             if (hit) { hs.hits++; const g = gaps(failInfo.who, tL, te - tL); if (g[0] < g[1]) { hs.headHits++; hs.gapAtHit = Math.max(hs.gapAtHit, g[0]); } }
