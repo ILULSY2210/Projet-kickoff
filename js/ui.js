@@ -5,7 +5,8 @@ const TOUCH = window.matchMedia ? matchMedia('(pointer: coarse)').matches : true
 const screens = ['menu', 'levels', 'win', 'fail', 'pause'];
 function hideAll() { screens.forEach(s => $(s).classList.remove('show')); }
 function show(id) { hideAll(); $(id).classList.add('show'); }
-function totalStars() { let s = 0; for (const k in bestStars) s += +bestStars[k] || 0; return s; }
+// total des étoiles ; max = LAST_LEVEL : seulement les 6 mondes (le compteur /900), COSMOS ∞ ayant son propre total
+function totalStars(max) { let s = 0; for (const k in bestStars) if (!max || +k <= max) s += +bestStars[k] || 0; return s; }
 const btn = (id, lbl, aux, big) => { $(id).innerHTML = `<span>${vsvg(lbl, big ? 17 : 11, big ? 2.5 : 1.6)}</span>` + (aux ? `<span class="aux">${aux}</span>` : ''); $(id).setAttribute('aria-label', lbl); };
 const ARROW = vsvg('→', 13, 2);
 
@@ -59,7 +60,7 @@ function showLevels() {
   }
   g.innerHTML = html;
   setVT($('lvTitle'), 'NIVEAUX', 20, 2.6);
-  setVT($('totalStars2'), '★ ' + totalStars() + '/' + LAST_LEVEL * 3, 10, 1.5);
+  setVT($('totalStars2'), '★ ' + totalStars(LAST_LEVEL) + '/' + LAST_LEVEL * 3, 10, 1.5);
   $('legacy').textContent = SAVE.legacyStars ? `Ancienne version : ★ ${SAVE.legacyStars}` : '';
   btn('levelsBack', 'RETOUR', vsvg('<', 10, 1.5));
   show('levels');
@@ -140,7 +141,12 @@ function tapInstant(ts, now, tSim, wall) {
 // pas sur un tir à l'aveugle). Avant la feuille (0,45 s), les taps sont ignorés : on voit toujours pourquoi on a perdu.
 const DEBOUNCE = 40;
 let lastTap = -1e9, shotLock = -1e9;
-function retry(ts) { startLevel(L.n, true); shotLock = ts + RETRY_LOCK * 1000; }
+// horodatage d'un événement DOM (ms, horloge de performance.now()), ou maintenant s'il est absent ou d'une autre horloge
+const evTs = e => (e && e.timeStamp >= 0 && Math.abs(e.timeStamp - performance.now()) < 1000 ? e.timeStamp : performance.now());
+// Toute partie lancée depuis l'interface (CONTINUER, SUIVANT, REJOUER, RECOMMENCER, case de niveau, Espace) pose le même
+// verrou : le second tap d'un double tap, qui tombe sur le canevas une fois la feuille cachée, ne tire pas à l'aveugle.
+function startFromUI(n, replay, ts) { startLevel(n, replay); shotLock = ts + RETRY_LOCK * 1000; lastTap = Math.max(lastTap, ts); }
+function retry(ts) { startFromUI(L.n, true, ts); }
 function tap(ts) {
   const now = performance.now();
   if (!(ts >= 0) || Math.abs(ts - now) > 1000) ts = now;
@@ -156,23 +162,23 @@ function bindUI() {
   bus.on('level:start', () => { hideAll(); $('hudBtn').style.display = 'block'; });
   bus.on('failed', showFail);
   bus.on('won', showWin);
-  click('playBtn', () => startLevel(continueLevel()));
+  click('playBtn', e => startFromUI(continueLevel(), false, evTs(e)));
   click('levelsBtn', showLevels);
   click('levelsBack', showMenu);
   $('soundBtn').onclick = () => { soundOn = !soundOn; saveNow(); soundLabel(); if (soundOn) { ac(); sfx('start'); } };
   $('grid').onclick = e => {
     const h = e.target.closest ? e.target.closest('.wsh') : null;
     if (h) { ac(); sfx('ui'); toggleWorld(+h.dataset.w); return; }
-    const b = e.target.closest ? e.target.closest('.lv') : null; if (b && !b.disabled) { ac(); sfx('ui'); startLevel(+b.dataset.n); }
+    const b = e.target.closest ? e.target.closest('.lv') : null; if (b && !b.disabled) { ac(); sfx('ui'); startFromUI(+b.dataset.n, false, evTs(e)); }
   };
-  click('nextBtn', () => startLevel(L.n + 1));
-  click('replayBtn', () => startLevel(L.n, true));
+  click('nextBtn', e => startFromUI(L.n + 1, false, evTs(e)));
+  click('replayBtn', e => startFromUI(L.n, true, evTs(e)));
   click('winMenu', showMenu);
-  click('retryBtn', e => retry(e && e.timeStamp >= 0 && Math.abs(e.timeStamp - performance.now()) < 1000 ? e.timeStamp : performance.now()));
+  click('retryBtn', e => retry(evTs(e)));
   click('failMenu', showMenu);
   $('hudBtn').onclick = e => { e.stopPropagation(); ac(); sfx('ui'); pauseGame(); };
   click('resumeBtn', resumeGame);
-  click('restartBtn', () => startLevel(L.n, true));
+  click('restartBtn', e => startFromUI(L.n, true, evTs(e)));
   click('pauseMenu', showMenu);
   cvs.addEventListener('pointerdown', e => { e.preventDefault(); tap(e.timeStamp); });
   $('failPanel').addEventListener('pointerdown', e => { if (!(e.target.closest && e.target.closest('button'))) tap(e.timeStamp); });
@@ -181,8 +187,8 @@ function bindUI() {
     if (e.code === 'Space' || e.code === 'Enter') {
       e.preventDefault(); ac();
       if (state === 'play' || state === 'failed' || state === 'dying') tap(e.timeStamp);
-      else if (state === 'won') startLevel(L.n + 1);
-      else if (state === 'menu') startLevel(continueLevel());
+      else if (state === 'won') startFromUI(L.n + 1, false, evTs(e));
+      else if (state === 'menu') startFromUI(continueLevel(), false, evTs(e));
       else if (state === 'pause') resumeGame();
     } else if (e.code === 'KeyP' || e.code === 'Escape') {
       if (state === 'play') pauseGame(); else if (state === 'pause') resumeGame(); else if (state === 'levels') showMenu();

@@ -667,6 +667,43 @@ async function reprendre(b) {
   await c2.close();
 }
 
+// double tap sur un bouton qui lance un niveau : le second tap, qui tombe sur le canevas une fois la feuille cachée,
+// ne tire pas (verrou de RETRY_LOCK) ; un tap 350 ms plus tard tire normalement
+async function doubletap(b) {
+  const S = section('doubletap');
+  const c = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+  await c.addInitScript(() => { try { localStorage.setItem('orbita_save', JSON.stringify({ v: 2, gen: 2, progress: { unlocked: 30 }, settings: { sfx: false }, levels: {} })); } catch (e) {} });
+  const p = await c.newPage(); hook(p, 'doubletap');
+  await p.goto(URL);
+  await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+  await p.evaluate(() => { soundOn = false; window.__thr = 0; bus.on('throw', () => { window.__thr++; }); });
+  const center = async sel => { const e = await p.$(sel); await e.scrollIntoViewIfNeeded(); const bb = await e.boundingBox(); return [bb.x + bb.width / 2, bb.y + bb.height / 2]; };
+  const toWin = async () => {
+    await p.evaluate(() => { startLevel(L ? L.n : 5); for (let i = 0; i < 60 * 240 && state === 'play'; i++) { if (!flying && left > 0 && window.__botSafe()) throwPin(); update(1 / 120); } });
+    await p.waitForFunction(() => state === 'won', null, { timeout: 5000 }).catch(() => {});
+    return st(p);
+  };
+  const check = async (name, prep, act) => {
+    await prep();
+    await p.evaluate(() => { window.__thr = 0; });
+    await act();
+    await p.waitForTimeout(90);
+    const r1 = await p.evaluate(() => ({ s: state, n: window.__thr }));
+    S.eq(r1.s + '/' + r1.n, 'play/0', `${name} : double tap à 90 ms → partie lancée, aucun tir à l'aveugle`);
+    await p.waitForTimeout(260);
+    await p.touchscreen.tap(195, 300); await p.waitForTimeout(60);
+    S.eq(await p.evaluate(() => window.__thr), 1, `${name} : un tap 350 ms plus tard tire normalement`);
+  };
+  const dbl = sel => async () => { const [x, y] = await center(sel); await p.touchscreen.tap(x, y); await p.waitForTimeout(90); await p.touchscreen.tap(x, y); };
+  await check('CONTINUER', async () => { await p.evaluate(() => showMenu()); }, dbl('#playBtn'));
+  await check('SUIVANT', async () => { S.eq(await toWin(), 'won', 'victoire préparée'); await p.waitForTimeout(250); }, dbl('#nextBtn'));
+  await check('REJOUER', async () => { await toWin(); await p.waitForTimeout(250); }, dbl('#replayBtn'));
+  await check('RECOMMENCER', async () => { await p.evaluate(() => { startLevel(L.n); }); await p.waitForTimeout(300); await p.evaluate(() => pauseGame()); await p.waitForTimeout(150); }, dbl('#restartBtn'));
+  await check('case de niveau', async () => { await p.evaluate(() => showLevels()); await p.waitForTimeout(200); }, dbl('.lv[data-n="5"]'));
+  await check('Espace ×2 sur la victoire', async () => { await toWin(); await p.waitForTimeout(250); }, async () => { await p.keyboard.press('Space'); await p.waitForTimeout(90); await p.keyboard.press('Space'); });
+  await c.close();
+}
+
 async function echec(b) {
   const S = section('echec');
   for (const [w, h] of SCREENS) {
@@ -874,6 +911,7 @@ async function feuilles(b) {
     if (want('ecrans')) await ecrans(b);
     if (want('tir')) await tir(b);
     if (want('reprendre')) await reprendre(b);
+    if (want('doubletap')) await doubletap(b);
     if (want('echec')) await echec(b);
     if (want('feuilles')) await feuilles(b);
   } catch (e) { errors.push('harness: ' + (e && e.stack || e)); }

@@ -25,6 +25,11 @@ function validSave(o) {
     const n = +k, x = o.levels[k];
     if (intIn(n, 1, MAX_UNLOCK) && isObj(x)) { const y = Object.assign({}, x); if (!intIn(y.stars, 0, 3)) delete y.stars; S.levels[n] = y; }
   }
+  // progression illisible mais étoiles présentes : on rouvre au moins jusqu'au niveau qui suit le dernier niveau étoilé
+  if (!(isObj(o.progress) && intIn(o.progress.unlocked, 1, MAX_UNLOCK))) {
+    let m = 0; for (const k in S.levels) if (S.levels[k].stars >= 1) m = Math.max(m, +k);
+    if (m) S.progress.unlocked = Math.min(MAX_UNLOCK, m + 1);
+  }
   if (isObj(o.meta)) { if (intIn(o.meta.created, 0, 1e15)) S.meta.created = o.meta.created; if (o.meta.migrated) S.meta.migrated = 1; }
   for (const k in o) if (!(k in S)) S[k] = o[k];   // champs d'une version plus récente : conservés tels quels
   return S;
@@ -35,7 +40,7 @@ function migrateV1() {
   if (u == null && st == null && so == null) return null;
   const S = freshSave();
   const un = Math.floor(+u);
-  S.progress.unlocked = un >= 1 ? Math.min(un, LAST_LEVEL) : 1;
+  S.progress.unlocked = isFinite(un) && un >= 1 ? Math.min(un, LAST_LEVEL) : 1;   // « 1e400 » → Infinity : invalide
   let tot = 0;
   if (isObj(st)) for (const k in st) { const v = Math.floor(+st[k]); if (intIn(+k, 1, MAX_UNLOCK) && v >= 1 && v <= 3) tot += v; }
   S.legacyStars = tot;
@@ -72,8 +77,12 @@ function continueLevel() {
   for (const k in TEACH) { const n = +k; if (n > unlocked) break; if (teachOf(n) && !(bestStars[n] >= 1) && n < unlocked) return n; }
   return unlocked;
 }
-// total d'étoiles d'un monde (sur 150) et de toute la progression
-function worldStars(w) { const a = firstOfWorld(w), b = a + LEVELS_PER_WORLD; let s = 0; for (let n = a; n < b; n++) s += +bestStars[n] || 0; return s; }
+// total d'étoiles d'un monde (sur 150) ; COSMOS ∞ (w ≥ WORLDS.length) : tous les niveaux au-delà de LAST_LEVEL
+function worldStars(w) {
+  let s = 0;
+  if (w >= WORLDS.length) { for (const k in bestStars) if (+k > LAST_LEVEL) s += +bestStars[k] || 0; return s; }
+  const a = firstOfWorld(w), b = a + LEVELS_PER_WORLD; for (let n = a; n < b; n++) s += +bestStars[n] || 0; return s;
+}
 
 // abonnements aux événements du cœur (appelé une fois par main.js)
 function bindStore() {

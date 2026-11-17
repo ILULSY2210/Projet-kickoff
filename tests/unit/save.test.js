@@ -80,5 +80,19 @@ for (const [i, init] of bad.entries()) {
   const b = boot(mem);
   check(b.g('continueLevel()') === 23, `joueur ordinaire : CONTINUER → ${b.g('continueLevel()')} (23)`);
 }
+// 5. valeurs limites (recette de l'étape 2, Q8) : « 1e400 » n'ouvre pas tout ; une progression illisible avec des étoiles
+//    rouvre jusqu'au niveau qui suit le dernier niveau étoilé
+{ const { g } = boot({ orbita_unlocked: '1e400' }); check(g('unlocked') === 1, `v1 unlocked « 1e400 » : unlocked ${g('unlocked')} (1)`); }
+for (const u of ['9', 12.5, -3, null]) {
+  const { g } = boot({ orbita_save: JSON.stringify({ v: 2, gen: 2, progress: { unlocked: u }, levels: { 4: { stars: 2 }, 2: { stars: 1 } } }) });
+  check(g('unlocked') === 5 && g('bestStars[4]') === 2, `v2 unlocked ${JSON.stringify(u)} avec étoiles jusqu'au 4 : unlocked ${g('unlocked')} (5)`);
+}
+// 6. compteurs d'étoiles au-delà du niveau 300 : COSMOS ∞ compte tous les niveaux > LAST_LEVEL
+{
+  const { g } = boot();
+  g('for (let i = 1; i <= 449; i++) bestStars[i] = 3');
+  check(g('worldStars(0)') === 150 && g('worldStars(5)') === 150, `mondes 1 et 6 : ${g('worldStars(0)')}, ${g('worldStars(5)')} (150)`);
+  check(g('worldStars(WORLDS.length)') === 3 * (449 - 300), `COSMOS ∞ : ${g('worldStars(WORLDS.length)')} (${3 * 149})`);
+}
 if (fails.length) { console.log('save : ÉCHEC\n  ' + fails.join('\n  ')); process.exit(1); }
 console.log('save : pass');
