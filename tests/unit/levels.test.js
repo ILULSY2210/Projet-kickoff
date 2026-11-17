@@ -38,7 +38,8 @@ for (let n = 1; n <= 400; n++) {
   if (t && IMPL.has(t)) check(L.omega <= DW.speed[0] + 1e-9, `niveau ${n} : apprentissage à ${L.omega.toFixed(3)} rad/s (au plus ${DW.speed[0]}, vitesse de début du monde)`);
   for (const q of L.rings) {
     const win = Math.min(...q.gates.map(g => (2 * g.h - 2 * RING_PAD[q.k]) / Math.abs(q.w)));
-    const minW = n <= 200 ? .42 : RING_WIN;
+    // (l'anneau anti-salve des niveaux d'apprentissage des mondes 2 à 6 : RING_WIN)
+    const minW = n <= 200 && !(t && IMPL.has(t) && n > 50) ? .42 : RING_WIN;
     check(win >= minW - 1e-5, `niveau ${n} : anneau ${q.k}, fenêtre de passage ${win.toFixed(3)} s (≥ ${minW})`);
   }
 }

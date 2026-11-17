@@ -1,14 +1,14 @@
 {
- "version": "orbita-v57",
+ "version": "orbita-v58",
  "files": {
-  "sw.js": "0102a71b02ead6bb55361adb23fcdb6729d7d063b4814eded7cc62596c27cad5",
-  "index.html": "3bb869fb0d1c2294de367c38eb944295a946b0ba03ba65a1b6e55ec0719ad793",
+  "sw.js": "73e560ca1b8ce2c4d4c756f04cbf054819ec6e3ae82e2011aadd1b48b9f5966b",
+  "index.html": "68bf524d7f93a7e26935ac8ed47364d96ab02d165c4a682c0877c0bd6e338a31",
   "manifest.webmanifest": "ea050e78e31ff932c89373bb4b49e5bcbab8468600c0df9164638641ce275de1",
   "icon.svg": "cb2c5a29fcd70e7ea2b67db3191ba45fe1ac98dc1bc3820b02ed9b86246a173f",
   "js/config.js": "9671dcdca64d51c2b14cd0f3f2d25a2c23d6be72bf147e7d20f98923af29fa89",
   "js/util.js": "f8447fdbfa9b23b282d7db5053374817dc23876271f79fc9947eda3cbd524a5d",
   "js/vector.js": "7f98b5a637c7d7387f80488cbba1960b36dbf1aafba1647eb0014abd7b073d1b",
-  "js/levels.js": "b4794a100805aadcf8e3a1bc633318fc05a6788c94df01202ea7a17e362e180d",
+  "js/levels.js": "8a9ccc5263935c1bd8f253119e967fe961663c24448bc35c87c6e2e28f68abe9",
   "js/store.js": "2f59fd5b49bfc61658c38f207f652b15f98482874c579fee4634b892bb6c9f2b",
   "js/core.js": "8bc3d0050724967f88b6b1a36d0c8ec80d34eccbe5f315ed961e2672c91b0530",
   "js/audio.js": "4d683cecc56f0b2b29b72d92b07b07d10bf8e2396f632c49d3d663bcb1a88d6d",

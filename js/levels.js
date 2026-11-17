@@ -173,12 +173,15 @@ function genLevel(n) {
     if (teach === 'glisse') { R.N = 5; R.glide = 1; }
     if (teach === 'anneau') { R.N = 5; R.rings = 1; ringWin(R, 1.3, 2.8, 3); }
     if (teach === 'anneaux2') { R.N = 5; R.rings = 2; ringWin(R, .85, 2.5, 3); }
-    if (teach === 'anneaux3') { R.N = 5; R.rings = 3; ringWin(R, .8, 2.5, 3); }
-    if (teach === 'portesPulsees') { R.N = 5; R.rings = 1; ringWin(R, .8, 2.4, 3); R.gatePulse = true; }
+    // (fenêtre de 0,42 s : à peine plus que la traversée d'une salve de 5 aiguilles à 100 ms, qui ne passe donc presque
+    // jamais en entier ; l'astre lent laisse au joueur qui regarde tout le temps de viser)
+    if (teach === 'anneaux3') { R.N = 5; R.rings = 3; ringWin(R, .42, 2.5, 3); }
+    if (teach === 'portesPulsees') { R.N = 5; R.rings = 1; ringWin(R, .42, 2.4, 3); R.gatePulse = true; }
     // à partir du monde 2, un anneau aussi sur les niveaux d'apprentissage (anti-salve : 3 à 5 aiguilles passent trop
     // facilement à l'aveugle) ; idée déjà apprise, l'idée nouvelle reste la seule nouveauté
-    // (fenêtre de 0,45 s qui revient toutes les 1,3 s : plus courte qu'une salve de 5 aiguilles, mais souvent offerte)
-    if (wi >= 1 && has('anneau')) { if (!R.rings) { R.rings = 1; ringWin(R, .45, 1.3, 3); } R.N = 5; }
+    // (fenêtre de RING_WIN = 0,35 s qui revient toutes les 2 s : une salve de 5 aiguilles à 100 ms ± 1 image, qui dure au
+    // moins 0,35 s, n'y tient presque jamais ; l'astre lent laisse au joueur qui regarde tout le temps de viser)
+    if (wi >= 1 && has('anneau')) { if (!R.rings) { R.rings = 1; ringWin(R, RING_WIN, 2, 3); } R.N = 5; }
   } else if (boss) {
     const B = BOSSES[bossArch(n)], tier = Math.min(wi, 5);
     R.N = B.throws[tier]; R.omega = B.speed[tier]; R.F = 0; R.orbs = has('etoiles') ? 3 : 0;

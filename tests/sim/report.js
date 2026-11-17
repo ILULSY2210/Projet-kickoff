@@ -23,6 +23,7 @@
 //              400 essais avant d'échouer) ; au-delà, la falaise n'est « propre aux arrêts et aux inversions » (échec) que si
 //              le même joueur fait aussi plus de 15 points de mieux sur la variante calme du niveau (même niveau, loi
 //              continue à la même vitesse moyenne, sans demi-tours : tests/sim/worker.js)
+//   apprentissage  niveau d'apprentissage ≥ ses voisins + 12 points à 70 ms (ou ≥ 99 %)
 //   durées     médiane du niveau propre (45 ms) dans la plage du monde
 // Graines : tests/sim/seeds.json. Écrit <out>/report.json et sort avec le code 1 si une règle échoue.
 const path = require('path'), fs = require('fs');
@@ -175,6 +176,13 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
       if (row.dur45 < DUR[w][0] || row.dur45 > DUR[w][1]) fail('durées', `${NAMES[w]} : niveau propre (45 ms) médian ${row.dur45.toFixed(1)} s (plage ${DUR[w][0]}-${DUR[w][1]} s)`);
       if (row.bossSp70 < BOSS70[w][0] - .07 || row.bossSp70 > BOSS70[w][1] + .07) fail('boss', `${NAMES[w]} : boss et spéciaux à 70 ms ${pc(row.bossSp70)} % (table ${BOSS70[w][0] * 100}-${BOSS70[w][1] * 100} % ± 7)`);
     }
+  }
+  // niveaux d'apprentissage : au moins 12 points au-dessus de leurs voisins à 70 ms (plafonné à 99 %), sans vitesse ajoutée
+  // (plan 5.3 : court, vitesse modérée ; facteur de réglage ≤ 1 dans le générateur)
+  for (const n of levels) if (n <= 300 && L[n].teach) {
+    const nb = neighbors(n, 'p70'); if (nb.length < 2) continue;
+    const want = Math.min(.99, mean(nb) + .12);
+    if (L[n].p70 < want - 1e-9) fail('apprentissage', `niveau ${n} (${L[n].teach}) : ${pc(L[n].p70)} % à 70 ms, ${((L[n].p70 - mean(nb)) * 100).toFixed(1)} points au-dessus de ses voisins (≥ +12, ou ≥ 99 %)`);
   }
   for (const c of cliffCheck()) fail('falaises', `niveau ${c.n}${normal(c.n) ? '' : L[c.n].boss ? ' (boss)' : ' (spécial)'} : ${pc(L[c.n].p70)} % à 70 ms, ${(c.gap * 100).toFixed(1)} points sous ses voisins (limite ${c.lim * 100}) ; IC95 ${pc(L[c.n].ci70[0])}-${pc(L[c.n].ci70[1])}`);
   // respirations : x1-x2 d'un bloc contre x8-x9 du bloc précédent
