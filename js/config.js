@@ -110,9 +110,9 @@ const DIFFICULTY = {
     { throws: [4, 8], fixed: [3, 5], speed: [1.1, 2.2] },
     { throws: [6, 9], fixed: [2, 5], speed: [1.6, 2.8] },
     { throws: [6, 9], fixed: [3, 5], speed: [1.8, 3.0] },
-    { throws: [7, 10], fixed: [2, 4], speed: [1.9, 3.2] },
-    { throws: [7, 10], fixed: [2, 4], speed: [2.1, 3.5] },
-    { throws: [8, 11], fixed: [2, 3], speed: [2.3, 3.8] }
+    { throws: [6, 9], fixed: [2, 4], speed: [1.9, 3.2] },
+    { throws: [6, 9], fixed: [2, 4], speed: [2.1, 3.5] },
+    { throws: [7, 9], fixed: [2, 3], speed: [2.3, 3.8] }
   ],
   pos: [-.55, -.35, .15, .3, .45, .55, .45, .7, .8, .9],
   tune: {}

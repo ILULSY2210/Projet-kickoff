@@ -6,13 +6,23 @@ Petit jeu mobile à une touche (HTML5, sans dépendance ni outil de compilation 
 Si deux aiguilles se touchent, c'est perdu. Plante-les toutes pour passer au niveau suivant.
 
 - **Arcade vectorielle** : tracés lumineux sur fond d'encre, astres en fil de fer, affichage façon tableau de bord.
-- **8 mondes** de 5 niveaux (Émeraude, Ambre, Givre, Braise, Iris, Soufre, Opale, Cobalt), chacun avec sa couleur,
-  son astre et sa règle : rotation qui s'inverse, arcs interdits, rotation pas à pas, sentinelle en orbite…
-  (la refonte en 6 mondes de 50 niveaux est l'étape 2 du plan, `docs/ANALYSE-ET-PLAN.md`).
-- Un **boss** à la fin de chaque monde, puis des variantes sans fin.
+- **6 mondes de 50 niveaux** (300 niveaux), puis **COSMOS ∞** sans fin : Émeraude (découverte), Ambre (accélération),
+  Rubis (précision), Saphir (rotations inversées), Obsidienne (difficulté élevée), Cosmos (défis extrêmes), chacun avec
+  sa palette, son astre et sa gamme.
+- **Une idée à la fois** : chaque mécanique est enseignée par un niveau court, annoncé par un bandeau (relisible dans la
+  pause et la sélection des niveaux) : aiguilles déjà plantées, étoiles, sens de rotation, accélération à chaque aiguille,
+  demi-tour annoncé, zones interdites, anneaux à portes, rotation irrégulière, à-coups, arrêts, rampe, fentes, zones
+  pulsées et glissantes, inversions, sentinelles, aiguilles traversantes, trois anneaux, portes pulsées.
+- Les **chevrons** du pas de tir annoncent 0,45 s à l'avance chaque arrêt, reprise ou inversion de la rotation.
+- Un **boss** tous les 10 niveaux (Réacteur, Pendule, Forteresse, Anneaux, Chaos, de plus en plus durs) ; un niveau
+  spécial en x7 (ils se jouent pour l'instant comme des niveaux normaux, sur leur terrain).
+- **Difficulté mesurée** : chaque niveau est réglé par un joueur simulé qui joue le vrai code du jeu (`tests/sim/`) :
+  les premiers mondes restent accessibles, les derniers sont durs, et aucun niveau n'est injuste (≥ 75 % de victoires
+  pour un joueur précis à 30 ms). Taper à l'aveugle ne fait plus passer de niveau après le premier monde.
 - **3 étoiles par niveau** : finir le niveau, plus des étoiles bonus à décrocher.
 - Chaque aiguille plantée joue une note de la gamme du monde.
-- Progression sauvegardée, sons générés, installable sur l'écran d'accueil (PWA, hors ligne).
+- Progression sauvegardée (et reprise depuis l'ancienne version, sans étoiles offertes), sons générés, installable sur
+  l'écran d'accueil (PWA, hors ligne).
 
 ## Un tir juste, sur tous les écrans
 

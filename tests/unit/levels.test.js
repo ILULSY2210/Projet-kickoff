@@ -4,7 +4,7 @@
 // - chaque niveau d'apprentissage d'une idée réalisée (IMPL) l'introduit, elle seule, en 3 à 5 aiguilles ;
 // - capacité : tirs (doublés pour les traversantes) + obstacles fixes ≤ 14 sur 1..400 ;
 // - déterminisme : makeLevel(n) identique d'un appel à l'autre ; boss tous les 10, spéciaux en x7 ;
-// - chaque niveau a au moins 3 tirs, une vitesse moyenne dans les bornes du monde (réglage compris).
+// - chaque niveau a au moins 3 tirs, une vitesse moyenne d'au plus 1,3 × la vitesse de fin de son monde (réglage compris).
 const { load } = require('../sim/load');
 const G = load();
 const fails = [], check = (c, m) => { if (!c) fails.push(m); };
@@ -26,7 +26,8 @@ for (let n = 1; n <= 400; n++) {
   check(L.throws >= 3, `niveau ${n} : ${L.throws} tirs`);
   check(JSON.stringify(mk(n)) === JSON.stringify(L), `niveau ${n} : makeLevel non déterministe`);
   check(L.boss === (n % 10 === 0) && L.special === (n % 10 === 7), `niveau ${n} : statut boss / spécial`);
-  check(L.omega > .5 && L.omega < 4.5, `niveau ${n} : vitesse moyenne ${L.omega}`);
+  const wmax = G.get('DIFFICULTY').worlds[Math.min(5, Math.floor((n - 1) / 50))].speed[1];
+  check(L.omega > .4 && L.omega <= 1.3 * wmax + 1e-9, `niveau ${n} : vitesse moyenne ${L.omega} (au plus 1,3 × ${wmax})`);
 }
 for (const k in TEACH) if (IMPL.has(TEACH[k])) check(intro[TEACH[k]] === +k, `« ${TEACH[k]} » apparaît au niveau ${intro[TEACH[k]]}, apprise au niveau ${k}`);
 console.log('idées introduites : ' + Object.entries(intro).map(([k, v]) => `${k} ${v}`).join(', '));

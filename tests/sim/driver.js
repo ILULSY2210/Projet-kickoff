@@ -5,7 +5,8 @@
 //     throwPin(tA) juste avant le pas qui le contient (t ≤ tA < t + STEP), comme la couche d'entrée ;
 //   - les instants des taps sont notés relativement au début du niveau (T0 = t après startLevel) : journal rejouable.
 // Politiques :
-//   aim      joueur qui vise : à chaque décision, il examine les lancers possibles sur un tour de l'astre (1,5 à 7 s), avec
+//   aim      joueur qui vise : à chaque décision, il examine les lancers possibles sur un tour de l'astre (au moins 1,5 s
+//            et trois périodes de passage des anneaux, au plus 8 s), avec
 //            la même predict() / shotSafe() que __botSafe, garde les instants où le tir survit, mesure pour chacun la marge
 //            de temps au plus proche instant mortel, et vise le milieu de la première fenêtre presque aussi large que la
 //            meilleure (≥ 85 %) ; son tap part avec une imprécision gaussienne σ ; il réfléchit THINK s après chaque impact.
@@ -40,7 +41,10 @@ var __sim = (function () {
   // choix du joueur qui vise, à l'instant courant (aucune aiguille en vol) : instant de lancer visé, ou -1
   var SAFE = [], MARG = [];
   function planShot() {
-    var t0 = t, g = 2 * STEP, K = Math.ceil(7 / g), kMin = Math.ceil(1.5 / g), cum = 0, prevR = predictRot(t0), n = 0, any = false;
+    // horizon : un tour de l'astre, au moins 1,5 s et trois périodes de passage des anneaux, au plus 8 s
+    var hz = 1.5;
+    for (var qi = 0; qi < L.rings.length; qi++) { var q = L.rings[qi]; hz = Math.max(hz, 3 * TAU / (q.gates.length * Math.abs(q.w))); }
+    var t0 = t, g = 2 * STEP, K = Math.ceil(8 / g), kMin = Math.ceil(Math.min(8, hz) / g), cum = 0, prevR = predictRot(t0), n = 0, any = false;
     for (var k = 0; k <= K; k++) {
       var tL = t0 + k * g, s = shotSafe(tL, 0), r = predictRot(tL);
       SAFE[k] = s; if (s) any = true;

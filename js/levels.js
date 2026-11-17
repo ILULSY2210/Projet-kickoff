@@ -209,6 +209,16 @@ function makeLevel(n) {
       if (A() + Bm() + C() < 2 && has('zone') && !A() && !R.trav) R.zones = [.35 + .15 * r()];
       if (A() + Bm() + C() < 2) { const stops = laws.filter(x => [2, 4, 5].includes(x)); if (stops.length) { R.law = stops[Math.floor(r() * stops.length)]; R.irr = null; } }
     }
+    // budget de complexité (dangers simultanés) par monde : au-delà, on retire d'abord ce qui n'est pas le cœur du monde
+    // (deuxième sentinelle, accélération ou rampe, demi-tours, zones dynamiques, anneaux en trop, zones fixes)
+    const cx = () => R.rings * .8 + R.sent + (R.pulse + R.glide) * .7 + (R.zones.length + (R.fentes ? 1 : 0)) * .5 + (R.trav ? 1.5 : 0) +
+      (R.accel || R.ramp ? .5 : 0) + (R.demi || R.rhythm || R.inv ? .5 : 0) + ([2, 4, 5, 6].includes(R.law) ? .4 : 0);
+    const CAP = [2.4, 3, 3.3, 3.4, 3.6, 3.8][wi];
+    const drops = [() => { if (R.sent > 1) R.sent = 1; }, () => { if (R.trav && R.sent) R.sent = 0; }, () => { if (wi !== 1) { R.accel = null; R.ramp = null; } },
+      () => { if (R.trav && R.accel) R.accel = null; }, () => { if (wi !== 3) { R.demi = null; R.rhythm = null; R.inv = false; } }, () => { if (wi !== 2) { R.pulse = 0; R.glide = 0; } },
+      () => { if (R.rings > 1) R.rings = 1; }, () => { if (wi !== 2) { R.zones = []; R.fentes = false; } }, () => { if (R.sent && wi !== 4) R.sent = 0; },
+      () => { R.accel = null; R.ramp = null; R.demi = null; R.rhythm = null; R.inv = false; }, () => { R.pulse = Math.min(R.pulse, 1); R.glide = 0; }];
+    for (let i = 0; i < drops.length && cx() > CAP; i++) drops[i]();
     if (special && sp === 'chrono') { R.law = 0; R.omega = lerp(DW.speed[0], DW.speed[1], Math.min(1, d + .3)); R.F = Math.max(R.F, 3); }
     if (special && sp === 'parfait') { R.N = 6; R.F = Math.max(R.F, 2); }
     if (special && sp === 'pluie' && has('etoiles')) R.orbs = 6 + Math.floor(r() * 4);

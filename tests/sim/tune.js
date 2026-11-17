@@ -39,11 +39,15 @@ async function measureAll(P, specs) {
   const t0 = Date.now(), P = pool();
   const ns = []; for (let n = FROM; n <= TO; n++) ns.push(n); for (let n = 301; n < 301 + ENDLESS; n++) ns.push(n);
   const st = {};
+  // vitesse plafonnée à 1,3 × la vitesse de fin du monde (table DIFFICULTY.worlds) ; un niveau encore trop facile à ce
+  // plafond reçoit une aiguille de plus (jusqu'à 2)
+  const hiOf = (n, dn) => { const w = Math.min(5, Math.floor((n - 1) / 50)), cur = D.tune[n] || [1, 0]; G.run(`DIFFICULTY.tune[${n}] = [1, ${dn}]`); const om = G.makeLevel(n).omega; G.run(`DIFFICULTY.tune[${n}] = ${JSON.stringify(cur)}`); return Math.max(1, Math.min(2.4, 1.3 * D.worlds[w].speed[1] / om)); };
   for (const n of ns) {
     const cur = D.tune[n] || [1, 0];
-    st[n] = { n, T: target70(n), f: cur[0], dn: cur[1], lo: .45, hi: 2.4, best: null, done: false, hist: [] };
+    st[n] = { n, T: target70(n), f: cur[0], dn: cur[1], lo: .45, hi: hiOf(n, cur[1]), best: null, done: false, hist: [] };
+    st[n].f = Math.min(st[n].f, st[n].hi); st[n].cap = st[n].hi;
   }
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; pass < 3; pass++) {
     for (let it = 0; it < ITERS; it++) {
       const act = ns.filter(n => !st[n].done);
       if (!act.length) break;
@@ -51,6 +55,8 @@ async function measureAll(P, specs) {
       act.forEach((n, i) => {
         const s = st[n], v = p[i]; s.hist.push([+s.f.toFixed(4), +v.toFixed(3)]);
         if (!s.best || Math.abs(v - s.T) < Math.abs(s.best.p - s.T)) s.best = { f: s.f, p: v };
+        const teachLv = TEACH[n] && IMPL.has(TEACH[n]);   // niveaux d'apprentissage : 3 à 5 aiguilles, nombre inchangé
+        if (v > s.T + .05 && s.f >= s.cap - 1e-9 && s.dn < 2 && !teachLv) { s.dn++; s.lo = .45; s.hi = s.cap = hiOf(n, s.dn); s.f = Math.min(1, s.cap); s.best = null; s.hist = []; return; }
         if (Math.abs(v - s.T) <= .025 || (v >= s.T && s.f >= s.hi - 1e-9) || (v <= s.T && s.f <= s.lo + 1e-9)) { s.done = true; return; }
         // trop facile → plus vite ; trop dur → plus lent
         if (v > s.T) s.lo = Math.max(s.lo, s.f); else s.hi = Math.min(s.hi, s.f);
@@ -58,8 +64,8 @@ async function measureAll(P, specs) {
         let nf;
         if (k >= 2 && Math.abs(h[k - 1][1] - h[k - 2][1]) > .02) { const sl = (h[k - 1][1] - h[k - 2][1]) / (Math.log(h[k - 1][0]) - Math.log(h[k - 2][0])); nf = Math.exp(Math.log(s.f) + (s.T - v) / sl); }
         else nf = s.f * Math.exp(Math.max(-.3, Math.min(.3, (v - s.T) * 1.2)));
-        if (!(nf > s.lo && nf < s.hi)) nf = Math.sqrt(Math.max(s.lo, .45) * Math.min(s.hi, 2.4));
-        s.f = Math.min(2.4, Math.max(.45, nf));
+        if (!(nf > s.lo && nf < s.hi)) nf = Math.sqrt(Math.max(s.lo, .45) * Math.min(s.hi, s.cap));
+        s.f = Math.min(s.cap, Math.max(.45, nf));
       });
       process.stderr.write(`passe ${pass + 1}, itération ${it + 1} : ${act.length} niveaux à régler, ${((Date.now() - t0) / 1000).toFixed(0)} s\n`);
     }
@@ -67,7 +73,7 @@ async function measureAll(P, specs) {
     // plancher à 30 ms : en dessous de 82 %, une aiguille de moins et on recommence le réglage de ce niveau
     const p30 = await measureAll(P, ns.map(n => ({ n, f: st[n].f, dn: st[n].dn, sigma: .03, trials: M, key: 2 })));
     let redo = 0;
-    ns.forEach((n, i) => { st[n].p30 = p30[i]; if (p30[i] < .82 && st[n].dn > -2 && pass === 0) { st[n].dn--; st[n].done = false; st[n].lo = .45; st[n].hi = 2.4; st[n].best = null; st[n].hist = []; redo++; } });
+    ns.forEach((n, i) => { st[n].p30 = p30[i]; if (p30[i] < .82 && st[n].dn > -3 && pass < 2 && !(TEACH[n] && IMPL.has(TEACH[n]))) { st[n].dn--; st[n].done = false; st[n].lo = .45; st[n].hi = st[n].cap = hiOf(n, st[n].dn); st[n].f = Math.min(st[n].f, st[n].cap); st[n].best = null; st[n].hist = []; redo++; } });
     process.stderr.write(`plancher : ${redo} niveau(x) avec une aiguille de moins\n`);
     if (!redo) break;
   }
