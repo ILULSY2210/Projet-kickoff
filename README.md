@@ -17,8 +17,9 @@ Si deux aiguilles se touchent, c'est perdu. Plante-les toutes pour passer au niv
 - Un **boss** tous les 10 niveaux (Réacteur, Pendule, Forteresse, Anneaux, Chaos, de plus en plus durs) ; un niveau
   spécial en x7 (ils se jouent pour l'instant comme des niveaux normaux, sur leur terrain).
 - **Difficulté mesurée** : chaque niveau est réglé par un joueur simulé qui joue le vrai code du jeu (`tests/sim/`) :
-  les premiers mondes restent accessibles, les derniers sont durs, et aucun niveau n'est injuste (≥ 75 % de victoires
-  pour un joueur précis à 30 ms). Taper à l'aveugle ne fait plus passer de niveau après le premier monde.
+  les premiers mondes restent accessibles, les derniers sont durs, et aucun niveau mesuré n'est injuste (≥ 75 % de
+  victoires pour un joueur précis à 30 ms) ; COSMOS ∞ rejoue, en miroir un cycle sur deux, une réserve de 100 niveaux tous
+  mesurés. Taper à l'aveugle ne fait plus passer de niveau après le premier monde.
 - **3 étoiles par niveau** : finir le niveau, plus des étoiles bonus à décrocher.
 - Chaque aiguille plantée joue une note de la gamme du monde.
 - Progression sauvegardée (et reprise depuis l'ancienne version, sans étoiles offertes), sons générés, installable sur
@@ -47,6 +48,7 @@ Ouvre `index.html` dans un navigateur. Pour jouer sur téléphone, active **GitH
 
 ## Développement
 
+- Ce qui a changé à l'étape 2, pour le porteur du projet : `docs/CHANGELOG-etape2.md`.
 - Plan de développement, architecture et spécification : `docs/ANALYSE-ET-PLAN.md` ; cahier des charges :
   `docs/cahier-des-charges.md`.
 - Tests : voir `tests/README.md`. Après toute modification d'un fichier du jeu, `node tests/unit/sw.test.js --bump`

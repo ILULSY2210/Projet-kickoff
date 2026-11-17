@@ -236,9 +236,9 @@ function genLevel(n) {
     if (has('invImpact') && r() < (wi === 3 ? .3 : .12)) R.inv = true;
     else if (has('rythme') && r() < pd) R.rhythm = { P: 3.2 - .8 * d, warn: Math.max(.45, .7 - .2 * d) };
     else if (has('demitour') && r() < pd) R.demi = { every: d < .5 ? 3 : 2, warn: Math.max(.45, .9 - .4 * d - .1 * wi) };
-    // (moins souvent dans les deux derniers mondes : leurs aiguilles remplissent le bord à 7 tirs, et la vitesse plafond
-    // ne les rend pas assez durs pour la fin du jeu)
-    if (has('traversantes') && r() < (wi >= 5 ? .06 : wi === 4 ? .12 : .15)) { R.trav = true; R.N = Math.max(R.N, 6); R.zones = []; R.fentes = false; }
+    // (moins souvent dans les deux derniers mondes, et plus du tout à la fin de Cosmos ni dans COSMOS ∞ : leurs aiguilles
+    // remplissent le bord à 7 tirs, et la vitesse plafond ne les rend pas assez durs pour la fin du jeu)
+    if (has('traversantes') && r() < (wi >= 5 ? .06 : wi === 4 ? .12 : .15) && !(wi >= 5 && d > .55)) { R.trav = true; R.N = Math.max(R.N, 6); R.zones = []; R.fentes = false; }
     // traversantes des deux derniers mondes : deux anneaux (leurs aiguilles remplissent déjà le bord, la difficulté vient
     // des obstacles mobiles)
     if (R.trav && wi >= 4 && has('anneaux2')) R.rings = Math.max(R.rings, 2);

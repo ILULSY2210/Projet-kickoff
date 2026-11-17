@@ -4,12 +4,17 @@ const { load } = require('./load');
 const { DRIVER } = require('./driver');
 const G = load(); G.run(DRIVER);
 const S = G.run('__sim');
+// variante « calme » d'un niveau (report.js, joueur réactif) : le même niveau sans arrêts ni inversions — loi continue à
+// la même vitesse moyenne, sans demi-tours ni inversion à l'impact ; anneaux, zones, sentinelles, obstacles, accélération
+// et rampe inchangés. Elle dit quelle part de l'écart du joueur réactif vient des arrêts et des inversions eux-mêmes.
+G.run(`var __calm = false, __mkCalm = makeLevel; makeLevel = function (n) { var l = __mkCalm(n); if (__calm) { l.pattern = 0; l.irr = null; l.speed = l.omega; l.demi = null; l.rhythm = null; l.inv = false; l.vmax = Math.round(l.omega * (l.accel ? l.accel.cap : 1) * (l.ramp ? 1 + l.ramp.k : 1) * 1e6) / 1e6; l.flags = levelFlags(l); } return l; };`);
 const BASE = JSON.stringify(G.get('DIFFICULTY').tune);
 let tuned = '';
 process.on('message', job => {
   // réglages par niveau à essayer (tune.js), ajoutés à ceux de config.js sans les remplacer
   const tk = JSON.stringify(job.tune || {});
   if (tk !== tuned) { G.run(`DIFFICULTY.tune = Object.assign(${BASE}, ${tk});`); tuned = tk; }
+  G.run(`__calm = ${!!job.calm}`);
   const out = { id: job.id, n: job.n, wins: 0, trials: job.trials, T: [], why: {}, sum: 0 };
   for (let i = 0; i < job.trials; i++) {
     const seed = job.seed0 + i;

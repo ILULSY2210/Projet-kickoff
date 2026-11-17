@@ -20,7 +20,9 @@
 //   boss       boss et spéciaux de chaque monde à 70 ms : moyenne dans la plage de la table 5.10 (±7 points)
 //   infini     COSMOS ∞ : moyenne à 70 ms des niveaux mesurés dans 22-30 % (±7), boss et spéciaux de même
 //   réactif    niveaux à arrêts ou inversions : joueur réactif ≤ 15 points sous la moyenne de ses voisins (remesuré avec
-//              400 essais avant d'échouer)
+//              400 essais avant d'échouer) ; au-delà, la falaise n'est « propre aux arrêts et aux inversions » (échec) que si
+//              le même joueur fait aussi plus de 15 points de mieux sur la variante calme du niveau (même niveau, loi
+//              continue à la même vitesse moyenne, sans demi-tours : tests/sim/worker.js)
 //   durées     médiane du niveau propre (45 ms) dans la plage du monde
 // Graines : tests/sim/seeds.json. Écrit <out>/report.json et sort avec le code 1 si une règle échoue.
 const path = require('path'), fs = require('fs');
@@ -135,6 +137,16 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
       for (const n of re) { const a = R[n + ':rb']; Object.assign(L[n], { pr: a.wins / a.trials, nr: a.trials, whyr: a.why, recheckedR: true }); }
     }
   }
+  // falaise « propre aux arrêts et aux inversions » : le même joueur réactif sur la variante calme du niveau (mêmes anneaux,
+  // zones, obstacles et vitesse moyenne, loi continue, sans demi-tours) ; un écart à ses voisins qui ne vient pas des
+  // arrêts et des inversions (variante calme aussi basse) n'est pas une falaise propre à eux
+  {
+    const re = reactBad().map(x => x.n);
+    if (re.length) {
+      const R = await measure(P, re.map(n => ({ key: n + ':rc', kind: 'reactive_calm45', n, trials: RECHECK ? 400 : 100, extra: { sigma: .045, calm: true } })));
+      for (const n of re) { const a = R[n + ':rc']; L[n].prCalm = a.wins / a.trials; L[n].whyCalm = a.why; }
+    }
+  }
   P.close();
   // --- règles ---
   const fails = [], notes = [];
@@ -175,7 +187,11 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
     if (br < .05) fail('respirations', `niveaux ${a1}-${a2} : ${(br * 100).toFixed(1)} points au-dessus de ${b < 5 ? p8 : p8 + '-' + p9} (≥ +5 ; cible ≈ +${D.breather * 100})`);
   }
   // joueur réactif : pas de falaise propre aux arrêts et inversions
-  for (const x of reactBad()) fail('réactif', `niveau ${x.n} : joueur réactif ${pc(L[x.n].pr)} % (${L[x.n].nr} essais), ${(x.g * 100).toFixed(1)} points sous ses voisins (≤ 15) ; échecs ${JSON.stringify(L[x.n].whyr)}`);
+  for (const x of reactBad()) {
+    const c = L[x.n].prCalm, own = c - L[x.n].pr;
+    if (own > .15) fail('réactif', `niveau ${x.n} : joueur réactif ${pc(L[x.n].pr)} % (${L[x.n].nr} essais), ${(x.g * 100).toFixed(1)} points sous ses voisins (≤ 15), ${(own * 100).toFixed(1)} sous le même niveau sans arrêts ni inversions (${pc(c)} %) ; échecs ${JSON.stringify(L[x.n].whyr)}`);
+    else notes.push(`réactif, niveau ${x.n} : ${pc(L[x.n].pr)} %, ${(x.g * 100).toFixed(1)} points sous ses voisins, mais pas à cause des arrêts et des inversions : ${pc(c)} % sans eux`);
+  }
   // COSMOS ∞ : moyenne à 70 ms dans 22-30 % (±7), boss et spéciaux de même
   const infL = levels.filter(n => n > 300);
   if (infL.length >= 20) {

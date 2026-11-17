@@ -8,5 +8,6 @@
   "mash": 7000003,
   "sustained": 8000009,
   "tune": 9000011,
-  "reactive_r45": 10000019
+  "reactive_r45": 10000019,
+  "reactive_calm45": 11000027
 }
