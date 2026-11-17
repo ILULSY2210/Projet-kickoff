@@ -1123,20 +1123,27 @@ Une relecture critique du plan a vérifié ses références au code (toutes just
 | Ambre | 92,3 / 99,2 % (≥ 90 / ≈ 96) | 80,1 → 70,3 % (80 → 65) | 68,0 % (60-70) | 16,9 s (10-18) |
 | Rubis | 93,7 / 98,5 % (≥ 85 / ≈ 93) | 68,0 → 55,4 % (68 → 52) | 56,0 % (48-58) | 17,5 s (12-22) |
 | Saphir | 86,1 / 96,3 % (≥ 82 / ≈ 90) | 57,7 → 46,0 % (58 → 42) | 46,0 % (38-48) | 18,3 s (12-24) |
-| Obsidienne | 83,7 / 93,4 % (≥ 78 / ≈ 87) | 46,1 → 31,0 % (45 → 32) | 36,5 % (28-38) | 22,2 s (14-28) |
-| Cosmos | 79,4 / 90,3 % (≥ 75 / ≈ 84) | 34,6 → 26,8 % (35 → 22) | 25,1 % (20-30) | 25,8 s (15-30) |
-| COSMOS ∞ (401-500, cycle en miroir jamais vu par le réglage) | 76,3 % au minimum (Wilson 73,6 %) | moyenne 26,7 % (22-30) | 26,3 % (20-30) | — |
+| Obsidienne | 83,7 / 93,4 % (≥ 78 / ≈ 87) | 46,0 → 31,0 % (45 → 32) | 36,5 % (28-38) | 22,2 s (14-28) |
+| Cosmos | 79,4 / 90,4 % (≥ 75 / ≈ 84) | 34,6 → 25,8 % (35 → 22) | 25,1 % (20-30) | 25,8 s (15-30) |
+| COSMOS ∞ (401-500, cycle en miroir jamais vu par le réglage) | 76,3 % au minimum (niveau 497, Wilson 73,6 %) | moyenne 26,7 % (22-30) | 26,3 % (20-30) | — |
 
 - Tenu : plancher d'équité sur 1..300 (minimum 79,4 % au niveau 275, borne de Wilson 76,8 %) et sur COSMOS ∞ ; toutes les
   cibles par monde (début, fin, moyennes à 30 ms, boss et spéciaux), moyenne de COSMOS ∞ ; aucune falaise ; respirations
-  ≥ +5 points partout (moyennes par monde +10,4, +13,6, +16,6, +20,1, +20,2, +20,9) ; apprentissages ≥ voisins + 12 ou
-  ≥ 90 % ; durées dans les plages ; salve aveugle (`mash.js` : 20,9 % sur 11-50, 0/200 au pire au-delà, salve soutenue :
-  aucun niveau fini) ; prédicteur honnête (`bot.js` : 0 mort, 0 blocage sur 1..300, 301-700 et 1001-1100) ; accord
-  Chromium / Node 2 000 / 2 000 (`agree.js`).
+  ≥ +5 points (moyennes par monde +10,4, +14,6, +16,6, +20,1, +20,2, +20,5) ; apprentissages ≥ voisins + 12 ou ≥ 90 % ;
+  durées dans les plages ; salve aveugle (`mash.js` : 20,9 % sur 11-50, 0/200 au pire au-delà, salve soutenue : aucun
+  niveau fini) ; prédicteur honnête (`bot.js` : 0 mort, 0 blocage sur 1..300, 301-700 et 1001-1100) ; accord Chromium /
+  Node 2 000 / 2 000 (`agree.js`). La dernière mesure complète signalait encore la respiration 271-272 (+4,5 : 269 venait
+  d'être rendu plus facile pour une falaise limite) ; 271 et 272 ont été repris puis remesurés avec les graines
+  officielles (39,0 et 36,0 % à 70 ms, 96,7 et 90,7 % à 30 ms) : +8,8 points sur 268-269, aucune autre règle touchée.
+- Contrôle avec des graines neuves (`report.js --seed=777777`, avant les dernières retouches) : mêmes résultats à quelques
+  points près ; restaient, de justesse, deux apprentissages (61, 71 : +11 et +10 points, 88 %) et trois falaises à
+  12,5-12,8 points (205, 269, 299), repris ensuite.
 - Pas tenu : joueur réactif sur 27 niveaux à arrêts, inversions ou vitesse très variable, où il fait plus de 15 points de
   moins que ses voisins ET que la variante calme du même niveau : 57, 65, 69, 75, 96, 100, 117, 126, 133, 143, 149, 150,
-  161, 165, 174, 187, 199, 200, 224, 232, 239, 254, 265, 276, 277, 283, 299 (écarts de 16,5 à 45 points ; détail par niveau, causes
-  d'échec et graines : `node tests/sim/report.js`, puis `tests/out/sim/report.json`). Le joueur qui vise les gagne (≥ 79 % à 30 ms) ; le joueur réactif modélisé (aucune
-  anticipation, extrapolation à vitesse constante sur 0,26 s) y perd surtout aux lois irrégulière, en ressac et à-coups à
-  vitesse élevée (pointes de 7 à 10 rad/s) et aux demi-tours au rythme combinés aux fenêtres d'anneaux. À reprendre avec
-  le porteur : adoucir ces lois (pointe de vitesse bornée) ou accepter qu'elles récompensent l'anticipation.
+  161, 165, 174, 187, 199, 200, 224, 232, 239, 254, 265, 276, 277, 283, 299 (écarts de 16,5 à 45 points ; détail par
+  niveau, causes d'échec et graines : `node tests/sim/report.js`, puis `tests/out/sim/report.json`). Sept autres niveaux
+  signalés (46, 79, 160, 191, 194, 219, 289) ne doivent pas leur écart aux arrêts et inversions (variante calme aussi
+  basse). Le joueur qui vise gagne tous ces niveaux (≥ 79 % à 30 ms) ; le joueur réactif modélisé (aucune anticipation,
+  extrapolation à vitesse constante sur 0,26 s) y perd surtout aux lois irrégulière, en ressac et à-coups à vitesse élevée
+  (pointes de 7 à 10 rad/s) et aux demi-tours au rythme combinés aux fenêtres d'anneaux. À reprendre avec le porteur :
+  adoucir ces lois (pointe de vitesse bornée) ou accepter qu'elles récompensent l'anticipation.
