@@ -2,6 +2,12 @@
 const cvs = $('c'), ctx = cvs.getContext('2d');
 const glow = document.createElement('canvas'), gctx = glow.getContext('2d');   // couche phosphore (basse résolution, persistante)
 const bg = document.createElement('canvas');                                    // fond statique pré-rendu
+// halo large (bloom) : la couche phosphore réduite deux fois (½ puis ¼) ; les réductions, réagrandies par filtrage
+// bilinéaire, s'ajoutent à une copie de la couche (comp) : halo doux sans filtre de flou, et une seule composition plein
+// écran par image comme avant (les copies se font à basse résolution)
+const bloomA = document.createElement('canvas'), bactx = bloomA.getContext('2d');
+const bloomB = document.createElement('canvas'), bbctx = bloomB.getContext('2d');
+const comp = document.createElement('canvas'), cctx = comp.getContext('2d');
 let W = 0, H = 0, DPR = 1, SX = 0, SW = 0, cx = 0, cy = 0, R = 60, PL = 60, HEAD = 6, PW = 2, RS = 150, RD = 170, LAUNCH = 0, FLYV = 2000;
 let SAT = 0, SAB = 0, bgKey = '', UMAP = [], SENT_HW = 5, RRAD = [0, 0, 0];
 const GSC = {}, MSC = { r: 0 };
@@ -72,6 +78,9 @@ function resize() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   glow.width = Math.ceil(W * GS); glow.height = Math.ceil(H * GS);
   gctx.setTransform(GS, 0, 0, GS, 0, 0);
+  comp.width = glow.width; comp.height = glow.height;
+  bloomA.width = Math.ceil(glow.width / 2); bloomA.height = Math.ceil(glow.height / 2);
+  bloomB.width = Math.ceil(glow.width / 4); bloomB.height = Math.ceil(glow.height / 4);
   SAT = $('sat').getBoundingClientRect().height; SAB = $('sab').getBoundingClientRect().height;
   layout(); bgKey = ''; hero = null;
   if (state === 'failed') measureSheet();
@@ -757,7 +766,7 @@ function draw(dt) {
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
   ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .95;
-  ctx.drawImage(glow, 0, 0, W, H);
+  ctx.drawImage(bloomed(), 0, 0, W, H);
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   if (inGame) drawGame(ctx, false); else if (state === 'menu') drawMenuScene(ctx, false);
   ctx.restore();
@@ -767,6 +776,18 @@ function draw(dt) {
     ctx.globalAlpha = wipe * .5; ctx.fillStyle = col(PAL.rgb, 1); ctx.fillRect(0, y - 1, W, 2);
     ctx.globalAlpha = wipe * .1; ctx.fillRect(0, y - 26, W, 26); ctx.globalAlpha = 1;
   }
+}
+
+function bloomed() {
+  const aw = bloomA.width, ah = bloomA.height, cw = comp.width, ch = comp.height, k = PAL.amb.glow < .07 ? .8 : 1;
+  bactx.globalCompositeOperation = 'copy'; bactx.drawImage(glow, 0, 0, aw, ah);
+  bbctx.globalCompositeOperation = 'copy'; bbctx.drawImage(bloomA, 0, 0, bloomB.width, bloomB.height);
+  cctx.globalCompositeOperation = 'copy'; cctx.globalAlpha = .92; cctx.drawImage(glow, 0, 0);
+  cctx.globalCompositeOperation = 'lighter';
+  cctx.globalAlpha = .45 * k; cctx.drawImage(bloomA, 0, 0, cw, ch);
+  cctx.globalAlpha = .55 * k; cctx.drawImage(bloomB, 0, 0, cw, ch);
+  cctx.globalAlpha = 1;
+  return comp;
 }
 
 // mode démo du menu : l'astre du monde en cours se joue tout seul
