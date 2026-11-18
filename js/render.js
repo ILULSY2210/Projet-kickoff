@@ -255,15 +255,21 @@ function drawBody(c, g, S) {
   c.lineCap = 'round'; c.lineJoin = 'round';
   // --- solide filaire : arêtes arrière atténuées, avant franches ---
   const sol = S.solid, rr = r * (.7 + .3 * eB);
-  if (!g) { c.globalAlpha = .3 * B; c.strokeStyle = C; c.lineWidth = lw * .75; strokeSolid(c, sol, x, y, rr, false); }
-  c.globalAlpha = (g ? .34 : .95) * B; c.strokeStyle = C; c.lineWidth = g ? lw * 2.4 : lw; strokeSolid(c, sol, x, y, rr, true);
+  // profondeur : quatre plans, du fond (fin, estompé) à l'avant (franc, un peu plus épais)
+  c.strokeStyle = C;
+  if (!g) {
+    c.globalAlpha = .16 * B; c.lineWidth = lw * .65; strokeSolidBand(c, sol, x, y, rr, -9, -.6);
+    c.globalAlpha = .36 * B; c.lineWidth = lw * .75; strokeSolidBand(c, sol, x, y, rr, -.6, 0);
+    c.globalAlpha = .72 * B; c.lineWidth = lw * .9; strokeSolidBand(c, sol, x, y, rr, 0, .6);
+    c.globalAlpha = B; c.lineWidth = lw * 1.15; strokeSolidBand(c, sol, x, y, rr, .6, 9);
+  } else { c.globalAlpha = .34 * B; c.lineWidth = lw * 2.4; strokeSolid(c, sol, x, y, rr, true); }
   if (S.boss) {
     c.globalAlpha = (g ? .34 : .95) * B; c.strokeStyle = g ? C : HI; strokeSolid(c, SOL.octa, x, y, rr, true);
     if (!g) { c.globalAlpha = .4 * B; strokeSolid(c, SOL.octa, x, y, rr, false); c.strokeStyle = C; c.setLineDash([2, 5]); c.globalAlpha = .7 * B; c.lineWidth = lw; c.beginPath(); c.arc(x, y, r * .93, ro, ro + TAU); c.stroke(); c.setLineDash([]); }
   }
   if (!g && sol.dots) {
     c.globalAlpha = .95 * B; c.fillStyle = HI; c.beginPath();
-    for (let i = 0; i < sol.n; i++) if (sol.pz[i] > 0) { const vx = x + sol.px[i] * rr, vy = y + sol.py[i] * rr; c.moveTo(vx + 1.6, vy); c.arc(vx, vy, 1.6, 0, TAU); }
+    for (let i = 0; i < sol.n; i++) if (sol.pz[i] > 0) { const vx = x + sol.px[i] * rr, vy = y + sol.py[i] * rr, q = 1 + sol.pz[i] * 1.1; c.moveTo(vx + q, vy); c.arc(vx, vy, q, 0, TAU); }
     c.fill();
   }
   // --- bord : seuls les arcs LIBRES sont allumés ---
