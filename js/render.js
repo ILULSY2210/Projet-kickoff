@@ -11,6 +11,21 @@ const comp = document.createElement('canvas'), cctx = comp.getContext('2d');
 let W = 0, H = 0, DPR = 1, SX = 0, SW = 0, cx = 0, cy = 0, R = 60, PL = 60, HEAD = 6, PW = 2, RS = 150, RD = 170, LAUNCH = 0, FLYV = 2000;
 let SAT = 0, SAB = 0, bgKey = '', UMAP = [], SENT_HW = 5, RRAD = [0, 0, 0];
 const GSC = {}, MSC = { r: 0 };
+// profondeur du fond : champ d'étoiles en trois plans qui tourne très lentement autour du centre de visée (parallaxe :
+// les plans proches tournent plus vite), et orbites lointaines inclinées parcourues par un satellite. Chaque monde a son
+// ciel : densité, dérive, sens (Saphir : plans à contre-sens), orbites. Rien de tout cela n'approche l'éclat du jeu.
+// n : étoiles ; w : dérive (rad/s) du plan proche ; ctr : plans alternés à contre-sens ; orbits : [rayon / RD, aplatissement, inclinaison]
+const DEEP = [
+  { n: 330, w: .012, ctr: false, orbits: [[2.05, .34, -.32], [3.1, .3, -.32]] },                  // Émeraude : calme
+  { n: 360, w: .03, ctr: false, orbits: [[1.9, .22, .12], [2.6, .22, .12], [3.5, .22, .12]] },    // Ambre : disque d'accrétion, plus vif
+  { n: 300, w: .016, ctr: false, orbits: [[2.2, .42, .62], [2.2, .42, -.62]] },                  // Rubis : orbites croisées, précises
+  { n: 340, w: .02, ctr: true, orbits: [[2.1, .3, -.5], [3, .3, .5]] },                          // Saphir : plans à contre-sens
+  { n: 200, w: .008, ctr: false, orbits: [[2.4, .26, -.2]] },                                    // Obsidienne : ciel profond, presque vide
+  { n: 500, w: .016, ctr: false, orbits: [[1.95, .3, -.4], [2.7, .5, .9], [3.5, .2, -.1]] }      // Cosmos : ciel dense
+];
+const STAR_MAX = 500, SX_A = new Float32Array(STAR_MAX), SX_R = new Float32Array(STAR_MAX), SX_Z = new Uint8Array(STAR_MAX), SX_P = new Float32Array(STAR_MAX);
+const bgF = { x: 0, y: 0 }, starCol = ['', '', ''];
+let starW = -1, starN = 0;
 let hero = null, heroTick = 0;
 // viseur d'avance : angle à l'écran où tomberait une aiguille lancée maintenant, et zone libre ou non (calculé au rendu)
 let leadA = HPI, leadOk = true;
@@ -104,6 +119,12 @@ function buildBg(fx, fy) {
   b.strokeStyle = col(rgb, .075); b.lineWidth = 1;
   for (const k of [1.55, 2.3, 3.3, 4.6]) { b.beginPath(); b.arc(fx, fy, RD * k, 0, TAU); b.stroke(); }
   b.beginPath(); b.moveTo(0, fy + .5); b.lineTo(W, fy + .5); b.moveTo(fx + .5, 0); b.lineTo(fx + .5, H); b.stroke();
+  // orbites lointaines inclinées (propres à chaque monde), en pointillés très discrets
+  const D = DEEP[Math.min(PAL.w, DEEP.length - 1)];
+  b.setLineDash([1, 5]); b.strokeStyle = col(rgb, .16);
+  for (const o of D.orbits) { b.beginPath(); b.ellipse(fx, fy, RD * o[0], RD * o[0] * o[1], o[2], 0, TAU); b.stroke(); }
+  b.setLineDash([]);
+  bgF.x = fx; bgF.y = fy;
   // cadre de l'écran de jeu : équerres aux coins
   const x0 = SX + 5.5, x1 = SX + SW - 5.5, y0 = Math.max(5, SAT) + .5, y1 = H - Math.max(5, SAB) - .5, k = 12;
   b.strokeStyle = col(rgb, .42); b.beginPath();
@@ -114,6 +135,43 @@ function buildBg(fx, fy) {
   g = b.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .45, W / 2, H / 2, Math.max(W, H) * .8);
   g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.55)');
   b.fillStyle = g; b.fillRect(0, 0, W, H);
+}
+
+// ciel du monde : positions polaires tirées d'une graine (le même ciel à chaque visite), couleurs par plan
+function buildStars() {
+  const D = DEEP[Math.min(PAL.w, DEEP.length - 1)], r = rng(9157 + PAL.w * 101), wh = [255, 255, 255];
+  starW = PAL.w; starN = D.n;
+  for (let i = 0; i < starN; i++) { SX_A[i] = r() * TAU; SX_R[i] = Math.sqrt(r()); SX_Z[i] = r() < .55 ? 0 : r() < .7 ? 1 : 2; SX_P[i] = r() * TAU; }
+  for (let z = 0; z < 3; z++) starCol[z] = col(mixRGB(PAL.rgb, wh, .35 + z * .2).map(Math.round), 1);
+}
+function drawSky(c) {
+  if (starW !== PAL.w) buildStars();
+  const D = DEEP[Math.min(PAL.w, DEEP.length - 1)], fx = bgF.x, fy = bgF.y, ext = Math.hypot(Math.max(fx, W - fx), Math.max(fy, H - fy)), still = rm();
+  const tt = still ? 0 : time, inner = RD * 1.02, hudY = L && state !== 'menu' && state !== 'levels' ? LAUNCH - 8 : 0;   // HUD du bas : ciel estompé
+  for (let z = 0; z < 3; z++) {
+    const w = D.w * (.35 + z * .45) * (D.ctr && z === 1 ? -1 : 1), base = .3 + z * .2, sz = z === 2 ? 2 : z ? 1.5 : 1.1;
+    c.fillStyle = starCol[z];
+    for (let i = 0; i < starN; i++) {
+      if (SX_Z[i] !== z) continue;
+      const a = SX_A[i] + tt * w, rr = SX_R[i] * ext, x = fx + Math.cos(a) * rr, y = fy + Math.sin(a) * rr;
+      if (x < -2 || y < -2 || x > W + 2 || y > H + 2) continue;
+      // les étoiles s'effacent dans le cadran : le jeu reste plus net que le décor
+      const fade = rr < inner || (hudY && y > hudY) ? .25 : 1, tw = still ? 1 : .6 + .4 * Math.sin(tt * (1.3 + z * .7) + SX_P[i]);
+      c.globalAlpha = base * tw * fade; c.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+      if (z === 2 && (i & 7) === 0 && fade === 1) { c.globalAlpha *= .55; c.fillRect(x - 3, y - .5, 6, 1); c.fillRect(x - .5, y - 3, 1, 6); }
+    }
+  }
+  // satellites sur les orbites lointaines
+  c.fillStyle = col(PAL.rgb, 1);
+  for (let k = 0; k < D.orbits.length; k++) {
+    const o = D.orbits[k], a = (still ? 1 + k * 2.1 : time * (.05 + .02 * k) * (k & 1 ? -1 : 1)) + k * 2.1, rx = RD * o[0], ry = rx * o[1];
+    const ex = Math.cos(a) * rx, ey = Math.sin(a) * ry, co = Math.cos(o[2]), si = Math.sin(o[2]);
+    const x = fx + ex * co - ey * si, y = fy + ex * si + ey * co;
+    if (x < -4 || y < -4 || x > W + 4 || y > H + 4 || Math.hypot(x - fx, y - fy) < RD * 1.15) continue;
+    c.globalAlpha = .45; c.beginPath(); c.arc(x, y, 1.8, 0, TAU); c.fill();
+    c.globalAlpha = .12; c.beginPath(); c.arc(x, y, 5, 0, TAU); c.fill();
+  }
+  c.globalAlpha = 1;
 }
 
 /* ---------- rendu ---------- */
@@ -758,6 +816,7 @@ function draw(dt) {
   if (key !== bgKey) { bgKey = key; buildBg(cx, fy); }
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   ctx.drawImage(bg, 0, 0, W, H);
+  drawSky(ctx);
   // couche phosphore : on efface un peu (rémanence), on redessine les traits vifs en gras et en basse résolution
   gctx.globalCompositeOperation = 'destination-out'; gctx.globalAlpha = 1;
   gctx.fillStyle = `rgba(0,0,0,${rm() ? .6 : clamp(1 - Math.exp(-dt / PAL.amb.decay), .12, 1)})`; gctx.fillRect(0, 0, W, H);
