@@ -223,7 +223,7 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
   }
   // --- impression ---
   console.log('monde        30 ms min / moy (cible)      70 ms début → fin (cible)        boss+spéciaux 70   niveau propre 45 ms');
-  for (const r of worlds) console.log(`${r.name.padEnd(11)} ${pc(r.min30)} / ${pc(r.mean30)} (≥${r.floor30 * 100}/≈${r.target30 * 100})   ${pc(r.start70)} → ${pc(r.end70)} (${r.target70[0] * 100} → ${r.target70[1] * 100})   ${pc(r.bossSp70)}             ${r.dur45.toFixed(1)} s`);
+  for (const r of worlds) console.log(`${r.name.padEnd(11)} ${pc(r.min30)} / ${pc(r.mean30)} (≥${Math.round(r.floor30 * 100)}/≈${Math.round(r.target30 * 100)})   ${pc(r.start70)} → ${pc(r.end70)} (${Math.round(r.target70[0] * 100)} → ${Math.round(r.target70[1] * 100)})   ${pc(r.bossSp70)}             ${r.dur45.toFixed(1)} s`);
   const inf = levels.filter(n => n > 300);
   if (inf.length) console.log(`COSMOS ∞ (${inf[0]}-${inf[inf.length - 1]}) : 30 ms min ${pc(Math.min(...inf.map(n => L[n].p30)))} %, 70 ms moyenne ${pc(mean(inf.map(n => L[n].p70)))} %, boss et spéciaux ${pc(mean(inf.filter(n => !normal(n)).map(n => L[n].p70)))} %, niveau propre médian ${median(inf.map(n => L[n].dur45).filter(x => x)).toFixed(1)} s`);
   for (let w = 0; w < 6; w++) { const bw = breaths.filter(x => x.w === w); if (bw.length) console.log(`respirations ${NAMES[w].padEnd(11)} : moyenne +${(mean(bw.map(x => x.br)) * 100).toFixed(1)} points, minimum ${(Math.min(...bw.map(x => x.br)) * 100).toFixed(1)}`); }
