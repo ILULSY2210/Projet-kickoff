@@ -43,7 +43,7 @@ const G = load(), D = G.get('DIFFICULTY'), mk = G.makeLevel;
 const FLOOR30 = [.95, .90, .85, .82, .78, .75], MEAN30 = [.99, .96, .93, .90, .87, .84];
 const DUR = [[6, 15], [10, 18], [12, 22], [12, 24], [14, 28], [15, 30]];
 const BOSS70 = [[.75, .85], [.60, .70], [.48, .58], [.38, .48], [.28, .38], [.20, .30]], INF70 = [.22, .30], INFDUR = 30;
-const BOSS_DUR_STAGE4 = [60, 100, 110, 120, 150, 170, 220, 260, 310, 340, 390];
+const BOSS_DUR_STAGE4 = [60, 100, 110, 120, 170, 260, 310, 340, 390];
 const NAMES = G.get('WORLDS').map(w => w.name);
 const pc = x => (x * 100).toFixed(1).padStart(5);
 const seedOf = (kind, n) => SEEDS[kind] + n * 10007 + SEED;
