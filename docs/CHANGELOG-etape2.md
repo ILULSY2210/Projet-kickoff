@@ -24,8 +24,9 @@ Ce qui change pour le joueur à l'étape 2 « Structure 6 × 50 et difficulté p
    sans anticiper (il lit les chevrons, les zones et les losanges des anneaux) ne décroche plus sur les niveaux à
    arrêts ou inversions : sur les 27 niveaux où il décrochait, il gagne de 34 à 81 % de ses parties (265 et 299 :
    49 et 37 %, contre 0 % ; l'apprentissage 161 : 75 %, contre 21 %). Chaque niveau propre tient dans la durée prévue
-   pour son monde (au plus 15 s en Émeraude, 30 s en Cosmos), sauf onze boss longs repris à l'étape 4 (60, 100, 110,
-   120, 150, 170, 220, 260 et, dans COSMOS ∞, 410, 440, 490).
+   pour son monde (au plus 15 s en Émeraude, 30 s en Cosmos), sauf neuf boss longs repris à l'étape 4 (60, 100, 110,
+   120, 170, 260 et, dans COSMOS ∞, 410, 440, 490). Aucune rotation ne dépasse 7 rad/s ni 2,2 fois sa vitesse moyenne,
+   accélération et rampe comprises (le niveau 245 montait à 9,5 rad/s).
 7. Taper à l'aveugle ne fait plus passer de niveau après le premier monde.
 8. La progression de l'ancienne version est gardée (niveau atteint, son), sans étoiles offertes sur les nouveaux
    niveaux ; CONTINUER propose d'abord les niveaux d'apprentissage pas encore joués.
