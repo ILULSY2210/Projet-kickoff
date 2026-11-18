@@ -19,10 +19,10 @@
 //              « ≈ +10 » : le réglage vise +11, le rapport échoue sous +5 et imprime la moyenne par monde (annexe D)
 //   boss       boss et spéciaux de chaque monde à 70 ms : moyenne dans la plage de la table 5.10 (±7 points)
 //   infini     COSMOS ∞ : moyenne à 70 ms des niveaux mesurés dans 22-30 % (±7), boss et spéciaux de même
-//   réactif    niveaux à arrêts ou inversions : joueur réactif ≤ 15 points sous la moyenne de ses voisins (remesuré avec
-//              400 essais avant d'échouer) ; au-delà, la falaise n'est « propre aux arrêts et aux inversions » (échec) que si
+//   réactif    niveaux à arrêts ou inversions : joueur réactif ≤ 15 points sous la moyenne de ses voisins (au-delà de
+//              12 points, le niveau ET ses voisins sont remesurés avec 1 000 essais avant d'échouer) ; au-delà, la falaise n'est « propre aux arrêts et aux inversions » (échec) que si
 //              le même joueur fait aussi plus de 15 points de mieux sur la variante calme du niveau (même niveau, loi
-//              continue à la même vitesse moyenne, sans demi-tours : tests/sim/worker.js)
+//              continue à la même vitesse moyenne, sans demi-tours : tests/sim/worker.js, 1 000 essais)
 //   apprentissage  niveau d'apprentissage ≥ ses voisins + 12 points à 70 ms (ou ≥ 90 %)
 //   durées     médiane du niveau propre (45 ms) dans la plage du monde ; chaque niveau propre au plus au maximum de son monde
 //              (1,5 × pour un boss ; COSMOS ∞ : 30 s, durées mesurées aussi sur les niveaux de COSMOS ∞ du rapport) ; boss
@@ -107,11 +107,12 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
   // eux-mêmes soumis à la règle
   const normal = n => !L[n].boss && !L[n].special;
   const ref = n => normal(n) && !L[n].teach;
-  const neighbors = (n, key) => {
+  const neighborIds = n => {
     const w = Math.floor((n - 1) / 50), out = [];
-    for (const dir of [-1, 1]) { let m = n, k = 0; while (k < 2) { m += dir; if (m < 1 || m > 300 || Math.floor((m - 1) / 50) !== w || !L[m]) break; if (ref(m)) { out.push(L[m][key]); k++; } } }
+    for (const dir of [-1, 1]) { let m = n, k = 0; while (k < 2) { m += dir; if (m < 1 || m > 300 || Math.floor((m - 1) / 50) !== w || !L[m]) break; if (ref(m)) { out.push(m); k++; } } }
     return out;
   };
+  const neighbors = (n, key) => neighborIds(n).map(m => L[m][key]);
   const cliffCheck = () => {
     const bad = [];
     for (const n of levels) if (n <= 300) {
@@ -129,13 +130,18 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
       for (const n of re) { const a = R[n + ':70b']; Object.assign(L[n], { p70: a.wins / a.trials, n70: a.trials, w70: a.wins, why70: a.why, rechecked70: true }); }
     }
   }
-  // joueur réactif : niveaux à arrêts ou inversions signalés, remesurés avec 400 essais (graines propres) avant d'échouer
-  const reactBad = () => levels.filter(n => n <= 300 && L[n].stopsOrFlips && L[n].pr !== null).map(n => { const nb = neighbors(n, 'pr'); return { n, g: nb.length >= 2 ? mean(nb) - L[n].pr : 0 }; }).filter(x => x.g > .15);
+  // joueur réactif : niveaux à arrêts ou inversions à plus de 12 points sous leurs voisins (3 points avant la limite),
+  // remesurés avec RECHECK essais (graines propres), AINSI QUE leurs quatre voisins : la règle compare le niveau à la
+  // moyenne de ses voisins, et des voisins mesurés à 200 essais (±3,5 points) la faisaient dépendre des graines tirées
+  // (recette 3, R1 : 103 et 294 sur graines neuves)
+  const reactGap = lim => levels.filter(n => n <= 300 && L[n].stopsOrFlips && L[n].pr !== null).map(n => { const nb = neighbors(n, 'pr'); return { n, g: nb.length >= 2 ? mean(nb) - L[n].pr : 0 }; }).filter(x => x.g > lim);
+  const reactBad = () => reactGap(.15);
   if (RECHECK) {
-    const re = reactBad().map(x => x.n);
+    const flagged = reactGap(.12).map(x => x.n);
+    const re = [...new Set(flagged.concat(...flagged.map(neighborIds)))].sort((a, b) => a - b);
     if (re.length) {
-      console.error(`remesure du joueur réactif sur ${re.length} niveau(x) : ${re.join(' ')}`);
-      const R = await measure(P, re.map(n => ({ key: n + ':rb', kind: 'reactive_r45', n, trials: 400, extra: { sigma: .045 } })));
+      console.error(`remesure du joueur réactif (${RECHECK} essais) sur ${flagged.length} niveau(x) signalé(s) et leurs voisins : ${re.join(' ')}`);
+      const R = await measure(P, re.map(n => ({ key: n + ':rb', kind: 'reactive_r45', n, trials: RECHECK, extra: { sigma: .045 } })));
       for (const n of re) { const a = R[n + ':rb']; Object.assign(L[n], { pr: a.wins / a.trials, nr: a.trials, whyr: a.why, recheckedR: true }); }
     }
   }
@@ -145,7 +151,7 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
   {
     const re = reactBad().map(x => x.n);
     if (re.length) {
-      const R = await measure(P, re.map(n => ({ key: n + ':rc', kind: 'reactive_calm45', n, trials: RECHECK ? 400 : 100, extra: { sigma: .045, calm: true } })));
+      const R = await measure(P, re.map(n => ({ key: n + ':rc', kind: 'reactive_calm45', n, trials: RECHECK || 100, extra: { sigma: .045, calm: true } })));
       for (const n of re) { const a = R[n + ':rc']; L[n].prCalm = a.wins / a.trials; L[n].whyCalm = a.why; }
     }
   }

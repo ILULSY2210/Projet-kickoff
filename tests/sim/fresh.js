@@ -7,7 +7,7 @@
 //                 remesure à --recheck essais (graines aim_r30 + K), qui remplace la première mesure (comme report.js)
 //   réactif       règle « réactif » de report.js (niveau à arrêts ou inversions ≤ 15 points sous la moyenne de ses voisins,
 //                 sinon variante calme : échec si elle fait plus de 15 points de mieux) ; plus de 12 points sous ses
-//                 voisins : le niveau est remesuré à --recheck essais, puis sa variante calme
+//                 voisins : le niveau et ses voisins sont remesurés à --recheck essais, puis sa variante calme
 //   respirations  x1-x2 contre x8-x9 du bloc précédent à 70 ms, ≥ +5 (cible ≈ +10) ; sous +8 : les quatre niveaux
 //                 remesurés à --recheck essais
 // --worlds : mondes entiers seulement (les voisins du joueur réactif restent dans leur monde) ; --inf=0 : sans COSMOS ∞.
@@ -72,10 +72,12 @@ async function measure(name, specs) {
   const pr = {}, nr = {}, whyr = {};
   for (const n of R300) { pr[n] = ar[n].w / ar[n].t; nr[n] = ar[n].t; whyr[n] = ar[n].why; }
   const ref = n => !info[n].boss && !info[n].special && !info[n].teach;
-  const nb = n => { const w = Math.floor((n - 1) / 50), out = []; for (const d of [-1, 1]) { let m = n, k = 0; while (k < 2) { m += d; if (m < 1 || m > 300 || Math.floor((m - 1) / 50) !== w || pr[m] === undefined) break; if (ref(m)) { out.push(pr[m]); k++; } } } return out; };
+  const nbIds = n => { const w = Math.floor((n - 1) / 50), out = []; for (const d of [-1, 1]) { let m = n, k = 0; while (k < 2) { m += d; if (m < 1 || m > 300 || Math.floor((m - 1) / 50) !== w || pr[m] === undefined) break; if (ref(m)) { out.push(m); k++; } } } return out; };
+  const nb = n => nbIds(n).map(m => pr[m]);
   const gap = n => { const x = nb(n); return x.length >= 2 ? mean(x) - pr[n] : 0; };
   const firstPr = Object.assign({}, pr);
-  const reR = R300.filter(n => info[n].sf && gap(n) > .12);
+  // niveau signalé ET ses voisins remesurés (comme report.js : la règle compare le niveau à la moyenne de ses voisins)
+  const flagR = R300.filter(n => info[n].sf && gap(n) > .12), reR = [...new Set(flagR.concat(...flagR.map(nbIds)))];
   if (reR.length) {
     const b = await measure('prr', reR.map(n => ({ n, kind: 'reactive', sk: 'reactive_r45', sigma: .045, trials: NR })));
     for (const n of reR) { pr[n] = b[n].w / b[n].t; nr[n] = b[n].t; whyr[n] = b[n].why; }
