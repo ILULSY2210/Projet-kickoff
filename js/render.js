@@ -174,6 +174,44 @@ function drawSky(c) {
   c.globalAlpha = 1;
 }
 
+/* ---------- lueurs pré-rendues ---------- */
+// une tache de lumière (dégradé radial : cœur blanc, couleur, transparent) par couleur, créée une fois et réutilisée ;
+// dessinée en mode additif sur le canvas net seulement (jamais dans la couche phosphore : pas de traînée)
+const SPR = new Map();
+function glowSprite(rgb) {
+  const k = rgb[0] << 16 | rgb[1] << 8 | rgb[2]; let s = SPR.get(k);
+  if (!s) {
+    s = document.createElement('canvas'); s.width = s.height = 64;
+    const g = s.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.16, col(rgb, .9)); gr.addColorStop(.42, col(rgb, .3)); gr.addColorStop(1, col(rgb, 0));
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64); SPR.set(k, s);
+  }
+  return s;
+}
+function blob(c, rgb, x, y, r, a) {
+  if (!(a > 0) || !(r > 0)) return;
+  c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a);
+  c.drawImage(glowSprite(rgb), x - r, y - r, 2 * r, 2 * r);
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+}
+// liseré d'alerte sur les bords de l'écran (échec), une texture basse résolution étirée
+const VIG = { c: null, k: -1 };
+function vignette(rgb) {
+  const k = rgb[0] << 16 | rgb[1] << 8 | rgb[2];
+  if (VIG.k !== k) {
+    const v = VIG.c || (VIG.c = document.createElement('canvas')); v.width = 48; v.height = 96;
+    const g = v.getContext('2d'), gr = g.createRadialGradient(24, 48, 18, 24, 48, 62);
+    gr.addColorStop(0, col(rgb, 0)); gr.addColorStop(.6, col(rgb, .25)); gr.addColorStop(1, col(rgb, .9));
+    g.clearRect(0, 0, 48, 96); g.fillStyle = gr; g.fillRect(0, 0, 48, 96); VIG.k = k;
+  }
+  return VIG.c;
+}
+// éclairs d'impact : segment du bord qui flashe au point d'impact (angle dans le repère de l'astre)
+const HITS = [{ a: 0, life: 0 }, { a: 0, life: 0 }, { a: 0, life: 0 }, { a: 0, life: 0 }];
+let hitI = 0;
+const HIT_T = .2;
+function addHit(a) { const h = HITS[hitI]; hitI = (hitI + 1) % HITS.length; h.a = a; h.life = HIT_T; }
+
 /* ---------- rendu ---------- */
 function syncScene() {
   const S = GSC;
@@ -545,11 +583,28 @@ function drawGame(c, g) {
       c.lineWidth = 1.3; c.strokeStyle = col(hi, 1); c.fillStyle = col(hi, 1); c.globalAlpha = leadOk ? 1 : .55;
       if (leadOk) c.fill(); c.stroke(); c.globalAlpha = 1;
     }
-    // marque de frôlement : l'intervalle serré
+    // éclairs d'impact : le segment du bord touché flashe, une lueur blanche au point de contact
+    if (!g) for (const h of HITS) {
+      if (h.life <= 0) continue;
+      const k = h.life / HIT_T, wa = h.a + S.rot, sp = .16 + .22 * (1 - k);
+      c.globalAlpha = k; c.strokeStyle = col(PAL.hi, 1); c.lineWidth = lw * (1 + 1.8 * k); c.lineCap = 'round';
+      c.beginPath(); c.arc(S.x, S.y, R, wa - sp, wa + sp); c.stroke(); c.globalAlpha = 1;
+      if (!rm()) blob(c, PAL.hi, S.x + Math.cos(wa) * R, S.y + Math.sin(wa) * R, HEAD * (2.2 + 1.6 * (1 - k)), .85 * k);
+    }
+    // marque de frôlement : l'intervalle serré, et un arc électrique entre les deux têtes au moment du frôlement
     if (nearMark && !g) {
       const a1 = nearMark.a1 + S.rot, a2 = nearMark.a2 + S.rot; let dlt = ((a2 - a1) % TAU + TAU * 1.5) % TAU - Math.PI;
       c.globalAlpha = clamp(nearMark.life * 2, 0, 1); c.strokeStyle = col(PAL.acc, 1); c.lineWidth = 1.4;
       c.beginPath(); c.arc(S.x, S.y, R + PL + HEAD + 5, Math.min(a1, a1 + dlt), Math.max(a1, a1 + dlt)); c.stroke(); c.globalAlpha = 1;
+      const zk = (nearMark.life - .55) / .35;
+      if (zk > 0) {
+        const rh = R + PL, x1 = S.x + Math.cos(a1) * rh, y1 = S.y + Math.sin(a1) * rh, x2 = S.x + Math.cos(a2) * rh, y2 = S.y + Math.sin(a2) * rh;
+        const dx = x2 - x1, dy = y2 - y1, dl = Math.hypot(dx, dy) || 1, nx = -dy / dl, ny = dx / dl, seed = rm() ? 1 : Math.floor(time * 40);
+        c.globalAlpha = zk; c.strokeStyle = col(PAL.acc, 1); c.lineWidth = 1.5; c.lineJoin = 'miter'; c.beginPath(); c.moveTo(x1, y1);
+        for (let i = 1; i < 5; i++) { const j = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453, o = (j - Math.floor(j) - .5) * HEAD * 1.4; c.lineTo(x1 + dx * i / 5 + nx * o, y1 + dy * i / 5 + ny * o); }
+        c.lineTo(x2, y2); c.stroke(); c.lineJoin = 'round'; c.globalAlpha = 1;
+        if (!rm()) { blob(c, PAL.acc, x1, y1, HEAD * 2.4, .6 * zk); blob(c, PAL.acc, x2, y2, HEAD * 2.4, .6 * zk); }
+      }
     }
   }
   // anneaux : aucun derrière la feuille de victoire ; sur la feuille d'échec, seul l'anneau fautif, coupé au-dessus du filet
@@ -585,13 +640,31 @@ function drawGame(c, g) {
         if (!who.wall) { c.moveTo(S.x + Math.cos(wa) * R, S.y + Math.sin(wa) * R); c.lineTo(S.x + Math.cos(wa) * (R + PL - HEAD - 3), S.y + Math.sin(wa) * (R + PL - HEAD - 3)); }
         c.stroke();
       }
+      // pendant la chute (avant la feuille) : flash au point de contact et croix dédoublée (aberration chromatique) qui se
+      // resserre ; la croix nette reste toujours dessinée par-dessus
+      if (!g && state === 'dying' && !rm()) {
+        const k = clamp(1 - dieT / FAIL_SHEET, 0, 1), o = 3.5 * k;
+        blob(c, PAL.alert, fx, fy, HEAD * (3 + 4 * (1 - k)), clamp(1 - dieT / .12, 0, 1) * .95);
+        c.globalAlpha = .55 * k; c.lineWidth = 2; c.strokeStyle = col(PAL.rgb, 1);
+        c.beginPath(); c.moveTo(fx - q - o, fy - q); c.lineTo(fx + q - o, fy + q); c.moveTo(fx + q - o, fy - q); c.lineTo(fx - q - o, fy + q); c.stroke();
+        c.strokeStyle = col(PAL.hi, 1);
+        c.beginPath(); c.moveTo(fx - q + o, fy - q); c.lineTo(fx + q + o, fy + q); c.moveTo(fx + q + o, fy - q); c.lineTo(fx - q + o, fy + q); c.stroke();
+        c.strokeStyle = A;
+      }
       c.globalAlpha = g ? .6 : 1; c.lineWidth = g ? 6 : 2.4;
       c.beginPath(); c.moveTo(fx - q, fy - q); c.lineTo(fx + q, fy + q); c.moveTo(fx + q, fy - q); c.lineTo(fx - q, fy + q); c.stroke();
       c.globalAlpha = 1;
     }
   }
+  // victoire : éclair blanc au cœur de l'astre quand il éclate
+  if (!g && state === 'winning' && exploded && !rm()) { const k = clamp((winT - .26) / .4, 0, 1); blob(c, hi, cx, cy, R * (1.3 + 2.2 * easeOut(k)), (1 - k) * .7); }
   const counting = state === 'play' && playPhase === 'compte';
-  if (state === 'play' && left > 0 && (!flying || flyU(flying) > U.len)) { const y = LAUNCH + (1 - easeOut(readyK)) * 26; drawPin(c, g, cx, y, y + PL + HEAD, hi, easeOut(readyK) * (counting ? .45 : 1)); }
+  if (state === 'play' && left > 0 && (!flying || flyU(flying) > U.len)) {
+    const y = LAUNCH + (1 - easeOut(readyK)) * 26, rk = easeOut(readyK) * (counting ? .45 : 1);
+    // aiguille prête : lueur qui respire sous la tête
+    if (!g) blob(c, hi, cx, y + PL, HEAD * 3, rk * (rm() ? .3 : .26 + .1 * Math.sin(time * 3.2)));
+    drawPin(c, g, cx, y, y + PL + HEAD, hi, rk);
+  }
   // compte à rebours de REPRENDRE : 3-2-1 sur le pas de tir, anneau qui se vide, tir verrouillé
   if (counting) {
     const k = countT / COUNTDOWN, d = String(Math.max(1, Math.ceil(countT / (COUNTDOWN / 3)))), rr = 15, yc = LAUNCH - rr - 12, h = 14;
@@ -835,6 +908,8 @@ function draw(dt) {
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   if (inGame) drawGame(ctx, false); else if (state === 'menu') drawMenuScene(ctx, false);
   ctx.restore();
+  // échec : liseré d'alerte sur les bords de l'écran, qui s'éteint avant la feuille
+  if (state === 'dying' && !rm()) { ctx.globalAlpha = .85 * clamp(1 - dieT / FAIL_SHEET, 0, 1); ctx.drawImage(vignette(PAL.alert), 0, 0, W, H); ctx.globalAlpha = 1; }
   // balayage de retrace entre deux écrans
   if (wipe > 0) {
     const y = (1 - wipe) * H;
@@ -887,5 +962,7 @@ function bindRender() {
     if (!retry && !rm()) wipe = 1;
   });
   bus.on('explode', () => { syncScene(); explodeScene(GSC, 300); });
-  bus.on('step', h => { if (state === 'menu') updDemo(h); });
+  bus.on('hit', s => { addHit(s.a); if (s.tw) addHit(s.tw.a); });
+  bus.on('level:start', () => { for (const h of HITS) h.life = 0; });
+  bus.on('step', h => { if (state === 'menu') updDemo(h); for (const x of HITS) if (x.life > 0) x.life -= h; });
 }

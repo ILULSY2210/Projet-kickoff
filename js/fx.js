@@ -30,6 +30,11 @@ function explodeScene(S, power) {
     spark(S.x + Math.cos(wa) * (S.r + S.pl), S.y + Math.sin(wa) * (S.r + S.pl), 2, S.hi, power * 1.6, .5, wa);
   }
   ringFx(S.x, S.y, S.r, power * 1.5, .6, S.hi, 2); ringFx(S.x, S.y, S.r * .5, power * 2.4, .5, S.rgb, 1.2);
+  // rais de lumière : traits longs et rapides, en étoile autour du cœur
+  for (let i = 0; i < 20; i++) {
+    const a = i * TAU / 20 + Math.random() * .12, v = power * (2.6 + Math.random() * 1.6), d = S.r * .35;
+    seg(S.x + Math.cos(a) * d, S.y + Math.sin(a) * d, a, S.r * (.35 + Math.random() * .35), Math.cos(a) * v, Math.sin(a) * v, 0, .32 + Math.random() * .18, i & 1 ? S.hi : S.acc);
+  }
   spark(S.x, S.y, 26, S.acc, power * 1.7);
 }
 
@@ -39,10 +44,16 @@ function bindFx() {
   bus.on('hit', () => {
     vib(10);
     spark(cx, cy + R, 7, PAL.hi, 210, 2.2, HPI);
+    ringFx(cx, cy + R, 2, 110, .22, PAL.hi, 1.3);   // petit anneau lumineux au point d'impact
     if (L.trav) spark(cx, cy - R, 5, PAL.hi, 180, 2, -HPI);
   });
   bus.on('near', deg => {
     texts = texts.filter(x => !x.near);
+    // étincelles d'accent entre les deux têtes qui se frôlent, projetées vers l'extérieur
+    if (nearMark) {
+      const m = nearMark.a1 + angSigned(nearMark.a1, nearMark.a2) / 2 + rot, rh = R + PL;
+      spark(cx + Math.cos(m) * rh, cy + Math.sin(m) * rh, 9, PAL.acc, 190, 1.4, m);
+    }
     texts.push({ near: 1, x: cx + HEAD * 3.2, y: cy + R + PL + HEAD * 1.75, txt: 'FRÔLÉ · ' + deg + '°', life: 1.1, rgb: PAL.acc, h: 10, al: 0 });
     vib([8, 30, 8]);
   });
