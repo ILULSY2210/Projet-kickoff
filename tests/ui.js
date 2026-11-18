@@ -21,8 +21,9 @@
 //             jamais avant le dernier instant simulé ; horodatage « depuis 1970 » et événement en retard bien traités.
 //   reprendre : REPRENDRE → compte à rebours de 0,6 s (rotation figée, taps ignorés, throwPin() et __botSafe() inertes,
 //               en 320×568 aucun bandeau d’intro sous l’anneau 3-2-1),
-//               puis le jeu reprend.
-//   echec   : sur 5 écrans : feuille d'échec à 0,45 s ; tap (et Espace) à 0,3 s ignoré, tap à 0,5 s → relance ;
+//               puis le jeu reprend. Durées relevées sur une horloge virtuelle (indépendantes de la charge).
+//   echec   : sur 5 écrans : feuille d'échec à 0,45 s ; tap (et Espace) à 0,3 s ignoré, tap à 0,5 s → relance (horloge
+//             virtuelle) ;
 //             tirs ignorés 250 ms après une relance par tap ; cause rappelée près du pas de tir après la relance ;
 //             point de collision (aiguille, niveau 3) et sentinelle fautive (niveau à sentinelle et anneau où le tir peut
 //             la croiser) ≥ 4 px au-dessus du filet du
@@ -85,6 +86,28 @@ const fastFail = p => p.evaluate(() => {
   return state;
 });
 const st = p => p.evaluate(() => state);
+// horloge virtuelle (comme tests/play.js) : la page ne voit le temps avancer que lorsque le test fait avancer les images.
+// Les relevés de durée (compte à rebours de 0,6 s, tap à 0,3 s de l'échec) ne dépendent plus de la charge de la machine
+// (recette 3, P2 : sur une machine chargée, les attentes en temps réel dépassaient la fenêtre mesurée)
+// (départ à 1e7 ms : l'horodatage réel des événements, loin de l'horloge virtuelle, est remplacé par elle, evTs de ui.js)
+const VCLOCK = () => {
+  let vnow = 1e7;
+  performance.now = () => vnow;
+  window.__vraf = [];
+  window.requestAnimationFrame = cb => { window.__vraf.push(cb); return window.__vraf.length; };
+  window.__frame = now => { vnow = now; const q = window.__vraf; window.__vraf = []; for (const cb of q) cb(now); };
+  window.__now = () => vnow;
+  // avance de ms millisecondes, image par image (60 Hz)
+  window.__run = ms => { const end = vnow + ms; while (vnow < end - 1e-6) __frame(Math.min(end, vnow + 1000 / 60)); };
+};
+async function vpage(c, tag) {
+  const p = await c.newPage(); hook(p, tag);
+  await p.addInitScript(VCLOCK);
+  await p.goto(URL);
+  await p.evaluate(() => { for (let i = 0; i < 3; i++) __frame(__now() + 16); });
+  await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+  return p;
+}
 const visibleButtons = p => p.evaluate(() => [...document.querySelectorAll('button')].filter(b => {
   const r = b.getBoundingClientRect(), cs = getComputedStyle(b);
   return r.width > 0 && r.height > 0 && cs.visibility !== 'hidden' && cs.display !== 'none' && b.offsetParent !== null;
@@ -599,13 +622,11 @@ async function tir(b) {
 async function reprendre(b) {
   const S = section('reprendre');
   const c = await b.newContext({ ...devices['iPhone 13'] });
-  const p = await c.newPage(); hook(p, 'reprendre');
-  await p.goto(URL);
-  await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
+  const p = await vpage(c, 'reprendre');
+  const run = ms => p.evaluate(ms => __run(ms), ms);
   for (const via of ['bouton', 'clavier']) {
-    await p.evaluate(() => { soundOn = false; startLevel(8); });
-    await p.waitForTimeout(500);
-    await p.click('#hudBtn'); await p.waitForTimeout(150);
+    await p.evaluate(() => { soundOn = false; startLevel(8); __run(500); });
+    await p.click('#hudBtn'); await run(150);
     S.eq(await st(p), 'pause', `${via} : pause`);
     // relevés pendant le compte à rebours : instant, phase, rotation, aiguilles restantes
     await p.evaluate(() => {
@@ -616,15 +637,16 @@ async function reprendre(b) {
     });
     if (via === 'bouton') { await p.evaluate(() => { window.__cd.t0 = performance.now(); }); await p.click('#resumeBtn'); }
     else { await p.evaluate(() => { document.activeElement && document.activeElement.blur && document.activeElement.blur(); window.__cd.t0 = performance.now(); }); await p.keyboard.press('Space'); }
-    await p.waitForTimeout(120);
+    await run(120);
     const mid = await p.evaluate(() => ({ s: state, ph: playPhase, left }));
     S.eq(mid.s + '/' + mid.ph, 'play/compte', `${via} : état pendant le compte à rebours`);
     if (via === 'bouton') await p.screenshot({ path: path.join(OUT, 'reprendre-compte.png') });
-    await p.touchscreen.tap(195, 120); await p.waitForTimeout(40);
-    const inert = await p.evaluate(() => { const a = window.__botSafe(); throwPin(); return { safe: a, left, fl: flights.length }; });
+    await p.touchscreen.tap(195, 120); await run(40);
+    const inert = await p.evaluate(() => { const a = window.__botSafe(); throwPin(); return { safe: a, left, fl: flights.length, ph: playPhase }; });
+    S.eq(inert.ph, 'compte', `${via} : relevé pris pendant le compte à rebours`);
     S.eq(inert.left, mid.left, `${via} : tap et throwPin() ignorés pendant le compte à rebours`);
     S.eq(inert.safe, false, `${via} : __botSafe() faux pendant le compte à rebours`);
-    await p.waitForTimeout(650);
+    await run(650);
     const r = await p.evaluate(() => { const w = window.__cd; window.__cdRestore(); return { s: state, ph: playPhase, dur: w.end - w.f0, frozen: w.rots.slice(0, -1).every(x => x === w.rots[0]), n: w.rots.length }; });
     S.eq(r.s + '/' + r.ph, 'play/jeu', `${via} : le jeu reprend après le compte à rebours`);
     S.ok(r.dur > 570 && r.dur < 660, `${via} : compte à rebours de ${Math.round(r.dur)} ms d'image en image (0,6 s)`);
@@ -709,13 +731,12 @@ async function echec(b) {
   for (const [w, h] of SCREENS) {
     const tag = w + 'x' + h;
     const c = await b.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
-    const p = await c.newPage(); hook(p, 'echec-' + tag);
-    await p.goto(URL);
-    await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
-    const r = await p.evaluate(async () => {
-      const frame = () => new Promise(res => requestAnimationFrame(() => res()));
+    // chronologie de l'échec sur l'horloge virtuelle (page à part) : les instants relevés ne dépendent pas de la charge
+    const pv = await vpage(c, 'echec-v-' + tag);
+    const r = await pv.evaluate(async () => {
+      const frame = async () => __frame(__now() + 1000 / 60);
       const until = async cond => { for (let i = 0; i < 1200 && !cond(); i++) await frame(); return cond(); };
-      const sleep = ms => new Promise(res => setTimeout(res, ms));
+      const sleep = async ms => __run(ms);
       const tapNow = () => cvs.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true }));
       const o = {};
       soundOn = false; lastTap = -1e9;
@@ -746,6 +767,10 @@ async function echec(b) {
       showMenu();
       return o;
     });
+    await pv.close();
+    const p = await c.newPage(); hook(p, 'echec-' + tag);
+    await p.goto(URL);
+    await p.waitForFunction(() => typeof state !== 'undefined' && state === 'menu');
     S.eq(r.s03, 'dying', `${tag} : tap à ${r.d03.toFixed(2)} s ignoré`);
     S.eq(r.k03, 'dying', `${tag} : Espace à 0,3 s ignoré`);
     S.ok(r.sheet >= .45 && r.sheet < .48, `${tag} : feuille d'échec à ${r.sheet.toFixed(3)} s (0,45)`);
