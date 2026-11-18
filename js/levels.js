@@ -40,15 +40,18 @@ function patSpeed(p, s, t, P, c = 1) {
 // vitesse moyenne |v| de chaque loi pour s = 1 : la vitesse d'un niveau (ω, table DIFFICULTY) est une vitesse moyenne
 // (arrondies : les fonctions sin, tanh, pow peuvent différer d'un dernier bit d'un moteur JavaScript à l'autre)
 const LAW_MEAN = (() => { const m = []; for (let p = 0; p < 6; p++) { let a = 0; for (let i = 0; i < 20000; i++) a += Math.abs(patSpeed(p, 1, i * .005)); m.push(Math.round(a / 20000 * 1e9) / 1e9); } return m; })();
-// moyenne |v| et pointe |v| d'une loi à-coups, ressac ou irrégulière d'amplitude c (s = 1), arrondies ; gardées en mémoire
-// (la loi irrégulière est quasi périodique : 200 s échantillonnées au centième, comme la moyenne d'origine)
+// moyenne |v| et pointe |v| d'une loi d'amplitude c (s = 1), arrondies ; gardées en mémoire. Moyenne : la loi
+// irrégulière est quasi périodique, 200 s échantillonnées au centième (comme la moyenne d'origine). Pointe : 300 s
+// échantillonnées toutes les 2 ms (au dixième de seconde, la pointe vraie d'une loi irrégulière était sous-estimée de 3 à
+// 6 % : recette 3, R3)
 const LAW_STAT = new Map();
 function lawStat(p, P, c) {
   const key = p + ':' + c + (p === 6 ? ':' + P.b + ':' + P.a.join() + ':' + P.f.join() + ':' + P.p.join() : '');
   let st = LAW_STAT.get(key);
   if (!st) {
     const N = 20000, h = p === 6 ? .01 : .005; let a = 0, m = 0;
-    for (let i = 0; i < N; i++) { const v = Math.abs(patSpeed(p, 1, i * h, P, c)); a += v; if (v > m) m = v; }
+    for (let i = 0; i < N; i++) a += Math.abs(patSpeed(p, 1, i * h, P, c));
+    for (let i = 0; i < 150000; i++) { const v = Math.abs(patSpeed(p, 1, i * .002, P, c)); if (v > m) m = v; }
     st = { mean: Math.round(a / N * 1e9) / 1e9, peak: Math.round(m * 1e9) / 1e9 };
     LAW_STAT.set(key, st);
   }
@@ -352,21 +355,24 @@ function genLevel(n) {
     irr.f = irr.f.map(x => Math.round(x * 1e6) / 1e6); irr.p = irr.p.map(x => Math.round(x * 1e6) / 1e6);
   }
   // --- plafond de pointe : à vitesse moyenne ω égale, les lois à-coups et irrégulière ne dépassent pas PK.ratio × ω, et
-  // les lois à-coups, ressac et irrégulière ne dépassent pas PK.total × ω ni PK.abs rad/s, accélération à l'impact et rampe
-  // comprises (au-delà, le joueur qui n'anticipe pas ne peut plus suivre : recette de l'étape 2, Q1). Leviers, dans l'ordre :
-  // amplitude c de la loi autour de sa valeur moyenne jusqu'à PK.cmin (ω inchangée), puis plafond de l'accélération ou de la
-  // rampe du niveau (jusqu'à une aiguille d'accélération, rampe de 15 %), puis amplitude plus basse encore. Le Réacteur garde
-  // son accélération (son archétype) : sa loi s'aplatit d'abord.
-  const PK = DIFFICULTY.peak, omega = R.omega * tn[0];
-  let amp = 1;
-  if (R.law === 3 || R.law === 5 || R.law === 6) {
+  // toutes les lois ne dépassent pas PK.total × ω ni PK.abs rad/s, accélération à l'impact et rampe comprises (au-delà, le
+  // joueur qui n'anticipe pas ne peut plus suivre : recettes 2 et 3 de l'étape 2, Q1 et R2). Leviers, dans l'ordre :
+  // amplitude c de la loi autour de sa valeur moyenne jusqu'à PK.cmin (ω inchangée ; lois à-coups et irrégulière), puis
+  // plafond de l'accélération ou de la rampe du niveau (jusqu'à une aiguille d'accélération, rampe de 15 %), puis amplitude
+  // plus basse encore. Le Réacteur garde son accélération (son archétype) : sa loi s'aplatit d'abord. Les lois sans
+  // amplitude réglable (continue, respirante, alternée, pas à pas, ressac) n'ont que les deux plafonds ; un niveau encore
+  // au-dessus de PK.abs, leviers au plancher (pas à pas très rapide de COSMOS ∞), est ralenti juste assez.
+  const PK = DIFFICULTY.peak;
+  let omega = R.omega * tn[0], amp = 1;
+  {
+    const squeezable = R.law === 3 || R.law === 6;
     const mult = () => (R.accel ? R.accel.cap : 1) * (R.ramp ? 1 + R.ramp.k : 1);
     const tot = Math.min(PK.total, PK.abs / omega), ratio = c => { const st = lawStat(R.law, irr, c); return st.peak / st.mean; };
-    const ok = c => ratio(c) <= PK.ratio + 1e-9 && ratio(c) * mult() <= tot + 1e-9;
-    // plus grande amplitude (par pas de 0,02) qui tient le plafond, sans descendre sous lo ; le ressac (paliers) n'en a pas
+    const ok = c => (!squeezable || ratio(c) <= PK.ratio + 1e-9) && ratio(c) * mult() <= tot + 1e-9;
+    // plus grande amplitude (par pas de 0,02) qui tient le plafond, sans descendre sous lo
     const at = k => Math.round((amp - k * .02) * 100) / 100;
     const squeeze = lo => {
-      if (R.law === 5 || ok(amp)) return;
+      if (!squeezable || ok(amp)) return;
       let a = 0, b = Math.max(0, Math.round((amp - lo) / .02));
       if (!ok(at(b))) { amp = at(b); return; }
       while (b - a > 1) { const m = (a + b) >> 1; if (ok(at(m))) b = m; else a = m; }
@@ -379,6 +385,8 @@ function genLevel(n) {
       if (R.ramp && !ok(amp)) R.ramp.k = Math.min(R.ramp.k, Math.max(.15, allow / (R.accel ? R.accel.cap : 1) - 1));
       squeeze(.1);
     }
+    const top = ratio(amp) * mult() * omega;
+    if (top > PK.abs + 1e-9) omega *= PK.abs / top;
   }
   const lawMean = R.law === 6 || amp !== 1 ? lawStat(R.law, irr, amp).mean : LAW_MEAN[R.law];
   const speed = omega / lawMean;
@@ -463,7 +471,8 @@ function genLevel(n) {
     const c = walls.length ? (walls[0].a0 + walls[0].a1) / 2 : pre[Math.floor(r() * pre.length)];
     rot0 = Math.round(norm(HPI - R0 - c) * 1e9) / 1e9;   // arrondi : identique d'un moteur JavaScript à l'autre
   }
-  let vmax = .1; for (let i = 0; i < 400; i++) vmax = Math.max(vmax, Math.abs(patSpeed(R.law, speed, i * .1, irr, amp)));
+  // vitesse de pointe de la loi (échantillonnage fin de lawStat) : seuil des chevrons d'arrêt et échelle du graphe
+  let vmax = Math.max(.1, speed * lawStat(R.law, irr, amp).peak);
   if (R.accel) { R.accel.k = Math.round(R.accel.k * 1e6) / 1e6; R.accel.cap = Math.round(R.accel.cap * 1e6) / 1e6; vmax *= R.accel.cap; }
   if (R.demi) R.demi.warn = Math.round(R.demi.warn * 1e3) / 1e3;
   if (R.ramp) { R.ramp.k = Math.round(R.ramp.k * 1e3) / 1e3; R.ramp.T = Math.round(R.ramp.T * 1e3) / 1e3; vmax *= 1 + R.ramp.k; }
