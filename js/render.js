@@ -2,8 +2,8 @@
 const cvs = $('c'), ctx = cvs.getContext('2d');
 const glow = document.createElement('canvas'), gctx = glow.getContext('2d');   // couche phosphore (basse résolution, persistante)
 const bg = document.createElement('canvas');                                    // fond statique pré-rendu
-// halo large (bloom) : la couche phosphore réduite deux fois (½ puis ¼) ; les réductions, réagrandies par filtrage
-// bilinéaire, s'ajoutent à une copie de la couche (comp) : halo doux sans filtre de flou, et une seule composition plein
+// halo large (bloom) : la couche phosphore réduite deux fois (½ puis ¼) ; la plus petite, réagrandie par filtrage
+// bilinéaire, s'ajoute à une copie de la couche (comp) : halo doux sans filtre de flou, et une seule composition plein
 // écran par image comme avant (les copies se font à basse résolution)
 const bloomA = document.createElement('canvas'), bactx = bloomA.getContext('2d');
 const bloomB = document.createElement('canvas'), bbctx = bloomB.getContext('2d');
@@ -23,7 +23,7 @@ const DEEP = [
   { n: 200, w: .008, ctr: false, orbits: [[2.4, .26, -.2]] },                                    // Obsidienne : ciel profond, presque vide
   { n: 500, w: .016, ctr: false, orbits: [[1.95, .3, -.4], [2.7, .5, .9], [3.5, .2, -.1]] }      // Cosmos : ciel dense
 ];
-const STAR_MAX = 500, SX_A = new Float32Array(STAR_MAX), SX_R = new Float32Array(STAR_MAX), SX_Z = new Uint8Array(STAR_MAX), SX_P = new Float32Array(STAR_MAX);
+const STAR_MAX = 500, SX_A = new Float32Array(STAR_MAX), SX_U = new Float32Array(STAR_MAX), SX_R = new Float32Array(STAR_MAX), SX_Z = new Uint8Array(STAR_MAX), TWK = new Float32Array(4);
 const bgF = { x: 0, y: 0 }, starCol = ['', '', ''];
 let starW = -1, starN = 0;
 let hero = null, heroTick = 0;
@@ -141,23 +141,25 @@ function buildBg(fx, fy) {
 function buildStars() {
   const D = DEEP[Math.min(PAL.w, DEEP.length - 1)], r = rng(9157 + PAL.w * 101), wh = [255, 255, 255];
   starW = PAL.w; starN = D.n;
-  for (let i = 0; i < starN; i++) { SX_A[i] = r() * TAU; SX_R[i] = Math.sqrt(r()); SX_Z[i] = r() < .55 ? 0 : r() < .7 ? 1 : 2; SX_P[i] = r() * TAU; }
+  for (let i = 0; i < starN; i++) { const a = r() * TAU; SX_A[i] = Math.cos(a); SX_U[i] = Math.sin(a); SX_R[i] = Math.sqrt(r()); SX_Z[i] = r() < .55 ? 0 : r() < .7 ? 1 : 2; }
   for (let z = 0; z < 3; z++) starCol[z] = col(mixRGB(PAL.rgb, wh, .35 + z * .2).map(Math.round), 1);
 }
 function drawSky(c) {
   if (starW !== PAL.w) buildStars();
   const D = DEEP[Math.min(PAL.w, DEEP.length - 1)], fx = bgF.x, fy = bgF.y, ext = Math.hypot(Math.max(fx, W - fx), Math.max(fy, H - fy)), still = rm();
   const tt = still ? 0 : time, inner = RD * 1.02, hudY = L && state !== 'menu' && state !== 'levels' ? LAUNCH - 8 : 0;   // HUD du bas : ciel estompé
+  // une rotation (cos, sin) par plan, quatre phases de scintillement : aucune trigonométrie par étoile
   for (let z = 0; z < 3; z++) {
-    const w = D.w * (.35 + z * .45) * (D.ctr && z === 1 ? -1 : 1), base = .3 + z * .2, sz = z === 2 ? 2 : z ? 1.5 : 1.1;
+    const w = D.w * (.35 + z * .45) * (D.ctr && z === 1 ? -1 : 1), base = .3 + z * .2, sz = z === 2 ? 2 : z ? 1.5 : 1.1, cs = Math.cos(tt * w), sn = Math.sin(tt * w);
+    for (let k = 0; k < 4; k++) TWK[k] = base * (still ? 1 : .6 + .4 * Math.sin(tt * (1.3 + z * .7) + k * 1.7));
     c.fillStyle = starCol[z];
     for (let i = 0; i < starN; i++) {
       if (SX_Z[i] !== z) continue;
-      const a = SX_A[i] + tt * w, rr = SX_R[i] * ext, x = fx + Math.cos(a) * rr, y = fy + Math.sin(a) * rr;
+      const rr = SX_R[i] * ext, x = fx + (SX_A[i] * cs - SX_U[i] * sn) * rr, y = fy + (SX_U[i] * cs + SX_A[i] * sn) * rr;
       if (x < -2 || y < -2 || x > W + 2 || y > H + 2) continue;
-      // les étoiles s'effacent dans le cadran : le jeu reste plus net que le décor
-      const fade = rr < inner || (hudY && y > hudY) ? .25 : 1, tw = still ? 1 : .6 + .4 * Math.sin(tt * (1.3 + z * .7) + SX_P[i]);
-      c.globalAlpha = base * tw * fade; c.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+      // les étoiles s'effacent dans le cadran et sous le HUD du bas : le jeu reste plus net que le décor
+      const fade = rr < inner || (hudY && y > hudY) ? .25 : 1;
+      c.globalAlpha = TWK[i & 3] * fade; c.fillRect(x - sz / 2, y - sz / 2, sz, sz);
       if (z === 2 && (i & 7) === 0 && fade === 1) { c.globalAlpha *= .55; c.fillRect(x - 3, y - .5, 6, 1); c.fillRect(x - .5, y - 3, 1, 6); }
     }
   }
@@ -964,8 +966,7 @@ function bloomed() {
   bbctx.globalCompositeOperation = 'copy'; bbctx.drawImage(bloomA, 0, 0, bloomB.width, bloomB.height);
   cctx.globalCompositeOperation = 'copy'; cctx.globalAlpha = .92; cctx.drawImage(glow, 0, 0);
   cctx.globalCompositeOperation = 'lighter';
-  cctx.globalAlpha = .45 * k; cctx.drawImage(bloomA, 0, 0, cw, ch);
-  cctx.globalAlpha = .55 * k; cctx.drawImage(bloomB, 0, 0, cw, ch);
+  cctx.globalAlpha = .85 * k; cctx.drawImage(bloomB, 0, 0, cw, ch);
   cctx.globalAlpha = 1;
   return comp;
 }
