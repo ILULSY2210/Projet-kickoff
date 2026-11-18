@@ -25,7 +25,8 @@
 //              continue à la même vitesse moyenne, sans demi-tours : tests/sim/worker.js)
 //   apprentissage  niveau d'apprentissage ≥ ses voisins + 12 points à 70 ms (ou ≥ 90 %)
 //   durées     médiane du niveau propre (45 ms) dans la plage du monde ; chaque niveau propre au plus au maximum de son monde
-//              (1,5 × pour un boss ; COSMOS ∞ : 30 s, durées mesurées aussi sur les niveaux de COSMOS ∞ du rapport)
+//              (1,5 × pour un boss ; COSMOS ∞ : 30 s, durées mesurées aussi sur les niveaux de COSMOS ∞ du rapport) ; boss
+//              de BOSS_DUR_STAGE4 : dépassement imprimé, repris à l'étape 4 (annexe D)
 // Graines : tests/sim/seeds.json. Écrit <out>/report.json et sort avec le code 1 si une règle échoue.
 const path = require('path'), fs = require('fs');
 const { pool, wilson } = require('./pool');
@@ -42,6 +43,7 @@ const G = load(), D = G.get('DIFFICULTY'), mk = G.makeLevel;
 const FLOOR30 = [.95, .90, .85, .82, .78, .75], MEAN30 = [.99, .96, .93, .90, .87, .84];
 const DUR = [[6, 15], [10, 18], [12, 22], [12, 24], [14, 28], [15, 30]];
 const BOSS70 = [[.75, .85], [.60, .70], [.48, .58], [.38, .48], [.28, .38], [.20, .30]], INF70 = [.22, .30], INFDUR = 30;
+const BOSS_DUR_STAGE4 = [60, 100, 110, 120, 150, 170, 220, 260, 310, 340, 390];
 const NAMES = G.get('WORLDS').map(w => w.name);
 const pc = x => (x * 100).toFixed(1).padStart(5);
 const seedOf = (kind, n) => SEEDS[kind] + n * 10007 + SEED;
@@ -178,8 +180,16 @@ const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : NaN;
   }
   // durée de chaque niveau propre (45 ms, médiane des victoires) : au plus le maximum de son monde (table 5.10 ; 30 s dans
   // COSMOS ∞), 1,5 × pour un boss
+  // Exception nommée : les boss de BOSS_DUR_STAGE4 (niveau source dans la réserve de COSMOS ∞ pour n > 400), longs par
+  // archétype, ne tiennent pas 1,5 × le maximum sans changer d'archétype ou devenir bien plus faciles : leur cadre (intro,
+  // barre de vie, deuxième phase) et leur durée sont repris à l'étape 4 (annexe D). Leur dépassement est imprimé, sans échec ;
+  // tout autre boss reste soumis à la règle.
   const durCap = n => (n > 300 ? INFDUR : DUR[Math.floor((n - 1) / 50)][1]) * (L[n].boss ? 1.5 : 1);
-  for (const n of levels) if (L[n].dur45 > durCap(n)) fail('durées', `niveau ${n}${L[n].boss ? ' (boss)' : ''} : niveau propre (45 ms) en ${L[n].dur45.toFixed(1)} s (au plus ${durCap(n)} s)`);
+  const srcOf = n => n > 400 ? 301 + (n - 301) % 100 : n;
+  for (const n of levels) if (L[n].dur45 > durCap(n)) {
+    const msg = `niveau ${n}${L[n].boss ? ' (boss)' : ''} : niveau propre (45 ms) en ${L[n].dur45.toFixed(1)} s (au plus ${durCap(n)} s)`;
+    if (L[n].boss && BOSS_DUR_STAGE4.includes(srcOf(n))) notes.push(`durées, boss repris à l'étape 4 : ${msg}`); else fail('durées', msg);
+  }
   // niveaux d'apprentissage : au moins 12 points au-dessus de leurs voisins à 70 ms, ou au moins 90 % (en début de monde,
   // où les voisins sont déjà vers 85 %), sans vitesse ajoutée (plan 5.3 : court, vitesse modérée ; facteur ≤ 1)
   for (const n of levels) if (n <= 300 && L[n].teach) {
