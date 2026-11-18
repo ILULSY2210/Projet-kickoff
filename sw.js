@@ -6,11 +6,11 @@
 // - message  : la page demande l'activation d'une nouvelle version seulement au menu (js/main.js, swApply).
 // - activate : supprime les caches Orbita des autres versions.
 // Toute modification d'un fichier de FILES exige d'incrémenter VERSION et les ?v= (tests/unit/sw.test.js).
-const VERSION = 'orbita-v65';
+const VERSION = 'orbita-v66';
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'icon.svg',
-  'js/config.js?v=65', 'js/util.js?v=65', 'js/vector.js?v=65', 'js/levels.js?v=65', 'js/store.js?v=65', 'js/core.js?v=65',
-  'js/audio.js?v=65', 'js/fx.js?v=65', 'js/render.js?v=65', 'js/ui.js?v=65', 'js/main.js?v=65',
+  'js/config.js?v=66', 'js/util.js?v=66', 'js/vector.js?v=66', 'js/levels.js?v=66', 'js/store.js?v=66', 'js/core.js?v=66',
+  'js/audio.js?v=66', 'js/fx.js?v=66', 'js/render.js?v=66', 'js/ui.js?v=66', 'js/main.js?v=66',
   'fonts/b612-latin-400-normal.woff2', 'fonts/b612-latin-700-normal.woff2',
   'fonts/b612-mono-latin-400-normal.woff2', 'fonts/b612-mono-latin-700-normal.woff2'
 ];

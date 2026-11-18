@@ -1,8 +1,8 @@
 {
- "version": "orbita-v65",
+ "version": "orbita-v66",
  "files": {
-  "sw.js": "bf5913ecb2fa0d8b25a6aef41cafd011ba61c28c04f1cfc47c3161504f753360",
-  "index.html": "a21e26e43ec44b86cc30c8b63ae8eecd71f6f9bad340af76afd9acc89f6611bb",
+  "sw.js": "ea4d1b956832c3704901d187fe1d33965929ad7a1994bf96e06b00d203c7ee86",
+  "index.html": "19d9270b4e1825c9c74f0d3e353249f1cc6c8b9f574c3f71cfefd4fc188b3e40",
   "manifest.webmanifest": "ea050e78e31ff932c89373bb4b49e5bcbab8468600c0df9164638641ce275de1",
   "icon.svg": "cb2c5a29fcd70e7ea2b67db3191ba45fe1ac98dc1bc3820b02ed9b86246a173f",
   "js/config.js": "a66a54bbd1ae1fa0985ae3ac58ef50f01cb03ec51dc8297a8ce295747ceff374",
@@ -13,7 +13,7 @@
   "js/core.js": "8bc3d0050724967f88b6b1a36d0c8ec80d34eccbe5f315ed961e2672c91b0530",
   "js/audio.js": "4d683cecc56f0b2b29b72d92b07b07d10bf8e2396f632c49d3d663bcb1a88d6d",
   "js/fx.js": "a20e398912e279610b57a73c8bc0a5cc0f99d9d083320c54f5dfe0757cd2b552",
-  "js/render.js": "53fe166ec0d2714f92b4106e99d088e34d6e3a4102f779b815760aa333efa7de",
+  "js/render.js": "57c5c9bc5c6be9b568579667f8cfdf593496c57f82b9b042f1dcca65751b0a43",
   "js/ui.js": "5fa22f2f227a7cc5ac56cdac0da49819f36ec0f587eefcdf17b1c77abcc8fad6",
   "js/main.js": "3681046831b5e86546177c84f35dfc711639d826943b1cb3832346f803992383",
   "fonts/b612-latin-400-normal.woff2": "a96e47feaec40f5b53b6c8e941e87ba7732d7935d47f2a554223585f36c6785d",
