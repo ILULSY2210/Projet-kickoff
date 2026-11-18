@@ -216,6 +216,7 @@ function addHit(a) { const h = HITS[hitI]; hitI = (hitI + 1) % HITS.length; h.a 
 function syncScene() {
   const S = GSC;
   const ro = RV.rot;
+  S.drot = sweep(ro, S.rot);
   S.x = cx; S.y = cy - pulse * 3; S.r = R; S.pl = PL; S.head = HEAD; S.rot = ro; S.stuck = stuck;
   if (arcsDirty) { arcs = litArcs(); arcsDirty = false; }
   if (L.zones.length) arcs = litArcsAt(RV.t);   // bord allumé = sûr maintenant, zones actives retirées
@@ -241,12 +242,15 @@ function heroRect() {
 function syncMenu() {
   const S = MSC, q = heroRect();
   S.r = q.h > 40 ? Math.max(18, Math.min(R * 1.15, (q.h + 6) / 4.75, SW * .2)) : 0;
+  S.drot = sweep(demo.rot, S.rot);
   S.x = cx; S.y = q.y; S.pl = S.r; S.head = GAP * S.r; S.rot = demo.rot; S.stuck = demo.stuck; S.arcs = demo.arcs;
   S.walls = NONE; S.zones = NONE; S.orbs = NONE; S.sents = NONE; S.st = 0; S.rs = 0; S.trav = false;
   S.rgb = PAL.rgb; S.hi = PAL.hi; S.acc = PAL.acc; S.solid = SOL[PAL.solid]; S.boss = false; S.build = demo.born === undefined ? 1 : demo.born; S.lock = 0;
   project(S.solid, demo.rot, TILT, demo.rot * .6 + .4);
 }
 const NONE = [];
+// rotation depuis l'image précédente (traînée continue des têtes dans le phosphore) ; nulle après un saut (relance)
+function sweep(ro, prev) { const d = prev === undefined ? 0 : ro - prev; return Math.abs(d) < .35 ? d : 0; }
 
 // compte-tours de l'accélération (à chaque aiguille, ou rampe avec le temps) : les graduations du cadran s'allument (depuis le haut, dans le sens horaire) à mesure
 // que l'astre accélère, jusqu'au plafond
@@ -475,6 +479,20 @@ function drawHeads(c, g, S) {
   for (const s of st) { if (!s.pre || s.wall) continue; const wa = s.a + ro, hx = x + Math.cos(wa) * (r + pl * eB), hy = y + Math.sin(wa) * (r + pl * eB), q = hring.r; c.moveTo(hx + q, hy); c.arc(hx, hy, q, 0, TAU); }
   c.stroke();
   const lockP = S.lock > 0 ? 1 + .4 * Math.sin(S.lock * Math.PI) : 1;
+  // phosphore : chaque tête balaie l'arc parcouru depuis l'image précédente (traînée continue au lieu de copies
+  // successives en escalier)
+  if (g && S.drot) {
+    const d = S.drot, p = Math.abs(d) > 1e-4;
+    if (p) {
+      c.lineCap = 'round';
+      c.globalAlpha = .22 * B; c.strokeStyle = col(S.rgb, 1); c.lineWidth = hd * 2; c.beginPath();
+      for (const s of st) { if (!s.pre || s.wall) continue; const wa = s.a + ro, rb = r + pl * eB; c.moveTo(x + Math.cos(wa - d) * rb, y + Math.sin(wa - d) * rb); c.arc(x, y, rb, wa - d, wa, d < 0); }
+      c.stroke();
+      c.globalAlpha = .34; c.strokeStyle = col(S.hi, 1); c.lineWidth = hd * 2; c.beginPath();
+      for (const s of st) { if (s.pre) continue; const wa = s.a + ro, rb = r + pl * (s.twin ? easeOut(s.k) : 1); c.moveTo(x + Math.cos(wa - d) * rb, y + Math.sin(wa - d) * rb); c.arc(x, y, rb, wa - d, wa, d < 0); }
+      c.stroke();
+    }
+  }
   c.globalAlpha = g ? .6 : 1; c.fillStyle = col(S.hi, 1); c.beginPath();
   const hr = hd * (g ? 1.2 : 1) * lockP;
   for (const s of st) {
