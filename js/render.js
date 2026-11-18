@@ -2,12 +2,10 @@
 const cvs = $('c'), ctx = cvs.getContext('2d');
 const glow = document.createElement('canvas'), gctx = glow.getContext('2d');   // couche phosphore (basse résolution, persistante)
 const bg = document.createElement('canvas');                                    // fond statique pré-rendu
-// halo large (bloom) : la couche phosphore réduite deux fois (½ puis ¼) ; la plus petite, réagrandie par filtrage
-// bilinéaire, s'ajoute à une copie de la couche (comp) : halo doux sans filtre de flou, et une seule composition plein
-// écran par image comme avant (les copies se font à basse résolution)
-const bloomA = document.createElement('canvas'), bactx = bloomA.getContext('2d');
-const bloomB = document.createElement('canvas'), bbctx = bloomB.getContext('2d');
-const comp = document.createElement('canvas'), cctx = comp.getContext('2d');
+// halo large (bloom) : la couche phosphore réduite au quart dans un petit canvas du document (#bloom, ⅛ de la taille de
+// l'écran en px CSS), que le navigateur agrandit lui-même (filtrage bilinéaire) et ajoute à l'image (mix-blend-mode
+// plus-lighter, index.html) : halo doux sans filtre de flou ni composition plein écran dans le canvas
+const bloomB = $('bloom'), bbctx = bloomB ? bloomB.getContext('2d') : null;
 let W = 0, H = 0, DPR = 1, SX = 0, SW = 0, cx = 0, cy = 0, R = 60, PL = 60, HEAD = 6, PW = 2, RS = 150, RD = 170, LAUNCH = 0, FLYV = 2000;
 let SAT = 0, SAB = 0, bgKey = '', UMAP = [], SENT_HW = 5, RRAD = [0, 0, 0];
 const GSC = {}, MSC = { r: 0 };
@@ -93,9 +91,7 @@ function resize() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   glow.width = Math.ceil(W * GS); glow.height = Math.ceil(H * GS);
   gctx.setTransform(GS, 0, 0, GS, 0, 0);
-  comp.width = glow.width; comp.height = glow.height;
-  bloomA.width = Math.ceil(glow.width / 2); bloomA.height = Math.ceil(glow.height / 2);
-  bloomB.width = Math.ceil(glow.width / 4); bloomB.height = Math.ceil(glow.height / 4);
+  if (bloomB) { bloomB.width = Math.ceil(glow.width / 4); bloomB.height = Math.ceil(glow.height / 4); bloomB.style.width = W + 'px'; bloomB.style.height = H + 'px'; }
   SAT = $('sat').getBoundingClientRect().height; SAB = $('sab').getBoundingClientRect().height;
   layout(); bgKey = ''; hero = null;
   if (state === 'failed') measureSheet();
@@ -125,6 +121,16 @@ function buildBg(fx, fy) {
   for (const o of D.orbits) { b.beginPath(); b.ellipse(fx, fy, RD * o[0], RD * o[0] * o[1], o[2], 0, TAU); b.stroke(); }
   b.setLineDash([]);
   bgF.x = fx; bgF.y = fy;
+  // plan le plus lointain du ciel : fixe, peint une fois dans le fond (les deux plans proches tournent, drawSky)
+  if (starW !== PAL.w) buildStars();
+  const ext = Math.hypot(Math.max(fx, W - fx), Math.max(fy, H - fy)), hudY = LAUNCH - 8;
+  b.fillStyle = starCol[0];
+  for (let i = 0; i < starN; i++) {
+    if (SX_Z[i] !== 0) continue;
+    const rr = SX_R[i] * ext, x = fx + SX_A[i] * rr, y = fy + SX_U[i] * rr;
+    b.globalAlpha = (.18 + .14 * (i & 3) / 3) * (rr < RD * 1.02 || y > hudY ? .25 : 1); b.fillRect(x - .55, y - .55, 1.1, 1.1);
+  }
+  b.globalAlpha = 1;
   // cadre de l'écran de jeu : équerres aux coins
   const x0 = SX + 5.5, x1 = SX + SW - 5.5, y0 = Math.max(5, SAT) + .5, y1 = H - Math.max(5, SAB) - .5, k = 12;
   b.strokeStyle = col(rgb, .42); b.beginPath();
@@ -149,7 +155,7 @@ function drawSky(c) {
   const D = DEEP[Math.min(PAL.w, DEEP.length - 1)], fx = bgF.x, fy = bgF.y, ext = Math.hypot(Math.max(fx, W - fx), Math.max(fy, H - fy)), still = rm();
   const tt = still ? 0 : time, inner = RD * 1.02, hudY = L && state !== 'menu' && state !== 'levels' ? LAUNCH - 8 : 0;   // HUD du bas : ciel estompé
   // une rotation (cos, sin) par plan, quatre phases de scintillement : aucune trigonométrie par étoile
-  for (let z = 0; z < 3; z++) {
+  for (let z = 1; z < 3; z++) {
     const w = D.w * (.35 + z * .45) * (D.ctr && z === 1 ? -1 : 1), base = .3 + z * .2, sz = z === 2 ? 2 : z ? 1.5 : 1.1, cs = Math.cos(tt * w), sn = Math.sin(tt * w);
     for (let k = 0; k < 4; k++) TWK[k] = base * (still ? 1 : .6 + .4 * Math.sin(tt * (1.3 + z * .7) + k * 1.7));
     c.fillStyle = starCol[z];
@@ -210,24 +216,22 @@ function hazeSprite(rgb) {
 }
 // Cosmos : la lueur du fond change lentement de teinte (cycle de 60 s, plan 5.2), fondu entre deux teintes voisines
 const COSMOS_HUES = [[120, 160, 255], [190, 110, 255], [255, 92, 207], [255, 150, 120], [110, 230, 210], [140, 200, 255]];
+// (teinte quantifiée en 8 pas entre deux teintes voisines : au plus 48 petites textures, une seule composition par image)
+const HAZE_Q = [0, 0, 0];
 function drawCosmosHaze(c) {
-  const n = COSMOS_HUES.length, ph = (rm() ? 0 : time / 60 * n) % n, i = Math.floor(ph), f = ph - i, r = Math.max(W, H) * .62, x = bgF.x, y = bgF.y;
-  c.globalCompositeOperation = 'lighter';
-  c.globalAlpha = .16 * (1 - f); c.drawImage(hazeSprite(COSMOS_HUES[i]), x - r, y - r, 2 * r, 2 * r);
-  c.globalAlpha = .16 * f; c.drawImage(hazeSprite(COSMOS_HUES[(i + 1) % n]), x - r, y - r, 2 * r, 2 * r);
+  const n = COSMOS_HUES.length, ph = (rm() ? 0 : time / 60 * n) % n, i = Math.floor(ph), f = Math.floor((ph - i) * 8) / 8, r = Math.max(W, H) * .62, x = bgF.x, y = bgF.y;
+  const a = COSMOS_HUES[i], b = COSMOS_HUES[(i + 1) % n];
+  for (let k = 0; k < 3; k++) HAZE_Q[k] = Math.round(a[k] + (b[k] - a[k]) * f);
+  c.globalCompositeOperation = 'lighter'; c.globalAlpha = .16;
+  c.drawImage(hazeSprite(HAZE_Q), x - r, y - r, 2 * r, 2 * r);
   c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
 }
-// liseré d'alerte sur les bords de l'écran (échec), une texture basse résolution étirée
-const VIG = { c: null, k: -1 };
-function vignette(rgb) {
-  const k = rgb[0] << 16 | rgb[1] << 8 | rgb[2];
-  if (VIG.k !== k) {
-    const v = VIG.c || (VIG.c = document.createElement('canvas')); v.width = 48; v.height = 96;
-    const g = v.getContext('2d'), gr = g.createRadialGradient(24, 48, 18, 24, 48, 62);
-    gr.addColorStop(0, col(rgb, 0)); gr.addColorStop(.6, col(rgb, .25)); gr.addColorStop(1, col(rgb, .9));
-    g.clearRect(0, 0, 48, 96); g.fillStyle = gr; g.fillRect(0, 0, 48, 96); VIG.k = k;
-  }
-  return VIG.c;
+// liseré d'alerte sur les bords de l'écran (échec) : trois cadres concentriques de plus en plus pâles vers l'intérieur
+// (seule une bande le long des bords est remplie : bon marché même sans accélération graphique)
+function drawAlertEdge(c, rgb, a) {
+  c.strokeStyle = col(rgb, 1);
+  for (let k = 0; k < 3; k++) { const w = 6 + k * 8; c.globalAlpha = a * (.5 - k * .15); c.lineWidth = w; c.strokeRect(w / 2 - 1, w / 2 - 1, W - w + 2, H - w + 2); }
+  c.globalAlpha = 1;
 }
 // éclairs d'impact : segment du bord qui flashe au point d'impact (angle dans le repère de l'astre)
 const HITS = [{ a: 0, life: 0 }, { a: 0, life: 0 }, { a: 0, life: 0 }, { a: 0, life: 0 }];
@@ -946,12 +950,13 @@ function draw(dt) {
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
   ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .95;
-  ctx.drawImage(bloomed(), 0, 0, W, H);
+  ctx.drawImage(glow, 0, 0, W, H);
+  updBloom();
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   if (inGame) drawGame(ctx, false); else if (state === 'menu') drawMenuScene(ctx, false);
   ctx.restore();
   // échec : liseré d'alerte sur les bords de l'écran, qui s'éteint avant la feuille
-  if (state === 'dying' && !rm()) { ctx.globalAlpha = .85 * clamp(1 - dieT / FAIL_SHEET, 0, 1); ctx.drawImage(vignette(PAL.alert), 0, 0, W, H); ctx.globalAlpha = 1; }
+  if (state === 'dying' && !rm()) drawAlertEdge(ctx, PAL.alert, clamp(1 - dieT / FAIL_SHEET, 0, 1));
   // balayage de retrace entre deux écrans
   if (wipe > 0) {
     const y = (1 - wipe) * H;
@@ -960,15 +965,10 @@ function draw(dt) {
   }
 }
 
-function bloomed() {
-  const aw = bloomA.width, ah = bloomA.height, cw = comp.width, ch = comp.height, k = PAL.amb.glow < .07 ? .8 : 1;
-  bactx.globalCompositeOperation = 'copy'; bactx.drawImage(glow, 0, 0, aw, ah);
-  bbctx.globalCompositeOperation = 'copy'; bbctx.drawImage(bloomA, 0, 0, bloomB.width, bloomB.height);
-  cctx.globalCompositeOperation = 'copy'; cctx.globalAlpha = .92; cctx.drawImage(glow, 0, 0);
-  cctx.globalCompositeOperation = 'lighter';
-  cctx.globalAlpha = .85 * k; cctx.drawImage(bloomB, 0, 0, cw, ch);
-  cctx.globalAlpha = 1;
-  return comp;
+function updBloom() {
+  if (!bbctx) return;
+  bbctx.globalCompositeOperation = 'copy'; bbctx.globalAlpha = PAL.amb.glow < .07 ? .65 : .8;
+  bbctx.drawImage(glow, 0, 0, bloomB.width, bloomB.height);
 }
 
 // mode démo du menu : l'astre du monde en cours se joue tout seul
