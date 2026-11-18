@@ -226,11 +226,11 @@ function drawCosmosHaze(c) {
   c.drawImage(hazeSprite(HAZE_Q), x - r, y - r, 2 * r, 2 * r);
   c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
 }
-// liseré d'alerte sur les bords de l'écran (échec) : trois cadres concentriques de plus en plus pâles vers l'intérieur
+// liseré d'alerte sur les bords de l'écran (échec) : six cadres concentriques de plus en plus pâles vers l'intérieur
 // (seule une bande le long des bords est remplie : bon marché même sans accélération graphique)
 function drawAlertEdge(c, rgb, a) {
   c.strokeStyle = col(rgb, 1);
-  for (let k = 0; k < 3; k++) { const w = 6 + k * 8; c.globalAlpha = a * (.5 - k * .15); c.lineWidth = w; c.strokeRect(w / 2 - 1, w / 2 - 1, W - w + 2, H - w + 2); }
+  for (let k = 0; k < 6; k++) { const w = 4 + k * 9; c.globalAlpha = a * .16 * (1 - k / 6); c.lineWidth = w; c.strokeRect(w / 2, w / 2, W - w, H - w); }
   c.globalAlpha = 1;
 }
 // éclairs d'impact : segment du bord qui flashe au point d'impact (angle dans le repère de l'astre)
