@@ -26,8 +26,6 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 html,body{height:100%;background:var(--ink);color:var(--c);font-family:var(--mono);overflow:hidden;overscroll-behavior:none}
 canvas{display:block;position:fixed;inset:0;touch-action:none}
-#bloom{pointer-events:none;mix-blend-mode:plus-lighter}
-@supports not (mix-blend-mode:plus-lighter){#bloom{mix-blend-mode:screen}}
 svg.vt{display:block;overflow:visible;flex:none}
 
 /* ---------- écrans ---------- */
@@ -200,7 +198,6 @@ svg.vt{display:block;overflow:visible;flex:none}
 </head>
 <body>
 <canvas id="c"></canvas>
-<canvas id="bloom" aria-hidden="true"></canvas>
 <div id="sat" style="position:fixed;top:0;height:env(safe-area-inset-top);width:0;pointer-events:none"></div>
 <div id="sab" style="position:fixed;bottom:0;height:env(safe-area-inset-bottom);width:0;pointer-events:none"></div>
 <button id="hudBtn" aria-label="Pause">

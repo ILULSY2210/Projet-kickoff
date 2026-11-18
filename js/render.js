@@ -2,10 +2,11 @@
 const cvs = $('c'), ctx = cvs.getContext('2d');
 const glow = document.createElement('canvas'), gctx = glow.getContext('2d');   // couche phosphore (basse résolution, persistante)
 const bg = document.createElement('canvas');                                    // fond statique pré-rendu
-// halo large (bloom) : la couche phosphore réduite au quart dans un petit canvas du document (#bloom, ⅛ de la taille de
-// l'écran en px CSS), que le navigateur agrandit lui-même (filtrage bilinéaire) et ajoute à l'image (mix-blend-mode
-// plus-lighter, index.html) : halo doux sans filtre de flou ni composition plein écran dans le canvas
-const bloomB = $('bloom'), bbctx = bloomB ? bloomB.getContext('2d') : null;
+// halo large (bloom) : une image sur quatre, la couche phosphore est réduite au quart (bloomB) ; à chaque image, cette
+// réduction, réagrandie par filtrage bilinéaire, est ajoutée faiblement à la couche elle-même, dont la rémanence fait le
+// reste : halo doux et large, sans filtre de flou, sans canvas ni composition plein écran de plus (une petite copie)
+const bloomB = document.createElement('canvas'), bbctx = bloomB.getContext('2d');
+let bloomN = 0;
 let W = 0, H = 0, DPR = 1, SX = 0, SW = 0, cx = 0, cy = 0, R = 60, PL = 60, HEAD = 6, PW = 2, RS = 150, RD = 170, LAUNCH = 0, FLYV = 2000;
 let SAT = 0, SAB = 0, bgKey = '', UMAP = [], SENT_HW = 5, RRAD = [0, 0, 0];
 const GSC = {}, MSC = { r: 0 };
@@ -91,7 +92,7 @@ function resize() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   glow.width = Math.ceil(W * GS); glow.height = Math.ceil(H * GS);
   gctx.setTransform(GS, 0, 0, GS, 0, 0);
-  if (bloomB) { bloomB.width = Math.ceil(glow.width / 4); bloomB.height = Math.ceil(glow.height / 4); bloomB.style.width = W + 'px'; bloomB.style.height = H + 'px'; }
+  bloomB.width = Math.ceil(glow.width / 4); bloomB.height = Math.ceil(glow.height / 4); bloomN = 0;
   SAT = $('sat').getBoundingClientRect().height; SAB = $('sab').getBoundingClientRect().height;
   layout(); bgKey = ''; hero = null;
   if (state === 'failed') measureSheet();
@@ -947,11 +948,11 @@ function draw(dt) {
   gctx.fillStyle = `rgba(0,0,0,${rm() ? .6 : clamp(1 - Math.exp(-dt / PAL.amb.decay), .12, 1)})`; gctx.fillRect(0, 0, W, H);
   gctx.globalCompositeOperation = 'source-over';
   if (inGame) drawGame(gctx, true); else if (state === 'menu') drawMenuScene(gctx, true);
+  updBloom();
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
   ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .95;
   ctx.drawImage(glow, 0, 0, W, H);
-  updBloom();
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   if (inGame) drawGame(ctx, false); else if (state === 'menu') drawMenuScene(ctx, false);
   ctx.restore();
@@ -966,9 +967,10 @@ function draw(dt) {
 }
 
 function updBloom() {
-  if (!bbctx) return;
-  bbctx.globalCompositeOperation = 'copy'; bbctx.globalAlpha = PAL.amb.glow < .07 ? .65 : .8;
-  bbctx.drawImage(glow, 0, 0, bloomB.width, bloomB.height);
+  if ((bloomN++ & 3) === 0) { bbctx.globalCompositeOperation = 'copy'; bbctx.drawImage(glow, 0, 0, bloomB.width, bloomB.height); }
+  gctx.globalCompositeOperation = 'lighter'; gctx.globalAlpha = PAL.amb.glow < .07 ? .13 : .16;
+  gctx.drawImage(bloomB, 0, 0, W, H);
+  gctx.globalCompositeOperation = 'source-over'; gctx.globalAlpha = 1;
 }
 
 // mode démo du menu : l'astre du monde en cours se joue tout seul
