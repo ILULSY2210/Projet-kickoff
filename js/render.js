@@ -194,6 +194,27 @@ function blob(c, rgb, x, y, r, a) {
   c.drawImage(glowSprite(rgb), x - r, y - r, 2 * r, 2 * r);
   c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
 }
+// brume colorée (sans cœur blanc) pour la lueur changeante de Cosmos
+const HAZE = new Map();
+function hazeSprite(rgb) {
+  const k = rgb[0] << 16 | rgb[1] << 8 | rgb[2]; let s = HAZE.get(k);
+  if (!s) {
+    s = document.createElement('canvas'); s.width = s.height = 64;
+    const g = s.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, col(rgb, 1)); gr.addColorStop(.5, col(rgb, .35)); gr.addColorStop(1, col(rgb, 0));
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64); HAZE.set(k, s);
+  }
+  return s;
+}
+// Cosmos : la lueur du fond change lentement de teinte (cycle de 60 s, plan 5.2), fondu entre deux teintes voisines
+const COSMOS_HUES = [[120, 160, 255], [190, 110, 255], [255, 92, 207], [255, 150, 120], [110, 230, 210], [140, 200, 255]];
+function drawCosmosHaze(c) {
+  const n = COSMOS_HUES.length, ph = (rm() ? 0 : time / 60 * n) % n, i = Math.floor(ph), f = ph - i, r = Math.max(W, H) * .62, x = bgF.x, y = bgF.y;
+  c.globalCompositeOperation = 'lighter';
+  c.globalAlpha = .16 * (1 - f); c.drawImage(hazeSprite(COSMOS_HUES[i]), x - r, y - r, 2 * r, 2 * r);
+  c.globalAlpha = .16 * f; c.drawImage(hazeSprite(COSMOS_HUES[(i + 1) % n]), x - r, y - r, 2 * r, 2 * r);
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+}
 // liseré d'alerte sur les bords de l'écran (échec), une texture basse résolution étirée
 const VIG = { c: null, k: -1 };
 function vignette(rgb) {
@@ -913,6 +934,7 @@ function draw(dt) {
   if (key !== bgKey) { bgKey = key; buildBg(cx, fy); }
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   ctx.drawImage(bg, 0, 0, W, H);
+  if (PAL.w >= 5) drawCosmosHaze(ctx);
   drawSky(ctx);
   // couche phosphore : on efface un peu (rémanence), on redessine les traits vifs en gras et en basse résolution
   gctx.globalCompositeOperation = 'destination-out'; gctx.globalAlpha = 1;
