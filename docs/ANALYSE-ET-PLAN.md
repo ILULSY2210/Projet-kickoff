@@ -1153,3 +1153,43 @@ Une relecture critique du plan a vérifié ses références au code (toutes just
   extrapolation à vitesse constante sur 0,26 s) y perd surtout aux lois irrégulière, en ressac et à-coups à vitesse élevée
   (pointes de 7 à 10 rad/s) et aux demi-tours au rythme combinés aux fenêtres d'anneaux. À reprendre avec le porteur :
   adoucir ces lois (pointe de vitesse bornée) ou accepter qu'elles récompensent l'anticipation.
+
+### Mesures à la fin de la recette 3 de l'étape 2 (vrai cœur dans Node, `node tests/sim/report.js`, graines officielles, 300 essais, remesures à 1 000 ; code d'`afc2ccc`)
+
+Rapport complet sur 1..300 et COSMOS ∞ 401-500 : **pass**, aucune règle en échec (4 196 s).
+
+| Monde | 30 ms : minimum / moyenne (table) | 70 ms : début → fin, moyenne (table ±7) | Boss et spéciaux à 70 ms (table ±7) | Niveau propre à 45 ms : médiane, pire niveau hors boss (plafond) | Respirations : moyenne, minimum |
+|---|---|---|---|---|---|
+| Émeraude | 98,0 / 99,8 % (≥ 95 / ≈ 99) | 95,1 → 86,1 %, 91,6 % (97 → 80) | 88,1 % (75-85) | 6,9 s, 14,8 s au 43 (15 s) | +10,0, +8,7 |
+| Ambre | 97,0 / 99,4 % (≥ 90 / ≈ 96) | 84,2 → 68,3 %, 76,1 % (80 → 65) | 72,6 % (60-70) | 14,6 s, 17,4 s au 65 (18 s) | +13,5, +10,0 |
+| Rubis | 93,7 / 98,2 % (≥ 85 / ≈ 93) | 65,8 → 54,8 %, 63,5 % (68 → 52) | 58,8 % (48-58) | 17,1 s, 21,1 s au 141 (22 s) | +17,3, +10,0 |
+| Saphir | 86,7 / 96,6 % (≥ 82 / ≈ 90) | 57,3 → 45,0 %, 53,3 % (58 → 42) | 50,1 % (38-48) | 17,6 s, 22,1 s au 157 (24 s) | +19,3, +12,5 |
+| Obsidienne | 82,6 / 93,8 % (≥ 78 / ≈ 87) | 42,4 → 36,3 %, 41,3 % (45 → 32) | 35,8 % (28-38) | 20,5 s, 25,5 s au 206 (28 s) | +21,9, +10,3 (241-242) |
+| Cosmos | 80,7 / 90,8 % (≥ 75 / ≈ 84) | 34,8 → 26,0 %, 32,4 % (35 → 22) | 25,2 % (20-30) | 24,5 s, 27,3 s au 259 (30 s) | +22,9, +11,5 |
+| COSMOS ∞ (401-500, cycle en miroir jamais vu par le réglage) | 78,9 % au minimum (423, 1 000 essais, Wilson 76,3 %) ; 421, 468, 497 : 96,3, 96,0, 94,3 % | moyenne 26,8 % (22-30) | 26,9 % (20-30) | 21,9 s ; pire niveau hors boss 28,6 s au 495 (30 s) | — |
+
+- Plancher d'équité sur 1..300 : minimum 80,7 % (294, Wilson 78,1 %). Obsidienne et Cosmos restent les mondes les plus
+  durs (fin à 70 ms 36,3 et 26,0 % ; moyennes à 70 ms 41,3 et 32,4 %).
+- Joueur réactif (Q1) : aucune falaise propre aux arrêts et aux inversions. Sur les 173 niveaux à arrêts ou inversions
+  de 1..300, le pire écart à ses voisins est 25,9 points (160), puis 19,1 (69), 18,0 (238), 17,9 (206) et 16,9 (128) :
+  tous ont une variante calme aussi basse (48,8, 73,5, 44,8, 46,5 et 70,0 % : moins de 15 points de mieux), et ne sont
+  donc pas des falaises propres aux arrêts ; ensuite 14,7 (285) et moins. Les 27 niveaux de la recette : 69 à 19,1 points
+  sous ses voisins (variante calme à 73,5 %, 9,5 points au-dessus), les 26 autres de 10 points au-dessus à 13,9 points
+  au-dessous (239 : 13,9 ; 200 : 10,5 ; tous les autres sous 8 points) ; 161
+  (apprentissage) 75,0 % (21 % avant), 187 72,0 %, 265 49,0 % et 299 36,5 % (0 % avant), avec 80,7, 45,3, 30,3 et
+  16,7 % à 70 ms pour le joueur précis.
+- Durées (Q3) : tous les niveaux hors boss tiennent le plafond de leur monde, et les boss 1,5 × ce plafond, sauf les
+  boss nommés dans `BOSS_DUR_STAGE4` et repris à l'étape 4 (dépassement imprimé par `report.js`, sans échec) : 60
+  (38,9 s pour 27), 100 (32,5 pour 27), 110 (40,5 pour 33), 120 (34,0 pour 33), 150 (33,3 pour 33), 170 (42,9 pour 36),
+  220 (42,2 pour 42), 260 (51,0 pour 45), et dans COSMOS ∞ 410, 440, 490 (55,5, 54,3, 52,7 pour 45). Les niveaux
+  signalés par la recette : 52 11,9 s, 65 17,4 s, 70 25,7 s et 90 25,1 s (boss : au plus 27 s).
+- Marges sur graines neuves (Q5, `tests/sim/fresh.js`, deux jeux à 400 essais, remesures à 1 000 ; détail dans la
+  ligne « Recette 3 (Q5) » ci-dessus) : plancher sur 1..300 au minimum 79,5 et 81,0 % ; COSMOS ∞ au minimum 79,6 et
+  79,8 % (423) ; 421, 468, 497 : 97,5 / 97,8, 96,5 / 96,5, 93,5 / 88,5 % ; sources 321, 368, 397 : 97,5 / 96,5,
+  96,5 / 96,5, 91,8 / 90,3 % ; respiration 241-242 : +11,2 / +10,1 points (+10,3 sur les graines officielles) ;
+  41-42 : +10,4 / +10,9 ; 191-192 : +17,8 / +9,9.
+- Autres contrôles sur le même code : salve aveugle (`mash.js` : 23,3 % en moyenne sur 11-50, au-delà au pire 1 départ
+  réussi sur 200 (132), salve soutenue : 0/50 niveaux finis sur 51-100, 0/200 au-delà) ; prédicteur honnête (`bot.js` :
+  3 200 parties sur 1..300 et la réserve 301-400, 0 mort, 0 blocage) ; accord Chromium / Node 2 000 / 2 000
+  (`agree.js`, écart d'angle au plus 7e-15) ; capacité et « une idée à la fois » (`tests/unit/levels.test.js`) ;
+  `tests/unit/run.js`, `tests/shoot.js` (+ `tests/sheet.py`) et `tests/ui.js` : pass (service worker `orbita-v63`).
