@@ -157,6 +157,16 @@ function strokeSolid(c, sol, x, y, r, front) {
   }
   c.stroke();
 }
+// arêtes dont la profondeur moyenne (pz[a] + pz[b]) tombe dans [z0, z1[ : rendu par plans (arrière estompé, avant franc)
+function strokeSolidBand(c, sol, x, y, r, z0, z1) {
+  const e = sol.e, px = sol.px, py = sol.py, pz = sol.pz;
+  c.beginPath();
+  for (let i = 0; i < e.length; i += 2) {
+    const a = e[i], b = e[i + 1], z = pz[a] + pz[b];
+    if (z >= z0 && z < z1) { c.moveTo(x + px[a] * r, y + py[a] * r); c.lineTo(x + px[b] * r, y + py[b] * r); }
+  }
+  c.stroke();
+}
 function solidSVG(name, size) {
   const sol = SOL[name], r = size / 2 - 1; project(sol, .35, TILT, .5); let d = '';
   for (let i = 0; i < sol.e.length; i += 2) { const a = sol.e[i], b = sol.e[i + 1]; d += `M${(size / 2 + sol.px[a] * r).toFixed(1)} ${(size / 2 + sol.py[a] * r).toFixed(1)}L${(size / 2 + sol.px[b] * r).toFixed(1)} ${(size / 2 + sol.py[b] * r).toFixed(1)}`; }

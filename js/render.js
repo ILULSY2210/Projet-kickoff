@@ -2,9 +2,29 @@
 const cvs = $('c'), ctx = cvs.getContext('2d');
 const glow = document.createElement('canvas'), gctx = glow.getContext('2d');   // couche phosphore (basse résolution, persistante)
 const bg = document.createElement('canvas');                                    // fond statique pré-rendu
+// halo large (bloom) : une image sur quatre, la couche phosphore est réduite au quart (bloomB) ; à chaque image, cette
+// réduction, réagrandie par filtrage bilinéaire, est ajoutée faiblement à la couche elle-même, dont la rémanence fait le
+// reste : halo doux et large, sans filtre de flou, sans canvas ni composition plein écran de plus (une petite copie)
+const bloomB = document.createElement('canvas'), bbctx = bloomB.getContext('2d');
+let bloomN = 0;
 let W = 0, H = 0, DPR = 1, SX = 0, SW = 0, cx = 0, cy = 0, R = 60, PL = 60, HEAD = 6, PW = 2, RS = 150, RD = 170, LAUNCH = 0, FLYV = 2000;
 let SAT = 0, SAB = 0, bgKey = '', UMAP = [], SENT_HW = 5, RRAD = [0, 0, 0];
 const GSC = {}, MSC = { r: 0 };
+// profondeur du fond : champ d'étoiles en trois plans qui tourne très lentement autour du centre de visée (parallaxe :
+// les plans proches tournent plus vite), et orbites lointaines inclinées parcourues par un satellite. Chaque monde a son
+// ciel : densité, dérive, sens (Saphir : plans à contre-sens), orbites. Rien de tout cela n'approche l'éclat du jeu.
+// n : étoiles ; w : dérive (rad/s) du plan proche ; ctr : plans alternés à contre-sens ; orbits : [rayon / RD, aplatissement, inclinaison]
+const DEEP = [
+  { n: 330, w: .012, ctr: false, orbits: [[2.05, .34, -.32], [3.1, .3, -.32]] },                  // Émeraude : calme
+  { n: 360, w: .03, ctr: false, orbits: [[1.9, .22, .12], [2.6, .22, .12], [3.5, .22, .12]] },    // Ambre : disque d'accrétion, plus vif
+  { n: 300, w: .016, ctr: false, orbits: [[2.2, .42, .62], [2.2, .42, -.62]] },                  // Rubis : orbites croisées, précises
+  { n: 340, w: .02, ctr: true, orbits: [[2.1, .3, -.5], [3, .3, .5]] },                          // Saphir : plans à contre-sens
+  { n: 200, w: .008, ctr: false, orbits: [[2.4, .26, -.2]] },                                    // Obsidienne : ciel profond, presque vide
+  { n: 500, w: .016, ctr: false, orbits: [[1.95, .3, -.4], [2.7, .5, .9], [3.5, .2, -.1]] }      // Cosmos : ciel dense
+];
+const STAR_MAX = 500, SX_A = new Float32Array(STAR_MAX), SX_U = new Float32Array(STAR_MAX), SX_R = new Float32Array(STAR_MAX), SX_Z = new Uint8Array(STAR_MAX), TWK = new Float32Array(4);
+const bgF = { x: 0, y: 0 }, starCol = ['', '', ''];
+let starW = -1, starN = 0;
 let hero = null, heroTick = 0;
 // viseur d'avance : angle à l'écran où tomberait une aiguille lancée maintenant, et zone libre ou non (calculé au rendu)
 let leadA = HPI, leadOk = true;
@@ -72,6 +92,7 @@ function resize() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   glow.width = Math.ceil(W * GS); glow.height = Math.ceil(H * GS);
   gctx.setTransform(GS, 0, 0, GS, 0, 0);
+  bloomB.width = Math.ceil(glow.width / 4); bloomB.height = Math.ceil(glow.height / 4); bloomN = 0;
   SAT = $('sat').getBoundingClientRect().height; SAB = $('sab').getBoundingClientRect().height;
   layout(); bgKey = ''; hero = null;
   if (state === 'failed') measureSheet();
@@ -95,6 +116,22 @@ function buildBg(fx, fy) {
   b.strokeStyle = col(rgb, .075); b.lineWidth = 1;
   for (const k of [1.55, 2.3, 3.3, 4.6]) { b.beginPath(); b.arc(fx, fy, RD * k, 0, TAU); b.stroke(); }
   b.beginPath(); b.moveTo(0, fy + .5); b.lineTo(W, fy + .5); b.moveTo(fx + .5, 0); b.lineTo(fx + .5, H); b.stroke();
+  // orbites lointaines inclinées (propres à chaque monde), en pointillés très discrets
+  const D = DEEP[Math.min(PAL.w, DEEP.length - 1)];
+  b.setLineDash([1, 5]); b.strokeStyle = col(rgb, .16);
+  for (const o of D.orbits) { b.beginPath(); b.ellipse(fx, fy, RD * o[0], RD * o[0] * o[1], o[2], 0, TAU); b.stroke(); }
+  b.setLineDash([]);
+  bgF.x = fx; bgF.y = fy;
+  // plan le plus lointain du ciel : fixe, peint une fois dans le fond (les deux plans proches tournent, drawSky)
+  if (starW !== PAL.w) buildStars();
+  const ext = Math.hypot(Math.max(fx, W - fx), Math.max(fy, H - fy)), hudY = LAUNCH - 8;
+  b.fillStyle = starCol[0];
+  for (let i = 0; i < starN; i++) {
+    if (SX_Z[i] !== 0) continue;
+    const rr = SX_R[i] * ext, x = fx + SX_A[i] * rr, y = fy + SX_U[i] * rr;
+    b.globalAlpha = (.18 + .14 * (i & 3) / 3) * (rr < RD * 1.02 || y > hudY ? .25 : 1); b.fillRect(x - .55, y - .55, 1.1, 1.1);
+  }
+  b.globalAlpha = 1;
   // cadre de l'écran de jeu : équerres aux coins
   const x0 = SX + 5.5, x1 = SX + SW - 5.5, y0 = Math.max(5, SAT) + .5, y1 = H - Math.max(5, SAB) - .5, k = 12;
   b.strokeStyle = col(rgb, .42); b.beginPath();
@@ -107,10 +144,107 @@ function buildBg(fx, fy) {
   b.fillStyle = g; b.fillRect(0, 0, W, H);
 }
 
+// ciel du monde : positions polaires tirées d'une graine (le même ciel à chaque visite), couleurs par plan
+function buildStars() {
+  const D = DEEP[Math.min(PAL.w, DEEP.length - 1)], r = rng(9157 + PAL.w * 101), wh = [255, 255, 255];
+  starW = PAL.w; starN = D.n;
+  for (let i = 0; i < starN; i++) { const a = r() * TAU; SX_A[i] = Math.cos(a); SX_U[i] = Math.sin(a); SX_R[i] = Math.sqrt(r()); SX_Z[i] = r() < .55 ? 0 : r() < .7 ? 1 : 2; }
+  for (let z = 0; z < 3; z++) starCol[z] = col(mixRGB(PAL.rgb, wh, .35 + z * .2).map(Math.round), 1);
+}
+function drawSky(c) {
+  if (starW !== PAL.w) buildStars();
+  const D = DEEP[Math.min(PAL.w, DEEP.length - 1)], fx = bgF.x, fy = bgF.y, ext = Math.hypot(Math.max(fx, W - fx), Math.max(fy, H - fy)), still = rm();
+  const tt = still ? 0 : time, inner = RD * 1.02, hudY = L && state !== 'menu' && state !== 'levels' ? LAUNCH - 8 : 0;   // HUD du bas : ciel estompé
+  // une rotation (cos, sin) par plan, quatre phases de scintillement : aucune trigonométrie par étoile
+  for (let z = 1; z < 3; z++) {
+    const w = D.w * (.35 + z * .45) * (D.ctr && z === 1 ? -1 : 1), base = .3 + z * .2, sz = z === 2 ? 2 : z ? 1.5 : 1.1, cs = Math.cos(tt * w), sn = Math.sin(tt * w);
+    for (let k = 0; k < 4; k++) TWK[k] = base * (still ? 1 : .6 + .4 * Math.sin(tt * (1.3 + z * .7) + k * 1.7));
+    c.fillStyle = starCol[z];
+    for (let i = 0; i < starN; i++) {
+      if (SX_Z[i] !== z) continue;
+      const rr = SX_R[i] * ext, x = fx + (SX_A[i] * cs - SX_U[i] * sn) * rr, y = fy + (SX_U[i] * cs + SX_A[i] * sn) * rr;
+      if (x < -2 || y < -2 || x > W + 2 || y > H + 2) continue;
+      // les étoiles s'effacent dans le cadran et sous le HUD du bas : le jeu reste plus net que le décor
+      const fade = rr < inner || (hudY && y > hudY) ? .25 : 1;
+      c.globalAlpha = TWK[i & 3] * fade; c.fillRect(x - sz / 2, y - sz / 2, sz, sz);
+      if (z === 2 && (i & 7) === 0 && fade === 1) { c.globalAlpha *= .55; c.fillRect(x - 3, y - .5, 6, 1); c.fillRect(x - .5, y - 3, 1, 6); }
+    }
+  }
+  // satellites sur les orbites lointaines
+  c.fillStyle = col(PAL.rgb, 1);
+  for (let k = 0; k < D.orbits.length; k++) {
+    const o = D.orbits[k], a = (still ? 1 + k * 2.1 : time * (.05 + .02 * k) * (k & 1 ? -1 : 1)) + k * 2.1, rx = RD * o[0], ry = rx * o[1];
+    const ex = Math.cos(a) * rx, ey = Math.sin(a) * ry, co = Math.cos(o[2]), si = Math.sin(o[2]);
+    const x = fx + ex * co - ey * si, y = fy + ex * si + ey * co;
+    if (x < -4 || y < -4 || x > W + 4 || y > H + 4 || Math.hypot(x - fx, y - fy) < RD * 1.15) continue;
+    c.globalAlpha = .45; c.beginPath(); c.arc(x, y, 1.8, 0, TAU); c.fill();
+    c.globalAlpha = .12; c.beginPath(); c.arc(x, y, 5, 0, TAU); c.fill();
+  }
+  c.globalAlpha = 1;
+}
+
+/* ---------- lueurs pré-rendues ---------- */
+// une tache de lumière (dégradé radial : cœur blanc, couleur, transparent) par couleur, créée une fois et réutilisée ;
+// dessinée en mode additif sur le canvas net seulement (jamais dans la couche phosphore : pas de traînée)
+const SPR = new Map();
+function glowSprite(rgb) {
+  const k = rgb[0] << 16 | rgb[1] << 8 | rgb[2]; let s = SPR.get(k);
+  if (!s) {
+    s = document.createElement('canvas'); s.width = s.height = 64;
+    const g = s.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(.16, col(rgb, .9)); gr.addColorStop(.42, col(rgb, .3)); gr.addColorStop(1, col(rgb, 0));
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64); SPR.set(k, s);
+  }
+  return s;
+}
+function blob(c, rgb, x, y, r, a) {
+  if (!(a > 0) || !(r > 0)) return;
+  c.globalCompositeOperation = 'lighter'; c.globalAlpha = Math.min(1, a);
+  c.drawImage(glowSprite(rgb), x - r, y - r, 2 * r, 2 * r);
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+}
+// brume colorée (sans cœur blanc) pour la lueur changeante de Cosmos
+const HAZE = new Map();
+function hazeSprite(rgb) {
+  const k = rgb[0] << 16 | rgb[1] << 8 | rgb[2]; let s = HAZE.get(k);
+  if (!s) {
+    s = document.createElement('canvas'); s.width = s.height = 64;
+    const g = s.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, col(rgb, 1)); gr.addColorStop(.5, col(rgb, .35)); gr.addColorStop(1, col(rgb, 0));
+    g.fillStyle = gr; g.fillRect(0, 0, 64, 64); HAZE.set(k, s);
+  }
+  return s;
+}
+// Cosmos : la lueur du fond change lentement de teinte (cycle de 60 s, plan 5.2), fondu entre deux teintes voisines
+const COSMOS_HUES = [[120, 160, 255], [190, 110, 255], [255, 92, 207], [255, 150, 120], [110, 230, 210], [140, 200, 255]];
+// (teinte quantifiée en 8 pas entre deux teintes voisines : au plus 48 petites textures, une seule composition par image)
+const HAZE_Q = [0, 0, 0];
+function drawCosmosHaze(c) {
+  const n = COSMOS_HUES.length, ph = (rm() ? 0 : time / 60 * n) % n, i = Math.floor(ph), f = Math.floor((ph - i) * 8) / 8, r = Math.max(W, H) * .62, x = bgF.x, y = bgF.y;
+  const a = COSMOS_HUES[i], b = COSMOS_HUES[(i + 1) % n];
+  for (let k = 0; k < 3; k++) HAZE_Q[k] = Math.round(a[k] + (b[k] - a[k]) * f);
+  c.globalCompositeOperation = 'lighter'; c.globalAlpha = .16;
+  c.drawImage(hazeSprite(HAZE_Q), x - r, y - r, 2 * r, 2 * r);
+  c.globalCompositeOperation = 'source-over'; c.globalAlpha = 1;
+}
+// liseré d'alerte sur les bords de l'écran (échec) : six cadres concentriques de plus en plus pâles vers l'intérieur
+// (seule une bande le long des bords est remplie : bon marché même sans accélération graphique)
+function drawAlertEdge(c, rgb, a) {
+  c.strokeStyle = col(rgb, 1);
+  for (let k = 0; k < 6; k++) { const w = 4 + k * 9; c.globalAlpha = a * .16 * (1 - k / 6); c.lineWidth = w; c.strokeRect(w / 2, w / 2, W - w, H - w); }
+  c.globalAlpha = 1;
+}
+// éclairs d'impact : segment du bord qui flashe au point d'impact (angle dans le repère de l'astre)
+const HITS = [{ a: 0, life: 0 }, { a: 0, life: 0 }, { a: 0, life: 0 }, { a: 0, life: 0 }];
+let hitI = 0;
+const HIT_T = .2;
+function addHit(a) { const h = HITS[hitI]; hitI = (hitI + 1) % HITS.length; h.a = a; h.life = HIT_T; }
+
 /* ---------- rendu ---------- */
 function syncScene() {
   const S = GSC;
   const ro = RV.rot;
+  S.drot = sweep(ro, S.rot);
   S.x = cx; S.y = cy - pulse * 3; S.r = R; S.pl = PL; S.head = HEAD; S.rot = ro; S.stuck = stuck;
   if (arcsDirty) { arcs = litArcs(); arcsDirty = false; }
   if (L.zones.length) arcs = litArcsAt(RV.t);   // bord allumé = sûr maintenant, zones actives retirées
@@ -136,12 +270,15 @@ function heroRect() {
 function syncMenu() {
   const S = MSC, q = heroRect();
   S.r = q.h > 40 ? Math.max(18, Math.min(R * 1.15, (q.h + 6) / 4.75, SW * .2)) : 0;
+  S.drot = sweep(demo.rot, S.rot);
   S.x = cx; S.y = q.y; S.pl = S.r; S.head = GAP * S.r; S.rot = demo.rot; S.stuck = demo.stuck; S.arcs = demo.arcs;
   S.walls = NONE; S.zones = NONE; S.orbs = NONE; S.sents = NONE; S.st = 0; S.rs = 0; S.trav = false;
   S.rgb = PAL.rgb; S.hi = PAL.hi; S.acc = PAL.acc; S.solid = SOL[PAL.solid]; S.boss = false; S.build = demo.born === undefined ? 1 : demo.born; S.lock = 0;
   project(S.solid, demo.rot, TILT, demo.rot * .6 + .4);
 }
 const NONE = [];
+// rotation depuis l'image précédente (traînée continue des têtes dans le phosphore) ; nulle après un saut (relance)
+function sweep(ro, prev) { const d = prev === undefined ? 0 : ro - prev; return Math.abs(d) < .35 ? d : 0; }
 
 // compte-tours de l'accélération (à chaque aiguille, ou rampe avec le temps) : les graduations du cadran s'allument (depuis le haut, dans le sens horaire) à mesure
 // que l'astre accélère, jusqu'au plafond
@@ -188,15 +325,21 @@ function drawBody(c, g, S) {
   c.lineCap = 'round'; c.lineJoin = 'round';
   // --- solide filaire : arêtes arrière atténuées, avant franches ---
   const sol = S.solid, rr = r * (.7 + .3 * eB);
-  if (!g) { c.globalAlpha = .3 * B; c.strokeStyle = C; c.lineWidth = lw * .75; strokeSolid(c, sol, x, y, rr, false); }
-  c.globalAlpha = (g ? .34 : .95) * B; c.strokeStyle = C; c.lineWidth = g ? lw * 2.4 : lw; strokeSolid(c, sol, x, y, rr, true);
+  // profondeur : quatre plans, du fond (fin, estompé) à l'avant (franc, un peu plus épais)
+  c.strokeStyle = C;
+  if (!g) {
+    c.globalAlpha = .16 * B; c.lineWidth = lw * .65; strokeSolidBand(c, sol, x, y, rr, -9, -.6);
+    c.globalAlpha = .36 * B; c.lineWidth = lw * .75; strokeSolidBand(c, sol, x, y, rr, -.6, 0);
+    c.globalAlpha = .72 * B; c.lineWidth = lw * .9; strokeSolidBand(c, sol, x, y, rr, 0, .6);
+    c.globalAlpha = B; c.lineWidth = lw * 1.15; strokeSolidBand(c, sol, x, y, rr, .6, 9);
+  } else { c.globalAlpha = .34 * B; c.lineWidth = lw * 2.4; strokeSolid(c, sol, x, y, rr, true); }
   if (S.boss) {
     c.globalAlpha = (g ? .34 : .95) * B; c.strokeStyle = g ? C : HI; strokeSolid(c, SOL.octa, x, y, rr, true);
     if (!g) { c.globalAlpha = .4 * B; strokeSolid(c, SOL.octa, x, y, rr, false); c.strokeStyle = C; c.setLineDash([2, 5]); c.globalAlpha = .7 * B; c.lineWidth = lw; c.beginPath(); c.arc(x, y, r * .93, ro, ro + TAU); c.stroke(); c.setLineDash([]); }
   }
   if (!g && sol.dots) {
     c.globalAlpha = .95 * B; c.fillStyle = HI; c.beginPath();
-    for (let i = 0; i < sol.n; i++) if (sol.pz[i] > 0) { const vx = x + sol.px[i] * rr, vy = y + sol.py[i] * rr; c.moveTo(vx + 1.6, vy); c.arc(vx, vy, 1.6, 0, TAU); }
+    for (let i = 0; i < sol.n; i++) if (sol.pz[i] > 0) { const vx = x + sol.px[i] * rr, vy = y + sol.py[i] * rr, q = 1 + sol.pz[i] * 1.1; c.moveTo(vx + q, vy); c.arc(vx, vy, q, 0, TAU); }
     c.fill();
   }
   // --- bord : seuls les arcs LIBRES sont allumés ---
@@ -364,6 +507,20 @@ function drawHeads(c, g, S) {
   for (const s of st) { if (!s.pre || s.wall) continue; const wa = s.a + ro, hx = x + Math.cos(wa) * (r + pl * eB), hy = y + Math.sin(wa) * (r + pl * eB), q = hring.r; c.moveTo(hx + q, hy); c.arc(hx, hy, q, 0, TAU); }
   c.stroke();
   const lockP = S.lock > 0 ? 1 + .4 * Math.sin(S.lock * Math.PI) : 1;
+  // phosphore : chaque tête balaie l'arc parcouru depuis l'image précédente (traînée continue au lieu de copies
+  // successives en escalier)
+  if (g && S.drot) {
+    const d = S.drot, p = Math.abs(d) > 1e-4;
+    if (p) {
+      c.lineCap = 'round';
+      c.globalAlpha = .22 * B; c.strokeStyle = col(S.rgb, 1); c.lineWidth = hd * 2; c.beginPath();
+      for (const s of st) { if (!s.pre || s.wall) continue; const wa = s.a + ro, rb = r + pl * eB; c.moveTo(x + Math.cos(wa - d) * rb, y + Math.sin(wa - d) * rb); c.arc(x, y, rb, wa - d, wa, d < 0); }
+      c.stroke();
+      c.globalAlpha = .34; c.strokeStyle = col(S.hi, 1); c.lineWidth = hd * 2; c.beginPath();
+      for (const s of st) { if (s.pre) continue; const wa = s.a + ro, rb = r + pl * (s.twin ? easeOut(s.k) : 1); c.moveTo(x + Math.cos(wa - d) * rb, y + Math.sin(wa - d) * rb); c.arc(x, y, rb, wa - d, wa, d < 0); }
+      c.stroke();
+    }
+  }
   c.globalAlpha = g ? .6 : 1; c.fillStyle = col(S.hi, 1); c.beginPath();
   const hr = hd * (g ? 1.2 : 1) * lockP;
   for (const s of st) {
@@ -472,11 +629,28 @@ function drawGame(c, g) {
       c.lineWidth = 1.3; c.strokeStyle = col(hi, 1); c.fillStyle = col(hi, 1); c.globalAlpha = leadOk ? 1 : .55;
       if (leadOk) c.fill(); c.stroke(); c.globalAlpha = 1;
     }
-    // marque de frôlement : l'intervalle serré
+    // éclairs d'impact : le segment du bord touché flashe, une lueur blanche au point de contact
+    if (!g) for (const h of HITS) {
+      if (h.life <= 0) continue;
+      const k = h.life / HIT_T, wa = h.a + S.rot, sp = .16 + .22 * (1 - k);
+      c.globalAlpha = k; c.strokeStyle = col(PAL.hi, 1); c.lineWidth = lw * (1 + 1.8 * k); c.lineCap = 'round';
+      c.beginPath(); c.arc(S.x, S.y, R, wa - sp, wa + sp); c.stroke(); c.globalAlpha = 1;
+      if (!rm()) blob(c, PAL.hi, S.x + Math.cos(wa) * R, S.y + Math.sin(wa) * R, HEAD * (2.2 + 1.6 * (1 - k)), .85 * k);
+    }
+    // marque de frôlement : l'intervalle serré, et un arc électrique entre les deux têtes au moment du frôlement
     if (nearMark && !g) {
       const a1 = nearMark.a1 + S.rot, a2 = nearMark.a2 + S.rot; let dlt = ((a2 - a1) % TAU + TAU * 1.5) % TAU - Math.PI;
       c.globalAlpha = clamp(nearMark.life * 2, 0, 1); c.strokeStyle = col(PAL.acc, 1); c.lineWidth = 1.4;
       c.beginPath(); c.arc(S.x, S.y, R + PL + HEAD + 5, Math.min(a1, a1 + dlt), Math.max(a1, a1 + dlt)); c.stroke(); c.globalAlpha = 1;
+      const zk = (nearMark.life - .55) / .35;
+      if (zk > 0) {
+        const rh = R + PL, x1 = S.x + Math.cos(a1) * rh, y1 = S.y + Math.sin(a1) * rh, x2 = S.x + Math.cos(a2) * rh, y2 = S.y + Math.sin(a2) * rh;
+        const dx = x2 - x1, dy = y2 - y1, dl = Math.hypot(dx, dy) || 1, nx = -dy / dl, ny = dx / dl, seed = rm() ? 1 : Math.floor(time * 40);
+        c.globalAlpha = zk; c.strokeStyle = col(PAL.acc, 1); c.lineWidth = 1.5; c.lineJoin = 'miter'; c.beginPath(); c.moveTo(x1, y1);
+        for (let i = 1; i < 5; i++) { const j = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453, o = (j - Math.floor(j) - .5) * HEAD * 1.4; c.lineTo(x1 + dx * i / 5 + nx * o, y1 + dy * i / 5 + ny * o); }
+        c.lineTo(x2, y2); c.stroke(); c.lineJoin = 'round'; c.globalAlpha = 1;
+        if (!rm()) { blob(c, PAL.acc, x1, y1, HEAD * 2.4, .6 * zk); blob(c, PAL.acc, x2, y2, HEAD * 2.4, .6 * zk); }
+      }
     }
   }
   // anneaux : aucun derrière la feuille de victoire ; sur la feuille d'échec, seul l'anneau fautif, coupé au-dessus du filet
@@ -512,13 +686,31 @@ function drawGame(c, g) {
         if (!who.wall) { c.moveTo(S.x + Math.cos(wa) * R, S.y + Math.sin(wa) * R); c.lineTo(S.x + Math.cos(wa) * (R + PL - HEAD - 3), S.y + Math.sin(wa) * (R + PL - HEAD - 3)); }
         c.stroke();
       }
+      // pendant la chute (avant la feuille) : flash au point de contact et croix dédoublée (aberration chromatique) qui se
+      // resserre ; la croix nette reste toujours dessinée par-dessus
+      if (!g && state === 'dying' && !rm()) {
+        const k = clamp(1 - dieT / FAIL_SHEET, 0, 1), o = 3.5 * k;
+        blob(c, PAL.alert, fx, fy, HEAD * (3 + 4 * (1 - k)), clamp(1 - dieT / .12, 0, 1) * .95);
+        c.globalAlpha = .55 * k; c.lineWidth = 2; c.strokeStyle = col(PAL.rgb, 1);
+        c.beginPath(); c.moveTo(fx - q - o, fy - q); c.lineTo(fx + q - o, fy + q); c.moveTo(fx + q - o, fy - q); c.lineTo(fx - q - o, fy + q); c.stroke();
+        c.strokeStyle = col(PAL.hi, 1);
+        c.beginPath(); c.moveTo(fx - q + o, fy - q); c.lineTo(fx + q + o, fy + q); c.moveTo(fx + q + o, fy - q); c.lineTo(fx - q + o, fy + q); c.stroke();
+        c.strokeStyle = A;
+      }
       c.globalAlpha = g ? .6 : 1; c.lineWidth = g ? 6 : 2.4;
       c.beginPath(); c.moveTo(fx - q, fy - q); c.lineTo(fx + q, fy + q); c.moveTo(fx + q, fy - q); c.lineTo(fx - q, fy + q); c.stroke();
       c.globalAlpha = 1;
     }
   }
+  // victoire : éclair blanc au cœur de l'astre quand il éclate
+  if (!g && state === 'winning' && exploded && !rm()) { const k = clamp((winT - .26) / .4, 0, 1); blob(c, hi, cx, cy, R * (1.3 + 2.2 * easeOut(k)), (1 - k) * .7); }
   const counting = state === 'play' && playPhase === 'compte';
-  if (state === 'play' && left > 0 && (!flying || flyU(flying) > U.len)) { const y = LAUNCH + (1 - easeOut(readyK)) * 26; drawPin(c, g, cx, y, y + PL + HEAD, hi, easeOut(readyK) * (counting ? .45 : 1)); }
+  if (state === 'play' && left > 0 && (!flying || flyU(flying) > U.len)) {
+    const y = LAUNCH + (1 - easeOut(readyK)) * 26, rk = easeOut(readyK) * (counting ? .45 : 1);
+    // aiguille prête : lueur qui respire sous la tête
+    if (!g) blob(c, hi, cx, y + PL, HEAD * 3, rk * (rm() ? .3 : .26 + .1 * Math.sin(time * 3.2)));
+    drawPin(c, g, cx, y, y + PL + HEAD, hi, rk);
+  }
   // compte à rebours de REPRENDRE : 3-2-1 sur le pas de tir, anneau qui se vide, tir verrouillé
   if (counting) {
     const k = countT / COUNTDOWN, d = String(Math.max(1, Math.ceil(countT / (COUNTDOWN / 3)))), rr = 15, yc = LAUNCH - rr - 12, h = 14;
@@ -749,11 +941,14 @@ function draw(dt) {
   if (key !== bgKey) { bgKey = key; buildBg(cx, fy); }
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   ctx.drawImage(bg, 0, 0, W, H);
+  if (PAL.w >= 5) drawCosmosHaze(ctx);
+  drawSky(ctx);
   // couche phosphore : on efface un peu (rémanence), on redessine les traits vifs en gras et en basse résolution
   gctx.globalCompositeOperation = 'destination-out'; gctx.globalAlpha = 1;
   gctx.fillStyle = `rgba(0,0,0,${rm() ? .6 : clamp(1 - Math.exp(-dt / PAL.amb.decay), .12, 1)})`; gctx.fillRect(0, 0, W, H);
   gctx.globalCompositeOperation = 'source-over';
   if (inGame) drawGame(gctx, true); else if (state === 'menu') drawMenuScene(gctx, true);
+  updBloom();
   ctx.save();
   if (shake > 0) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
   ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = .95;
@@ -761,12 +956,21 @@ function draw(dt) {
   ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
   if (inGame) drawGame(ctx, false); else if (state === 'menu') drawMenuScene(ctx, false);
   ctx.restore();
+  // échec : liseré d'alerte sur les bords de l'écran, qui s'éteint avant la feuille
+  if (state === 'dying' && !rm()) drawAlertEdge(ctx, PAL.alert, clamp(1 - dieT / FAIL_SHEET, 0, 1));
   // balayage de retrace entre deux écrans
   if (wipe > 0) {
     const y = (1 - wipe) * H;
     ctx.globalAlpha = wipe * .5; ctx.fillStyle = col(PAL.rgb, 1); ctx.fillRect(0, y - 1, W, 2);
     ctx.globalAlpha = wipe * .1; ctx.fillRect(0, y - 26, W, 26); ctx.globalAlpha = 1;
   }
+}
+
+function updBloom() {
+  if ((bloomN++ & 3) === 0) { bbctx.globalCompositeOperation = 'copy'; bbctx.drawImage(glow, 0, 0, bloomB.width, bloomB.height); }
+  gctx.globalCompositeOperation = 'lighter'; gctx.globalAlpha = PAL.amb.glow < .07 ? .13 : .16;
+  gctx.drawImage(bloomB, 0, 0, W, H);
+  gctx.globalCompositeOperation = 'source-over'; gctx.globalAlpha = 1;
 }
 
 // mode démo du menu : l'astre du monde en cours se joue tout seul
@@ -801,5 +1005,7 @@ function bindRender() {
     if (!retry && !rm()) wipe = 1;
   });
   bus.on('explode', () => { syncScene(); explodeScene(GSC, 300); });
-  bus.on('step', h => { if (state === 'menu') updDemo(h); });
+  bus.on('hit', s => { addHit(s.a); if (s.tw) addHit(s.tw.a); });
+  bus.on('level:start', () => { for (const h of HITS) h.life = 0; });
+  bus.on('step', h => { if (state === 'menu') updDemo(h); for (const x of HITS) if (x.life > 0) x.life -= h; });
 }
